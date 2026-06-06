@@ -66,6 +66,14 @@ function readStoredAdminSidebarState() {
   }
 }
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0)
+}
+
 function AdminTopbar({ title, searchPlaceholder, currentDateLabel, displayName, onToggleSidebar, isSidebarCollapsed, showSearch = true, onHomeClick }) {
   return (
     <header className="admin-topbar">
@@ -142,6 +150,10 @@ function HomePage() {
   const [activeTestimonial, setActiveTestimonial] = useState(0)
   const [isPromoVisible, setIsPromoVisible] = useState(true)
   const [storedUser, setStoredUser] = useState(() => readStoredUser())
+  const [packageRows, setPackageRows] = useState([])
+  const [selectedProgram, setSelectedProgram] = useState('CPNS')
+  const [packageLoading, setPackageLoading] = useState(true)
+  const [packageError, setPackageError] = useState(null)
   const isLoggedIn = Boolean(storedUser)
   const displayName = storedUser?.nama || storedUser?.name || storedUser?.email?.split('@')?.[0] || 'User'
   const authLabel = Number(storedUser?.is_admin ?? 0) === 1 ? 'Admin' : 'User'
@@ -165,6 +177,42 @@ function HomePage() {
       window.removeEventListener('storage', syncAuth)
       window.removeEventListener('focus', syncAuth)
       document.removeEventListener('visibilitychange', syncAuth)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadPackages = async () => {
+      setPackageLoading(true)
+      setPackageError(null)
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/packages`)
+        const payload = await response.json()
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'Data paket gagal dimuat.')
+        }
+
+        if (!cancelled) {
+          setPackageRows(Array.isArray(payload.data) ? payload.data : [])
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPackageError(error instanceof Error ? error.message : 'Data paket gagal dimuat.')
+        }
+      } finally {
+        if (!cancelled) {
+          setPackageLoading(false)
+        }
+      }
+    }
+
+    void loadPackages()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -238,47 +286,51 @@ function HomePage() {
     },
   ]
 
-  const packageCards = [
-    {
-      title: 'Lorem Ipsum Dolor Sit Amet 2026',
-      subtitle: 'Consectetur adipiscing elit sed do eiusmod tempor incididunt.',
-      note: '(Aktif hingga lorem ipsum selesai)',
-      bullets: [
-        'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-        'Sed do eiusmod tempor incididunt ut labore et dolore.',
-      ],
-      discount: '52%',
-      oldPrice: 'Rp25.000',
-      newPrice: 'Rp12.000',
-      icon: '📋',
-    },
-    {
-      title: 'Lorem Ipsum Fulltest Part 29',
-      subtitle: 'Ut enim ad minim veniam quis nostrud exercitation ullamco.',
-      note: '(Aktif hingga lorem ipsum selesai)',
-      bullets: [
-        'Duis aute irure dolor in reprehenderit in voluptate.',
-        'Velit esse cillum dolore eu fugiat nulla pariatur.',
-      ],
-      discount: '40%',
-      oldPrice: 'Rp35.000',
-      newPrice: 'Rp21.000',
-      icon: '🎯',
-    },
-    {
-      title: 'Lorem Bundling Persubtest 2026',
-      subtitle: 'Excepteur sint occaecat cupidatat non proident sunt in culpa.',
-      note: '(Aktif hingga lorem ipsum selesai)',
-      bullets: [
-        'Officia deserunt mollit anim id est laborum lorem.',
-        'Integer nec odio praesent libero sed cursus ante.',
-      ],
-      discount: '57%',
-      oldPrice: 'Rp59.000',
-      newPrice: 'Rp25.000',
-      icon: '📊',
-    },
-  ]
+  const normalizedSelectedProgram = selectedProgram.toUpperCase()
+  const visiblePackageRows = packageRows.filter((item) => {
+    if (normalizedSelectedProgram === 'ALL') return true
+    return String(item.kategori || '').trim().toUpperCase() === normalizedSelectedProgram
+  })
+
+  const packageCards = visiblePackageRows.map((item, index) => {
+    const kategori = String(item.kategori || 'Program').trim()
+    const namaPaket = item.nama_paket || 'Nama Paket'
+    const subtitle = item.formasi || item.jadwal || item.ket || 'Paket belajar terarah.'
+    const note = item.jadwal ? `(Jadwal ${item.jadwal})` : '(Aktif)'
+    const ketText = String(item.ket || '').replace(/\s+/g, ' ').trim()
+    const bullets = [item.formasi, item.jadwal, ketText].filter(Boolean).slice(0, 2)
+    const basePrice = Number(item.harga) || 0
+
+    return {
+      key: item.pid ?? `${kategori}-${index}`,
+      title: namaPaket,
+      subtitle,
+      note,
+      bullets: bullets.length ? bullets : [ketText || 'Paket belajar terarah.', 'Informasi paket tersedia di detail.'],
+      newPrice: formatCurrency(basePrice),
+      icon: kategori.toUpperCase() === 'PPPK' ? '🎯' : kategori.toUpperCase() === 'CPNS' ? '📋' : '📦',
+      badge: kategori ? kategori.toUpperCase() : 'PROGRAM',
+    }
+  })
+
+  useEffect(() => {
+    if (!packageRows.length) return
+
+    const availablePrograms = Array.from(new Set(packageRows.map((item) => String(item.kategori || '').trim().toUpperCase()).filter(Boolean)))
+    if (!availablePrograms.length) return
+
+    setSelectedProgram((current) => {
+      const normalizedCurrent = current.toUpperCase()
+      if (availablePrograms.includes(normalizedCurrent)) {
+        return current
+      }
+
+      if (availablePrograms.includes('CPNS')) return 'CPNS'
+      if (availablePrograms.includes('PPPK')) return 'PPPK'
+
+      return current
+    })
+  }, [packageRows])
 
   const faqItems = [
     { icon: '❓', label: 'Lorem ipsum dolor sit amet consectetur?' },
@@ -575,29 +627,35 @@ function HomePage() {
 
         <div className="package-filter package-filter-ref">
           <label htmlFor="program">Program</label>
-          <select id="program" name="program" defaultValue="UTBK">
+          <select id="program" name="program" value={selectedProgram} onChange={(event) => setSelectedProgram(event.target.value)}>
             <option>CPNS</option>
             <option>PPPK</option>
           </select>
         </div>
 
+        {packageError ? <div className="package-status package-status-error">{packageError}</div> : null}
+        {packageLoading ? <div className="package-status">Memuat paket belajar...</div> : null}
+
+        {!packageLoading && !packageError && packageCards.length === 0 ? (
+          <div className="package-status">Belum ada paket untuk program ini.</div>
+        ) : null}
+
         <div className="package-grid package-grid-ref">
           {packageCards.map((card) => (
-            <article className="course-card course-card-ref" key={card.title}>
+            <article className="course-card course-card-ref" key={card.key}>
               <div className="course-cover course-cover-ref">
-                <div className="course-cover-badge">TRYOUT BUNDLE</div>
+                <div className="course-cover-badge">{card.badge || 'TRYOUT BUNDLE'}</div>
                 <div className="course-cover-icon" aria-hidden="true">{card.icon}</div>
                 <h3>{card.title}</h3>
               </div>
               <div className="course-body course-body-ref">
-                <p className="course-sub"><strong>Lorem ipsum dolor sit amet</strong><br />{card.subtitle}</p>
+                <p className="course-sub"><strong>{card.subtitle}</strong></p>
                 <p className="course-meta"><strong>{card.note}</strong></p>
                 <ul className="course-list">
                   {card.bullets.map((bullet) => <li key={bullet}>✓ {bullet}</li>)}
                 </ul>
                 <div className="course-price course-price-ref">
-                  <span className="badge-discount">{card.discount}</span>
-                  <span className="old-price">{card.oldPrice}</span>
+                  {/* Diskon dan harga lama belum ditampilkan sampai data tersedia di database. */}
                   <span className="new-price">{card.newPrice}</span>
                 </div>
               </div>

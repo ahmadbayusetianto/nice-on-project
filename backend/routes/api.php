@@ -43,6 +43,46 @@ Route::get('/admin/dashboard-summary', function () {
     ]);
 });
 
+Route::get('/packages', function (Request $request) {
+    $kategori = trim((string) $request->query('kategori', ''));
+
+    $query = DB::table('tbl_paket')
+        ->select([
+            'pid',
+            'kategori',
+            'formasi',
+            'jadwal',
+            'nama_paket',
+            'harga',
+            'ket',
+            'created_at',
+        ])
+        ->orderByDesc('created_at')
+        ->orderByDesc('pid');
+
+    if ($kategori !== '' && strtoupper($kategori) !== 'ALL') {
+        $query->whereRaw('UPPER(kategori) = ?', [strtoupper($kategori)]);
+    }
+
+    $packages = $query->get()->map(function ($item) {
+        return [
+            'pid' => (int) $item->pid,
+            'kategori' => $item->kategori,
+            'formasi' => $item->formasi,
+            'jadwal' => $item->jadwal,
+            'nama_paket' => $item->nama_paket,
+            'harga' => (float) $item->harga,
+            'ket' => $item->ket,
+            'created_at' => $item->created_at,
+        ];
+    });
+
+    return response()->json([
+        'message' => 'Data paket berhasil dimuat.',
+        'data' => $packages,
+    ]);
+});
+
 Route::get('/me', function (Request $request) {
     return response()->json([
         'authenticated' => $request->user() !== null,

@@ -112,9 +112,12 @@ VALUES
 INSERT INTO tbl_paket
 (kategori, formasi, jadwal, nama_paket, harga, ket, created_by)
 VALUES
-('CPNS', 'Analis Data', 'Senin-Rabu 19:00', 'Paket Intensif CPNS', 750000, 'Kelas persiapan CPNS', 1),
-('PPPK', 'Teknis', 'Selasa-Kamis 19:00', 'Paket Intensif PPPK', 650000, 'Kelas persiapan PPPK Teknis', 1),
-('Kedinasan', 'Umum', 'Sabtu-Minggu 09:00', 'Paket Sekolah Kedinasan', 850000, 'Kelas persiapan sekolah kedinasan', 1);
+('CPNS', 'TWK + TIU + TKP', 'Senin-Rabu 19:00', 'Paket Intensif CPNS', 750000, 'Kelas intensif CPNS dengan fokus latihan terarah.', 1),
+('CPNS', 'SKD Tryout', 'Kamis 19:00', 'CPNS Full Tryout', 650000, 'Simulasi tryout CPNS lengkap dengan pembahasan.', 1),
+('CPNS', 'Materi Dasar', 'Sabtu 09:00', 'CPNS Starter Pack', 500000, 'Paket awal untuk membangun fondasi materi CPNS.', 1),
+('PPPK', 'Teknis', 'Selasa-Kamis 19:00', 'Paket Intensif PPPK', 650000, 'Kelas intensif PPPK dengan fokus latihan terarah.', 1),
+('PPPK', 'Tryout Teknis', 'Jumat 19:00', 'PPPK Full Tryout', 700000, 'Simulasi tryout PPPK lengkap dengan evaluasi.', 1),
+('PPPK', 'Materi Dasar', 'Sabtu 09:00', 'PPPK Starter Pack', 550000, 'Paket awal untuk membangun fondasi materi PPPK.', 1);
 
 -- =========================
 -- SEEDER TRANSAKSI
