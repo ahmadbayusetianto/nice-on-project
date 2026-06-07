@@ -7,6 +7,7 @@ import './App.css'
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const AUTH_STORAGE_KEY = 'niceon.auth.user'
 const ADMIN_SIDEBAR_COLLAPSED_KEY = 'niceon.admin.sidebarCollapsed'
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 function readStoredUser() {
   if (typeof window === 'undefined') return null
@@ -74,7 +75,80 @@ function formatCurrency(value) {
   }).format(Number(value) || 0)
 }
 
-function AdminTopbar({ title, searchPlaceholder, currentDateLabel, displayName, onToggleSidebar, isSidebarCollapsed, showSearch = true, onHomeClick }) {
+function formatAdminDate(value, options = {}) {
+  if (!value) return '-'
+
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: options.hour === false ? undefined : '2-digit',
+    minute: options.hour === false ? undefined : '2-digit',
+    ...(options.hour === false ? { hour: undefined, minute: undefined } : {}),
+  }).format(date)
+}
+
+function getFriendlyFetchError(error, fallbackMessage) {
+  const message = error instanceof Error ? error.message : ''
+  const normalized = message.toLowerCase()
+
+  if (normalized.includes('failed to fetch') || normalized.includes('networkerror') || normalized.includes('load failed') || normalized.includes('fetch failed')) {
+    return 'Backend tidak dapat dijangkau. Pastikan server Laravel berjalan di http://127.0.0.1:8000.'
+  }
+
+  return message || fallbackMessage
+}
+
+function AdminTopbar({
+  title,
+  searchPlaceholder,
+  currentDateLabel,
+  displayName,
+  profileRoleLabel = 'Super Admin',
+  profileUser,
+  onToggleSidebar,
+  isSidebarCollapsed,
+  showSearch = true,
+  onHomeClick,
+  onResumeProfile,
+  onLogout,
+}) {
+  const profileMenuRef = useRef(null)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handleOutsideClick)
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
+  const profileInitials = (displayName || 'AB')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'AB'
+
   return (
     <header className="admin-topbar">
       <div className="admin-topbar-left">
@@ -112,14 +186,49 @@ function AdminTopbar({ title, searchPlaceholder, currentDateLabel, displayName, 
           <span aria-hidden="true">⌄</span>
         </button>
 
-        <button type="button" className="admin-profile-chip">
-          <span className="admin-profile-avatar">AB</span>
-          <span className="admin-profile-copy">
-            <strong>{displayName}</strong>
-            <span>Super Admin</span>
-          </span>
-          <span aria-hidden="true">⌄</span>
-        </button>
+        <div className="dashboard-profile-menu-wrap admin-profile-menu-wrap" ref={profileMenuRef}>
+          <button
+            type="button"
+            className="dashboard-profile-chip admin-profile-chip"
+            aria-haspopup="menu"
+            aria-expanded={isProfileMenuOpen}
+            onClick={() => setIsProfileMenuOpen((current) => !current)}
+          >
+            <span className="dashboard-profile-avatar admin-profile-avatar">{profileInitials}</span>
+            <span className="dashboard-profile-copy admin-profile-copy">
+              <strong>{displayName}</strong>
+              <span>{profileRoleLabel}</span>
+            </span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+
+          {isProfileMenuOpen ? (
+            <div className="dashboard-profile-dropdown" role="menu" aria-label="Menu akun admin">
+              <button
+                type="button"
+                className="dashboard-profile-dropdown-item"
+                role="menuitem"
+                onClick={() => {
+                  setIsProfileMenuOpen(false)
+                  onResumeProfile?.(profileUser)
+                }}
+              >
+                <span className="dashboard-profile-dropdown-label">Resume Profile</span>
+              </button>
+              <button
+                type="button"
+                className="dashboard-profile-dropdown-item danger"
+                role="menuitem"
+                onClick={() => {
+                  setIsProfileMenuOpen(false)
+                  onLogout?.()
+                }}
+              >
+                <span className="dashboard-profile-dropdown-label">Logout</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   )
@@ -138,6 +247,485 @@ function AdminLogoutModal({ open, onCancel, onConfirm, title = 'Keluar dari akun
           <button type="button" className="admin-modal-button secondary" onClick={onCancel}>Batal</button>
           <button type="button" className="admin-modal-button primary" onClick={onConfirm}>{confirmLabel}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error }) {
+  if (!open) return null
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-package-modal" role="dialog" aria-modal="true" aria-labelledby="adminPackageTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-modal-icon" aria-hidden="true">📦</div>
+        <h3 id="adminPackageTitle">Tambah Paket</h3>
+        <p>Isi data paket sesuai kolom yang tersedia di tabel paket.</p>
+
+        <form className="admin-package-form" onSubmit={onSubmit}>
+          {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+          <div className="admin-package-form-grid">
+            <label className="admin-package-field">
+              <span>Kategori</span>
+              <select value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)}>
+                <option value="CPNS">CPNS</option>
+                <option value="PPPK">PPPK</option>
+              </select>
+            </label>
+
+            <label className="admin-package-field">
+              <span>Nama Paket</span>
+              <input type="text" value={form.nama_paket} onChange={(event) => onFieldChange('nama_paket', event.target.value)} placeholder="Contoh: Paket Premium CPNS" />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Formasi</span>
+              <input type="text" value={form.formasi} onChange={(event) => onFieldChange('formasi', event.target.value)} placeholder="Contoh: Online / Offline" />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Jadwal</span>
+              <input type="text" value={form.jadwal} onChange={(event) => onFieldChange('jadwal', event.target.value)} placeholder="Contoh: Batch 1 - Mei 2026" />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Harga</span>
+              <input type="number" min="0" step="1" value={form.harga} onChange={(event) => onFieldChange('harga', event.target.value)} placeholder="Contoh: 250000" />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Keterangan</span>
+              <textarea value={form.ket} onChange={(event) => onFieldChange('ket', event.target.value)} placeholder="Deskripsi singkat paket"></textarea>
+            </label>
+          </div>
+
+          <div className="admin-modal-actions admin-package-form-actions">
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : 'Simpan Paket'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function AdminTransactionManagementPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [transactionRows, setTransactionRows] = useState([])
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true)
+  const [transactionError, setTransactionError] = useState(null)
+  const [transactionSearch, setTransactionSearch] = useState('')
+  const [selectedTransactionStatus, setSelectedTransactionStatus] = useState('Semua Status')
+  const [selectedTransactionProgram, setSelectedTransactionProgram] = useState('Semua Program')
+  const [transactionCurrentPage, setTransactionCurrentPage] = useState(1)
+  const [transactionPageSize, setTransactionPageSize] = useState(10)
+  const [transactionSummary, setTransactionSummary] = useState({
+    total_transaksi: 0,
+    total_pendapatan: 0,
+    transaksi_berhasil: 0,
+    menunggu_pembayaran: 0,
+    dibatalkan: 0,
+  })
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+
+  if (!user || Number(user?.is_admin ?? 0) !== 1) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-admin/transactions' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.email?.split('@')?.[0] || 'Admin'
+  const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+    .format(new Date())
+    .replace(/^./, (char) => char.toUpperCase())
+
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
+
+  const adminSystemMenu = [
+    { label: 'Pengaturan', href: '#' },
+    { label: 'Admin', href: '#' },
+    { label: 'Log Aktivitas', href: '#' },
+  ]
+
+  const transactionSummaryCards = [
+    { label: 'Total Transaksi', value: String(transactionSummary.total_transaksi ?? 0), delta: 'Semua transaksi', accent: 'blue', icon: '🧾' },
+    { label: 'Total Pendapatan', value: formatCurrency(transactionSummary.total_pendapatan ?? 0), delta: 'Transaksi berhasil', accent: 'green', icon: '💳' },
+    { label: 'Transaksi Berhasil', value: String(transactionSummary.transaksi_berhasil ?? 0), delta: 'Status paid', accent: 'purple', icon: '✅' },
+    { label: 'Menunggu Pembayaran', value: String(transactionSummary.menunggu_pembayaran ?? 0), delta: 'Status pending', accent: 'orange', icon: '⏳' },
+    { label: 'Dibatalkan', value: String(transactionSummary.dibatalkan ?? 0), delta: 'Status cancelled', accent: 'red', icon: '⛔' },
+  ]
+
+  const transactionStatusOptions = ['Semua Status', 'Berhasil', 'Menunggu', 'Dibatalkan']
+  const transactionProgramOptions = ['Semua Program', 'CPNS', 'PPPK']
+
+  const statusQueryMap = {
+    Berhasil: 'paid',
+    Menunggu: 'pending',
+    Dibatalkan: 'cancelled',
+  }
+
+  const loadTransactions = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingTransactions(true)
+    }
+
+    setTransactionError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (transactionSearch.trim()) params.set('search', transactionSearch.trim())
+      if (selectedTransactionStatus !== 'Semua Status') params.set('status', statusQueryMap[selectedTransactionStatus])
+      if (selectedTransactionProgram !== 'Semua Program') params.set('program', selectedTransactionProgram)
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/transactions${params.toString() ? `?${params.toString()}` : ''}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data transaksi gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setTransactionRows(Array.isArray(payload?.data) ? payload.data : [])
+        setTransactionSummary(payload?.summary ?? {
+          total_transaksi: 0,
+          total_pendapatan: 0,
+          transaksi_berhasil: 0,
+          menunggu_pembayaran: 0,
+          dibatalkan: 0,
+        })
+      }
+      } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data transaksi gagal dimuat.')
+        setTransactionError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingTransactions(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadTransactions({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [transactionSearch, selectedTransactionStatus, selectedTransactionProgram])
+
+  const visibleTransactionRows = transactionRows
+  const totalTransactionPages = Math.max(1, Math.ceil(visibleTransactionRows.length / transactionPageSize))
+  const safeTransactionCurrentPage = Math.min(transactionCurrentPage, totalTransactionPages)
+  const transactionStartIndex = (safeTransactionCurrentPage - 1) * transactionPageSize
+  const transactionPaginatedRows = visibleTransactionRows.slice(transactionStartIndex, transactionStartIndex + transactionPageSize)
+
+  useEffect(() => {
+    setTransactionCurrentPage(1)
+  }, [transactionSearch, selectedTransactionStatus, selectedTransactionProgram, transactionPageSize])
+
+  useEffect(() => {
+    if (transactionCurrentPage > totalTransactionPages) {
+      setTransactionCurrentPage(totalTransactionPages)
+    }
+  }, [transactionCurrentPage, totalTransactionPages])
+
+  const renderTransactionPaginationPages = () => {
+    if (totalTransactionPages <= 1) return [1]
+
+    const pages = new Set([1, totalTransactionPages, safeTransactionCurrentPage])
+    if (safeTransactionCurrentPage > 1) pages.add(safeTransactionCurrentPage - 1)
+    if (safeTransactionCurrentPage < totalTransactionPages) pages.add(safeTransactionCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
+
+  const transactionDateRangeLabel = (() => {
+    if (!transactionRows.length) return 'Belum ada data'
+
+    const dates = transactionRows
+      .map((row) => new Date(row.transactionDateRaw || row.paidDateRaw || ''))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime())
+
+    if (!dates.length) return 'Belum ada data'
+
+    return `${formatAdminDate(dates[0], { hour: false })} - ${formatAdminDate(dates[dates.length - 1], { hour: false })}`
+  })()
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
+    clearAuthUser()
+
+    navigate('/login', { replace: true })
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  return (
+    <div className="admin-dashboard-page admin-transaction-page">
+      <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <div className="admin-brand-block">
+            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
+              <div className="admin-brand-logo-shell">
+                <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              </div>
+              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
+                <strong>Admin Panel</strong>
+                <span>Learning Hub</span>
+              </div>
+            </Link>
+          </div>
+
+          <div className="admin-sidebar-group-label">Main</div>
+          <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
+            {adminMainMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="admin-sidebar-group-label">System</div>
+          <nav className="admin-sidebar-nav" aria-label="Menu sistem admin">
+            {adminSystemMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className="admin-sidebar-item secondary"
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="admin-sidebar-footer-card">
+            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
+              <span aria-hidden="true">⎋</span>
+              <span>Keluar</span>
+            </button>
+          </div>
+        </aside>
+
+        <main className="admin-main admin-transaction-main">
+          <AdminTopbar
+            title="Transaksi"
+            searchPlaceholder="Cari transaksi..."
+            currentDateLabel={currentDateLabel}
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
+            showSearch={false}
+            onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
+          />
+
+          <section className="admin-transaction-hero">
+            <div>
+              <h2>Transaksi</h2>
+              <p>Kelola semua transaksi yang tercatat di platform Nice On.</p>
+            </div>
+
+            <div className="admin-transaction-actions">
+              <button type="button" className="admin-outline-action">Export Excel</button>
+              <button type="button" className="admin-outline-action">Export PDF</button>
+            </div>
+          </section>
+
+          <section className="admin-summary-grid admin-transaction-summary-grid">
+            {transactionSummaryCards.map((card) => (
+              <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                <div className="admin-summary-copy">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <p>{card.delta}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="admin-card admin-transaction-filter-card">
+            {transactionError ? <div className="admin-user-message error">{transactionError}</div> : null}
+            {isLoadingTransactions ? <div className="admin-user-message">Memuat data transaksi...</div> : null}
+
+            <div className="admin-transaction-filters">
+              <label className="admin-user-search admin-transaction-search">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  type="search"
+                  placeholder="Cari nama, email, no. HP, atau invoice..."
+                  value={transactionSearch}
+                  onChange={(event) => setTransactionSearch(event.target.value)}
+                />
+              </label>
+
+              <div className="admin-transaction-filter-group">
+                <select value={selectedTransactionStatus} onChange={(event) => setSelectedTransactionStatus(event.target.value)} className="admin-package-select admin-transaction-select">
+                  {transactionStatusOptions.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <select value={selectedTransactionProgram} onChange={(event) => setSelectedTransactionProgram(event.target.value)} className="admin-package-select admin-transaction-select">
+                  {transactionProgramOptions.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <button type="button" className="admin-user-filter-button admin-transaction-filter-button">Filter</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={transactionPageSize}
+                    onChange={(event) => setTransactionPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="admin-package-reset"
+                  onClick={() => {
+                    setTransactionSearch('')
+                    setSelectedTransactionStatus('Semua Status')
+                    setSelectedTransactionProgram('Semua Program')
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="admin-card admin-transaction-table-card">
+            <div className="admin-transaction-table-head">
+              <div>
+                <h3>Daftar Transaksi</h3>
+                <p>{transactionDateRangeLabel}</p>
+              </div>
+            </div>
+
+            <div className="admin-transaction-table-wrap">
+              <table className="admin-user-table admin-transaction-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Pelanggan</th>
+                    <th>Paket</th>
+                    <th>Program</th>
+                    <th>Tgl Transaksi</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactionPaginatedRows.map((row) => (
+                    <tr key={row.pid}>
+                      <td>
+                        <strong className="admin-transaction-invoice">{row.invoice}</strong>
+                      </td>
+                      <td>
+                        <div className="admin-user-cell admin-transaction-customer-cell">
+                          <div className="admin-user-avatar">{row.customerName.slice(0, 1)}</div>
+                          <div>
+                            <strong>{row.customerName}</strong>
+                            <span>{row.customerEmail}</span>
+                            <span>{row.customerPhone}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-transaction-package">
+                          <strong>{row.packageName}</strong>
+                          <span>{row.packageType}</span>
+                        </div>
+                      </td>
+                      <td><span className="admin-transaction-program-pill">{row.program}</span></td>
+                      <td>{row.transactionDate}</td>
+                      <td><strong className="admin-transaction-total">{row.totalLabel}</strong></td>
+                      <td><span className={`admin-transaction-status ${row.statusClass}`}>{row.status}</span></td>
+                      <td>
+                        <div className="admin-row-actions admin-transaction-row-actions">
+                          <button type="button" className="admin-row-action">👁</button>
+                          <button type="button" className="admin-row-action">🖨</button>
+                          <button type="button" className="admin-row-action danger">⋮</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-user-footer admin-transaction-footer">
+              <p>Menampilkan {transactionPaginatedRows.length} data dari {visibleTransactionRows.length} transaksi</p>
+              <div className="admin-pagination">
+                <button type="button" className="admin-pagination-arrow" disabled={safeTransactionCurrentPage === 1} onClick={() => setTransactionCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                {renderTransactionPaginationPages().map((page, index, array) => {
+                  const previousPage = array[index - 1]
+                  const shouldShowDots = previousPage && page - previousPage > 1
+
+                  return (
+                    <span key={page}>
+                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                      <button type="button" className={`admin-pagination-page${page === safeTransactionCurrentPage ? ' active' : ''}`} onClick={() => setTransactionCurrentPage(page)}>{page}</button>
+                    </span>
+                  )
+                })}
+                <button type="button" className="admin-pagination-arrow" disabled={safeTransactionCurrentPage === totalTransactionPages} onClick={() => setTransactionCurrentPage((current) => Math.min(totalTransactionPages, current + 1))}>›</button>
+              </div>
+            </div>
+          </section>
+
+          <AdminLogoutModal
+            open={showLogoutConfirm}
+            onCancel={() => setShowLogoutConfirm(false)}
+            onConfirm={confirmLogout}
+          />
+        </main>
       </div>
     </div>
   )
@@ -200,7 +788,7 @@ function HomePage() {
         }
       } catch (error) {
         if (!cancelled) {
-          setPackageError(error instanceof Error ? error.message : 'Data paket gagal dimuat.')
+          setPackageError(getFriendlyFetchError(error, 'Data paket gagal dimuat.'))
         }
       } finally {
         if (!cancelled) {
@@ -1464,6 +2052,7 @@ function AccountProfilePage() {
   const displayName = detail.nama || activeProfile?.nama || activeProfile?.name || activeProfile?.email?.split('@')?.[0] || 'User'
   const username = activeProfile?.email ? `@${activeProfile.email.split('@')[0]}` : '@user'
   const emailLabel = activeProfile?.email || 'Belum tersedia'
+  const backDashboardPath = Number(activeProfile?.is_admin ?? user?.is_admin ?? 0) === 1 ? '/dashboard-admin' : '/dashboard-user'
   const genderLabel = detail.gender === 'L' ? 'Laki-laki' : detail.gender === 'P' ? 'Perempuan' : 'Belum diisi'
   const formattedBirthDate = detail.ttl || 'Belum diisi'
   const biodataItems = [
@@ -1628,8 +2217,6 @@ function AccountProfilePage() {
 
               <div className="account-profile-tabs" aria-label="Navigasi profil">
                 <button type="button" className="account-profile-tab active">Personal Info</button>
-                <button type="button" className="account-profile-tab">Eduparx Points</button>
-                <button type="button" className="account-profile-tab">Personal Historical Learning</button>
               </div>
             </section>
           </section>
@@ -1691,7 +2278,7 @@ function AccountProfilePage() {
           </section>
 
           <div className="account-profile-footer-actions">
-            <button type="button" className="dashboard-secondary-action" onClick={() => navigate('/dashboard-user', { state: { user: activeProfile } })}>
+            <button type="button" className="dashboard-secondary-action" onClick={() => navigate(backDashboardPath, { state: { user: activeProfile } })}>
               Kembali ke Dashboard
             </button>
           </div>
@@ -2208,7 +2795,7 @@ function AdminDashboardPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
-    { label: 'Transaksi', href: '#' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
   ]
@@ -2265,7 +2852,9 @@ function AdminDashboardPage() {
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
           <div className="admin-brand-block">
             <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              <div className="admin-brand-logo-shell">
+                <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              </div>
               <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
                 <strong>Admin Panel</strong>
                 <span>Learning Hub</span>
@@ -2316,10 +2905,14 @@ function AdminDashboardPage() {
             title="Dashboard Admin"
             searchPlaceholder="Cari sesuatu..."
             currentDateLabel={currentDateLabel}
-            displayName="Ahmad Bayu"
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
             isSidebarCollapsed={isSidebarCollapsed}
             onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
             onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
           />
 
           <section className="admin-hero-row">
@@ -2468,6 +3061,13 @@ function AdminUserManagementPage() {
   const navigate = useNavigate()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [userRows, setUserRows] = useState([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true)
+  const [userError, setUserError] = useState(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [userSummary, setUserSummary] = useState({ total_user: 0, user_aktif: 0, user_nonaktif: 0, admin: 0 })
+  const [userCurrentPage, setUserCurrentPage] = useState(1)
+  const [userPageSize, setUserPageSize] = useState(10)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
 
@@ -2490,7 +3090,7 @@ function AdminUserManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
-    { label: 'Transaksi', href: '#' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
   ]
@@ -2501,21 +3101,82 @@ function AdminUserManagementPage() {
     { label: 'Log Aktivitas', href: '#' },
   ]
 
-  const userSummaryCards = [
-    { label: 'Total User', value: '1.248', delta: '↑ 12.5% dari minggu lalu', accent: 'blue', icon: '👥' },
-    { label: 'User Aktif', value: '1.102', delta: '↑ 8.3% dari minggu lalu', accent: 'green', icon: '✅' },
-    { label: 'User Nonaktif', value: '120', delta: '↓ 3.1% dari minggu lalu', accent: 'orange', icon: '👤' },
-    { label: 'Admin', value: '26', delta: 'Tidak berubah', accent: 'purple', icon: '🛡️' },
-  ]
+  useEffect(() => {
+    let cancelled = false
 
-  const userRows = [
-    { name: 'Budi Santoso', pid: '#USR-1001', email: 'budi.santoso@gmail.com', phone: '0812-3456-7890', role: 'User', status: 'Aktif', joined: '21 Mei 2025' },
-    { name: 'Siti Aminah', pid: '#USR-1002', email: 'siti.aminah@gmail.com', phone: '0821-2345-6789', role: 'User', status: 'Aktif', joined: '20 Mei 2025' },
-    { name: 'Ahmad Fauzi', pid: '#USR-1003', email: 'ahmad.fauzi@gmail.com', phone: '0813-1122-3344', role: 'User', status: 'Nonaktif', joined: '18 Mei 2025' },
-    { name: 'Dewi Lestari', pid: '#USR-1004', email: 'dewi.lestari@gmail.com', phone: '0856-7788-9900', role: 'User', status: 'Aktif', joined: '17 Mei 2025' },
-    { name: 'Rizky Maulana', pid: '#USR-1005', email: 'rizky.maulana@gmail.com', phone: '0877-6655-4433', role: 'Admin', status: 'Aktif', joined: '15 Mei 2025' },
-    { name: 'Fitriani', pid: '#USR-1006', email: 'fitriani@gmail.com', phone: '0814-9988-7766', role: 'User', status: 'Nonaktif', joined: '12 Mei 2025' },
-    { name: 'Hendra Wijaya', pid: '#USR-1007', email: 'hendra.wijaya@gmail.com', phone: '0899-1122-3344', role: 'User', status: 'Aktif', joined: '10 Mei 2025' },
+    const loadUsers = async () => {
+      setIsLoadingUsers(true)
+      setUserError(null)
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/admin/users`)
+        const payload = await response.json()
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'Data user gagal dimuat.')
+        }
+
+        if (!cancelled) {
+          setUserRows(Array.isArray(payload.data) ? payload.data : [])
+          setUserSummary(payload.summary ?? { total_user: 0, user_aktif: 0, user_nonaktif: 0, admin: 0 })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setUserError(error instanceof Error ? error.message : 'Data user gagal dimuat.')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingUsers(false)
+        }
+      }
+    }
+
+    void loadUsers()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const visibleUserRows = userRows.filter((row) => {
+    const normalizedSearch = userSearch.trim().toLowerCase()
+    if (!normalizedSearch) return true
+
+    return [row.name, row.email, row.phone, row.role, row.status, row.code]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+  })
+
+  const totalUserPages = Math.max(1, Math.ceil(visibleUserRows.length / userPageSize))
+  const safeUserCurrentPage = Math.min(userCurrentPage, totalUserPages)
+  const userStartIndex = (safeUserCurrentPage - 1) * userPageSize
+  const userPaginatedRows = visibleUserRows.slice(userStartIndex, userStartIndex + userPageSize)
+
+  useEffect(() => {
+    setUserCurrentPage(1)
+  }, [userSearch, userPageSize])
+
+  useEffect(() => {
+    if (userCurrentPage > totalUserPages) {
+      setUserCurrentPage(totalUserPages)
+    }
+  }, [userCurrentPage, totalUserPages])
+
+  const renderUserPaginationPages = () => {
+    if (totalUserPages <= 1) return [1]
+
+    const pages = new Set([1, totalUserPages, safeUserCurrentPage])
+    if (safeUserCurrentPage > 1) pages.add(safeUserCurrentPage - 1)
+    if (safeUserCurrentPage < totalUserPages) pages.add(safeUserCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
+
+  const userSummaryCards = [
+    { label: 'Total User', value: String(userSummary.total_user ?? userRows.length), delta: 'Data dari tbl_user', accent: 'blue', icon: '👥' },
+    { label: 'User Aktif', value: String(userSummary.user_aktif ?? 0), delta: 'Status aktif', accent: 'green', icon: '✅' },
+    { label: 'User Nonaktif', value: String(userSummary.user_nonaktif ?? 0), delta: 'Status nonaktif', accent: 'orange', icon: '👤' },
+    { label: 'Admin', value: String(userSummary.admin ?? 0), delta: 'Role admin', accent: 'purple', icon: '🛡️' },
   ]
 
   const handleLogout = () => {
@@ -2539,7 +3200,9 @@ function AdminUserManagementPage() {
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
           <div className="admin-brand-block">
             <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              <div className="admin-brand-logo-shell">
+                <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              </div>
               <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
                 <strong>Admin Panel</strong>
                 <span>Learning Hub</span>
@@ -2590,10 +3253,14 @@ function AdminUserManagementPage() {
             title="Manajemen User"
             searchPlaceholder="Cari user..."
             currentDateLabel={currentDateLabel}
-            displayName="Ahmad Bayu"
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
             isSidebarCollapsed={isSidebarCollapsed}
             onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
             onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
           />
 
           <section className="admin-user-toolbar">
@@ -2618,16 +3285,30 @@ function AdminUserManagementPage() {
           </section>
 
           <section className="admin-card admin-user-table-card">
+            {userError ? <div className="admin-user-message error">{userError}</div> : null}
+            {isLoadingUsers ? <div className="admin-user-message">Memuat data user...</div> : null}
+
             <div className="admin-user-filters">
               <label className="admin-user-search">
                 <span aria-hidden="true">⌕</span>
-                <input type="search" placeholder="Cari berdasarkan nama, email, atau no HP..." />
+                <input type="search" placeholder="Cari berdasarkan nama, email, atau no HP..." value={userSearch} onChange={(event) => setUserSearch(event.target.value)} />
               </label>
 
               <div className="admin-user-filter-group">
                 <button type="button" className="admin-user-filter-pill">Semua Status <span aria-hidden="true">⌄</span></button>
                 <button type="button" className="admin-user-filter-pill">Semua Peran <span aria-hidden="true">⌄</span></button>
                 <button type="button" className="admin-user-filter-button">Filter</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={userPageSize}
+                    onChange={(event) => setUserPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
 
@@ -2645,14 +3326,14 @@ function AdminUserManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {userRows.map((row) => (
+                  {userPaginatedRows.map((row) => (
                     <tr key={row.pid}>
                       <td>
                         <div className="admin-user-cell">
                           <div className="admin-user-avatar">{row.name.slice(0, 1)}</div>
                           <div>
                             <strong>{row.name}</strong>
-                            <span>{row.pid}</span>
+                            <span>{row.code}</span>
                           </div>
                         </div>
                       </td>
@@ -2675,16 +3356,21 @@ function AdminUserManagementPage() {
             </div>
 
             <div className="admin-user-footer">
-              <p>Menampilkan 1 - 10 dari 1.248 data</p>
+              <p>Menampilkan {userPaginatedRows.length} data dari {visibleUserRows.length} user</p>
               <div className="admin-pagination">
-                <button type="button" className="admin-pagination-arrow">‹</button>
-                <button type="button" className="admin-pagination-page active">1</button>
-                <button type="button" className="admin-pagination-page">2</button>
-                <button type="button" className="admin-pagination-page">3</button>
-                <span className="admin-pagination-dots">…</span>
-                <button type="button" className="admin-pagination-page">125</button>
-                <button type="button" className="admin-pagination-arrow">›</button>
-                <button type="button" className="admin-pagination-size">10 / halaman <span aria-hidden="true">⌄</span></button>
+                <button type="button" className="admin-pagination-arrow" disabled={safeUserCurrentPage === 1} onClick={() => setUserCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                {renderUserPaginationPages().map((page, index, array) => {
+                  const previousPage = array[index - 1]
+                  const shouldShowDots = previousPage && page - previousPage > 1
+
+                  return (
+                    <span key={page}>
+                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                      <button type="button" className={`admin-pagination-page${page === safeUserCurrentPage ? ' active' : ''}`} onClick={() => setUserCurrentPage(page)}>{page}</button>
+                    </span>
+                  )
+                })}
+                <button type="button" className="admin-pagination-arrow" disabled={safeUserCurrentPage === totalUserPages} onClick={() => setUserCurrentPage((current) => Math.min(totalUserPages, current + 1))}>›</button>
               </div>
             </div>
           </section>
@@ -2705,6 +3391,28 @@ function AdminPackageManagementPage() {
   const navigate = useNavigate()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [packageRows, setPackageRows] = useState([])
+  const [isLoadingPackages, setIsLoadingPackages] = useState(true)
+  const [packageError, setPackageError] = useState(null)
+  const [packageSearch, setPackageSearch] = useState('')
+  const [selectedProgram, setSelectedProgram] = useState('Semua Program')
+  const [selectedStatus, setSelectedStatus] = useState('Semua Status')
+  const [packageCurrentPage, setPackageCurrentPage] = useState(1)
+  const [packagePageSize, setPackagePageSize] = useState(10)
+  const [showAddPackageModal, setShowAddPackageModal] = useState(false)
+  const [isSavingPackage, setIsSavingPackage] = useState(false)
+  const [packageSubmitError, setPackageSubmitError] = useState(null)
+  const [packageSubmitSuccess, setPackageSubmitSuccess] = useState(null)
+  const [packageForm, setPackageForm] = useState({
+    kategori: 'CPNS',
+    formasi: '',
+    jadwal: '',
+    nama_paket: '',
+    harga: '',
+    ket: '',
+  })
+  const [packageSummary, setPackageSummary] = useState({ total_paket: 0, paket_aktif: 0, paket_nonaktif: 0, total_penjualan: 0 })
+  const packageSuccessTimerRef = useRef(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
 
@@ -2727,7 +3435,7 @@ function AdminPackageManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
-    { label: 'Transaksi', href: '#' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
   ]
@@ -2739,94 +3447,215 @@ function AdminPackageManagementPage() {
   ]
 
   const packageSummaryCards = [
-    { label: 'Total Paket', value: '24', delta: 'Semua paket tersedia', accent: 'blue', icon: '📦' },
-    { label: 'Paket Aktif', value: '18', delta: 'Paket sedang aktif', accent: 'green', icon: '🏷️' },
-    { label: 'Paket Nonaktif', value: '6', delta: 'Paket tidak aktif', accent: 'orange', icon: '⏱️' },
-    { label: 'Total Penjualan', value: '1.248', delta: 'Paket terjual', accent: 'purple', icon: '🛒' },
+    { label: 'Total Paket', value: String(packageSummary.total_paket ?? 0), delta: 'Semua paket tersedia', accent: 'blue', icon: '📦' },
+    { label: 'Paket Aktif', value: String(packageSummary.paket_aktif ?? 0), delta: 'Paket sedang aktif', accent: 'green', icon: '🏷️' },
+    { label: 'Paket Nonaktif', value: String(packageSummary.paket_nonaktif ?? 0), delta: 'Paket tidak aktif', accent: 'orange', icon: '⏱️' },
+    { label: 'Total Penjualan', value: formatCurrency(packageSummary.total_penjualan ?? 0), delta: 'Akumulasi harga paket', accent: 'purple', icon: '🛒' },
   ]
 
   const packageFilters = [
-    { placeholder: 'Semua Program', options: ['Semua Program', 'CPNS', 'PPPK'] },
-    { placeholder: 'Semua Status', options: ['Semua Status', 'Aktif', 'Nonaktif'] },
+    { key: 'program', placeholder: 'Semua Program', value: selectedProgram, options: ['Semua Program', 'CPNS', 'PPPK'] },
+    { key: 'status', placeholder: 'Semua Status', value: selectedStatus, options: ['Semua Status', 'Aktif', 'Nonaktif'] },
   ]
 
-  const packageRows = [
-    {
-      name: 'Tryout Bundle UTBK 2026',
-      desc: 'Akses tryout lengkap UTBK 2026 dengan pembahasan.',
-      thumb: 'TRYOUT\nBUNDLE',
-      tone: 'red',
-      program: 'UTBK 2026',
-      type: 'Tryout',
-      typeClass: 'tryout',
-      price: 'Rp150.000',
-      discount: '30%',
-      finalPrice: 'Rp105.000',
-      status: 'Aktif',
-      statusClass: 'aktif',
-      sold: '342',
-    },
-    {
-      name: 'Kelas Online UTBK 2026',
-      desc: 'Video materi, latihan soal, dan live class interaktif.',
-      thumb: 'KELAS\nONLINE',
-      tone: 'blue',
-      program: 'UTBK 2026',
-      type: 'Kelas Online',
-      typeClass: 'online',
-      price: 'Rp299.000',
-      discount: '20%',
-      finalPrice: 'Rp239.000',
-      status: 'Aktif',
-      statusClass: 'aktif',
-      sold: '186',
-    },
-    {
-      name: 'Rekaman Kelas UTBK 2026',
-      desc: 'Akses rekaman kelas kapan saja dan di mana saja.',
-      thumb: 'REKAMAN\nKELAS',
-      tone: 'purple',
-      program: 'UTBK 2026',
-      type: 'Rekaman Kelas',
-      typeClass: 'recorded',
-      price: 'Rp199.000',
-      discount: '25%',
-      finalPrice: 'Rp149.000',
-      status: 'Aktif',
-      statusClass: 'aktif',
-      sold: '275',
-    },
-    {
-      name: 'Tryout Bundle SNBT 2026',
-      desc: 'Paket tryout SNBT 2026 terlengkap.',
-      thumb: 'TRYOUT\nBUNDLE',
-      tone: 'red',
-      program: 'SNBT 2026',
-      type: 'Tryout',
-      typeClass: 'tryout',
-      price: 'Rp175.000',
-      discount: '15%',
-      finalPrice: 'Rp148.750',
-      status: 'Aktif',
-      statusClass: 'aktif',
-      sold: '213',
-    },
-    {
-      name: 'Kelas Online SNBT 2026',
-      desc: 'Materi, latihan, dan live class persiapan SNBT.',
-      thumb: 'KELAS\nONLINE',
-      tone: 'blue',
-      program: 'SNBT 2026',
-      type: 'Kelas Online',
-      typeClass: 'online',
-      price: 'Rp329.000',
-      discount: '20%',
-      finalPrice: 'Rp263.200',
-      status: 'Nonaktif',
-      statusClass: 'nonaktif',
-      sold: '32',
-    },
-  ]
+  const loadPackages = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingPackages(true)
+    }
+
+    setPackageError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (selectedProgram !== 'Semua Program') params.set('kategori', selectedProgram)
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/packages${params.toString() ? `?${params.toString()}` : ''}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data paket gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setPackageRows(Array.isArray(payload?.data) ? payload.data : [])
+        setPackageSummary(payload?.summary ?? { total_paket: 0, paket_aktif: 0, paket_nonaktif: 0, total_penjualan: 0 })
+      }
+      } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data paket gagal dimuat.')
+        setPackageError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingPackages(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadPackages({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedProgram])
+
+  const openAddPackageModal = () => {
+    if (packageSuccessTimerRef.current) {
+      window.clearTimeout(packageSuccessTimerRef.current)
+      packageSuccessTimerRef.current = null
+    }
+
+    setPackageSubmitError(null)
+    setPackageSubmitSuccess(null)
+    setPackageForm({
+      kategori: 'CPNS',
+      formasi: '',
+      jadwal: '',
+      nama_paket: '',
+      harga: '',
+      ket: '',
+    })
+    setShowAddPackageModal(true)
+  }
+
+  const closeAddPackageModal = () => {
+    if (isSavingPackage) return
+
+    if (packageSuccessTimerRef.current) {
+      window.clearTimeout(packageSuccessTimerRef.current)
+      packageSuccessTimerRef.current = null
+    }
+
+    setShowAddPackageModal(false)
+    setPackageSubmitError(null)
+    setPackageSubmitSuccess(null)
+  }
+
+  const handlePackageFieldChange = (field, value) => {
+    setPackageForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  const handleAddPackageSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!packageForm.kategori.trim() || !packageForm.nama_paket.trim() || String(packageForm.harga).trim() === '') {
+      setPackageSubmitError('Kategori, nama paket, dan harga wajib diisi.')
+      return
+    }
+
+    setIsSavingPackage(true)
+    setPackageSubmitError(null)
+    setPackageSubmitSuccess(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/packages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          kategori: packageForm.kategori.trim(),
+          formasi: packageForm.formasi.trim(),
+          jadwal: packageForm.jadwal.trim(),
+          nama_paket: packageForm.nama_paket.trim(),
+          harga: Number(packageForm.harga),
+          ket: packageForm.ket.trim(),
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Paket gagal disimpan (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setPackageSubmitSuccess('Data paket berhasil disimpan.')
+      setShowAddPackageModal(false)
+      setPackageForm({
+        kategori: 'CPNS',
+        formasi: '',
+        jadwal: '',
+        nama_paket: '',
+        harga: '',
+        ket: '',
+      })
+
+      await loadPackages({ cancelled: () => false, showLoading: false })
+
+      if (packageSuccessTimerRef.current) {
+        window.clearTimeout(packageSuccessTimerRef.current)
+      }
+
+      packageSuccessTimerRef.current = window.setTimeout(() => {
+        setPackageSubmitSuccess(null)
+        packageSuccessTimerRef.current = null
+      }, 2800)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Paket gagal disimpan.'
+      setPackageSubmitError(message)
+    } finally {
+      setIsSavingPackage(false)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (packageSuccessTimerRef.current) {
+        window.clearTimeout(packageSuccessTimerRef.current)
+      }
+    }
+  }, [])
+
+  const visiblePackageRows = packageRows.filter((row) => {
+    const search = packageSearch.trim().toLowerCase()
+    if (selectedStatus !== 'Semua Status' && String(row.status || '').toLowerCase() !== selectedStatus.toLowerCase()) {
+      return false
+    }
+
+    if (!search) return true
+
+    return [row.name, row.program, row.type, row.price, row.status, row.desc]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(search))
+  })
+
+  const totalPackagePages = Math.max(1, Math.ceil(visiblePackageRows.length / packagePageSize))
+  const safePackageCurrentPage = Math.min(packageCurrentPage, totalPackagePages)
+  const packageStartIndex = (safePackageCurrentPage - 1) * packagePageSize
+  const packagePaginatedRows = visiblePackageRows.slice(packageStartIndex, packageStartIndex + packagePageSize)
+
+  useEffect(() => {
+    setPackageCurrentPage(1)
+  }, [packageSearch, selectedProgram, selectedStatus, packagePageSize])
+
+  useEffect(() => {
+    if (packageCurrentPage > totalPackagePages) {
+      setPackageCurrentPage(totalPackagePages)
+    }
+  }, [packageCurrentPage, totalPackagePages])
+
+  const renderPackagePaginationPages = () => {
+    if (totalPackagePages <= 1) return [1]
+
+    const pages = new Set([1, totalPackagePages, safePackageCurrentPage])
+    if (safePackageCurrentPage > 1) pages.add(safePackageCurrentPage - 1)
+    if (safePackageCurrentPage < totalPackagePages) pages.add(safePackageCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
 
   const handleLogout = () => {
     setShowLogoutConfirm(true)
@@ -2901,10 +3730,14 @@ function AdminPackageManagementPage() {
             searchPlaceholder="Cari paket..."
             currentDateLabel={currentDateLabel}
             displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
             isSidebarCollapsed={isSidebarCollapsed}
             onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
             showSearch={false}
             onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
           />
 
           <section className="admin-package-hero">
@@ -2917,7 +3750,7 @@ function AdminPackageManagementPage() {
 
             <div className="admin-package-actions">
               <button type="button" className="admin-outline-action">⬇ Ekspor Data</button>
-              <button type="button" className="admin-primary-action">＋ Tambah Paket</button>
+              <button type="button" className="admin-primary-action" onClick={openAddPackageModal}>＋ Tambah Paket</button>
             </div>
           </section>
 
@@ -2935,15 +3768,29 @@ function AdminPackageManagementPage() {
           </section>
 
           <section className="admin-card admin-package-filter-card">
+            {packageError ? <div className="admin-user-message error">{packageError}</div> : null}
+            {isLoadingPackages ? <div className="admin-user-message">Memuat data paket...</div> : null}
+
             <div className="admin-package-filters">
               <label className="admin-package-search">
                 <span aria-hidden="true">⌕</span>
-                <input type="search" placeholder="Cari paket..." />
+                <input type="search" placeholder="Cari paket..." value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} />
               </label>
 
               <div className="admin-package-filter-group">
                 {packageFilters.map((filter) => (
-                  <select key={filter.placeholder} className="admin-package-select" defaultValue={filter.placeholder}>
+                  <select
+                    key={filter.key}
+                    className="admin-package-select"
+                    value={filter.value}
+                    onChange={(event) => {
+                      if (filter.key === 'program') {
+                        setSelectedProgram(event.target.value)
+                      } else {
+                        setSelectedStatus(event.target.value)
+                      }
+                    }}
+                  >
                     {filter.options.map((option) => (
                       <option key={option}>{option}</option>
                     ))}
@@ -2951,12 +3798,34 @@ function AdminPackageManagementPage() {
                 ))}
 
                 <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
-                <button type="button" className="admin-package-reset">Reset</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={packagePageSize}
+                    onChange={(event) => setPackagePageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="admin-package-reset"
+                  onClick={() => {
+                    setPackageSearch('')
+                    setSelectedProgram('Semua Program')
+                    setSelectedStatus('Semua Status')
+                  }}
+                >
+                  Reset
+                </button>
               </div>
             </div>
           </section>
 
           <section className="admin-card admin-package-table-card">
+            {packageSubmitSuccess ? <div className="admin-package-banner success">{packageSubmitSuccess}</div> : null}
             <div className="admin-package-table-wrap">
               <table className="admin-user-table admin-package-table">
                 <thead>
@@ -2973,8 +3842,8 @@ function AdminPackageManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {packageRows.map((row) => (
-                    <tr key={row.name}>
+                  {packagePaginatedRows.map((row) => (
+                    <tr key={row.pid}>
                       <td>
                         <div className="admin-package-cell">
                           <div className={`admin-package-thumb ${row.tone}`}>
@@ -3007,19 +3876,34 @@ function AdminPackageManagementPage() {
             </div>
 
             <div className="admin-package-footer admin-user-footer">
-              <p>Menampilkan 1 - 5 dari 24 paket</p>
+              <p>Menampilkan {packagePaginatedRows.length} data dari {visiblePackageRows.length} paket</p>
               <div className="admin-pagination">
-                <button type="button" className="admin-pagination-arrow">‹</button>
-                <button type="button" className="admin-pagination-page active">1</button>
-                <button type="button" className="admin-pagination-page">2</button>
-                <button type="button" className="admin-pagination-page">3</button>
-                <span className="admin-pagination-dots">…</span>
-                <button type="button" className="admin-pagination-page">5</button>
-                <button type="button" className="admin-pagination-arrow">›</button>
-                <button type="button" className="admin-pagination-size">10 / halaman <span aria-hidden="true">⌄</span></button>
+                <button type="button" className="admin-pagination-arrow" disabled={safePackageCurrentPage === 1} onClick={() => setPackageCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                {renderPackagePaginationPages().map((page, index, array) => {
+                  const previousPage = array[index - 1]
+                  const shouldShowDots = previousPage && page - previousPage > 1
+
+                  return (
+                    <span key={page}>
+                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                      <button type="button" className={`admin-pagination-page${page === safePackageCurrentPage ? ' active' : ''}`} onClick={() => setPackageCurrentPage(page)}>{page}</button>
+                    </span>
+                  )
+                })}
+                <button type="button" className="admin-pagination-arrow" disabled={safePackageCurrentPage === totalPackagePages} onClick={() => setPackageCurrentPage((current) => Math.min(totalPackagePages, current + 1))}>›</button>
               </div>
             </div>
           </section>
+
+          <AdminPackageFormModal
+            open={showAddPackageModal}
+            onCancel={closeAddPackageModal}
+            onSubmit={handleAddPackageSubmit}
+            form={packageForm}
+            onFieldChange={handlePackageFieldChange}
+            loading={isSavingPackage}
+            error={packageSubmitError}
+          />
 
           <AdminLogoutModal
             open={showLogoutConfirm}
@@ -3034,6 +3918,8 @@ function AdminPackageManagementPage() {
 
 function App() {
   useEffect(() => {
+    document.title = 'Nice On'
+
     const faviconLink = document.querySelector('link[rel="icon"]') || document.createElement('link')
 
     faviconLink.setAttribute('rel', 'icon')
@@ -3083,6 +3969,10 @@ function App() {
       <Route
         path="/dashboard-admin/packages"
         element={<AdminPackageManagementPage />}
+      />
+      <Route
+        path="/dashboard-admin/transactions"
+        element={<AdminTransactionManagementPage />}
       />
     </Routes>
   )
