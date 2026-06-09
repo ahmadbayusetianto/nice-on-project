@@ -58,7 +58,24 @@ CREATE TABLE tbl_paket (
 );
 
 -- =========================
--- 4. TABEL TRANSAKSI
+-- 4. TABEL FAQ
+-- =========================
+CREATE TABLE tbl_faq (
+    pid BIGINT AUTO_INCREMENT PRIMARY KEY,
+    kategori VARCHAR(100) NULL,
+    pertanyaan VARCHAR(255) NOT NULL,
+    jawaban TEXT NOT NULL,
+    ikon VARCHAR(50) NULL,
+    urutan INT UNSIGNED DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT NULL,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+    updated_by BIGINT NULL
+);
+
+-- =========================
+-- 5. TABEL TRANSAKSI
 -- =========================
 CREATE TABLE tbl_transaksi (
     pid BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -84,6 +101,19 @@ CREATE TABLE tbl_transaksi (
         ON UPDATE CASCADE
 );
 
+
+-- =========================
+-- SEEDER FAQ
+-- =========================
+INSERT INTO tbl_faq
+(kategori, pertanyaan, jawaban, ikon, urutan, is_active, created_by)
+VALUES
+('Umum', 'Lorem ipsum dolor sit amet consectetur?', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.', '❓', 1, 1, 1),
+('Umum', 'Consectetur adipiscing elit sed do eiusmod?', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.', '📘', 2, 1, 1),
+('Umum', 'Tempor incididunt ut labore et dolore?', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.', '💬', 3, 1, 1),
+('Program', 'Magna aliqua ut enim ad minim veniam?', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.', '🎓', 4, 1, 1),
+('Program', 'Quis nostrud exercitation ullamco laboris?', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.', '🧩', 5, 1, 1),
+('Program', 'Nisi ut aliquip ex ea commodo consequat?', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.', '🛡️', 6, 1, 1);
 
 -- =========================
 -- SEEDER USER

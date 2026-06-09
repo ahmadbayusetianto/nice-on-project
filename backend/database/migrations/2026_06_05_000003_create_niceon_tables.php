@@ -64,6 +64,22 @@ return new class extends Migration
             });
         }
 
+        if (!Schema::hasTable('tbl_faq')) {
+            Schema::create('tbl_faq', function (Blueprint $table) {
+                $table->id('pid');
+                $table->string('kategori', 100)->nullable();
+                $table->string('pertanyaan', 255);
+                $table->text('jawaban');
+                $table->string('ikon', 50)->nullable();
+                $table->unsignedInteger('urutan')->default(0);
+                $table->boolean('is_active')->default(true);
+                $table->dateTime('created_at')->useCurrent();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->dateTime('updated_at')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+            });
+        }
+
         if (!Schema::hasTable('tbl_transaksi')) {
             Schema::create('tbl_transaksi', function (Blueprint $table) {
                 $table->id('pid');
@@ -97,6 +113,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('tbl_transaksi');
+        Schema::dropIfExists('tbl_faq');
         Schema::dropIfExists('tbl_paket');
         Schema::dropIfExists('tbl_detail_user');
         Schema::dropIfExists('tbl_user');

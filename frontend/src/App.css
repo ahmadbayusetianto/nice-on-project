@@ -1142,16 +1142,23 @@
 }
 
 .faq-item-ref summary::after {
-  content: '⌄';
-  display: inline-block;
-  font-size: 24px;
+  content: '+';
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1;
   color: #2153db;
 }
 
 .faq-item-ref[open] summary::after {
-  transform: rotate(180deg);
+  content: '-';
+}
+
+.faq-item-ref summary .faq-chevron {
+  display: none;
 }
 
 .faq-summary-left {
@@ -1188,6 +1195,12 @@
   color: #51647f;
   font-size: 15px;
   line-height: 1.55;
+}
+
+.faq-loading-note {
+  margin-top: 12px;
+  color: #6a7ea7;
+  font-size: 14px;
 }
 
 .faq-help-card {

@@ -149,6 +149,38 @@ Route::get('/packages', function (Request $request) {
     ]);
 });
 
+Route::get('/faqs', function () {
+    $faqs = DB::table('tbl_faq')
+        ->select([
+            'pid',
+            'kategori',
+            'pertanyaan',
+            'jawaban',
+            'ikon',
+            'urutan',
+            'is_active',
+        ])
+        ->where('is_active', 1)
+        ->orderBy('urutan')
+        ->orderBy('pid')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'pid' => (int) $item->pid,
+                'kategori' => $item->kategori,
+                'pertanyaan' => $item->pertanyaan,
+                'jawaban' => $item->jawaban,
+                'ikon' => $item->ikon ?: '❓',
+                'urutan' => (int) $item->urutan,
+            ];
+        });
+
+    return response()->json([
+        'message' => 'Data FAQ berhasil dimuat.',
+        'data' => $faqs,
+    ]);
+});
+
 Route::get('/admin/packages', function (Request $request) {
     $kategori = trim((string) $request->query('kategori', ''));
 

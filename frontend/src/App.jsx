@@ -102,6 +102,15 @@ function getFriendlyFetchError(error, fallbackMessage) {
   return message || fallbackMessage
 }
 
+const DEFAULT_FAQ_ITEMS = [
+  { icon: '❓', label: 'Lorem ipsum dolor sit amet consectetur?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
+  { icon: '📘', label: 'Consectetur adipiscing elit sed do eiusmod?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
+  { icon: '💬', label: 'Tempor incididunt ut labore et dolore?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
+  { icon: '🎓', label: 'Magna aliqua ut enim ad minim veniam?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
+  { icon: '🧩', label: 'Quis nostrud exercitation ullamco laboris?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
+  { icon: '🛡️', label: 'Nisi ut aliquip ex ea commodo consequat?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
+]
+
 function AdminTopbar({
   title,
   searchPlaceholder,
@@ -742,6 +751,8 @@ function HomePage() {
   const [selectedProgram, setSelectedProgram] = useState('CPNS')
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
+  const [faqRows, setFaqRows] = useState([])
+  const [faqLoading, setFaqLoading] = useState(true)
   const isLoggedIn = Boolean(storedUser)
   const displayName = storedUser?.nama || storedUser?.name || storedUser?.email?.split('@')?.[0] || 'User'
   const authLabel = Number(storedUser?.is_admin ?? 0) === 1 ? 'Admin' : 'User'
@@ -920,14 +931,13 @@ function HomePage() {
     })
   }, [packageRows])
 
-  const faqItems = [
-    { icon: '❓', label: 'Lorem ipsum dolor sit amet consectetur?' },
-    { icon: '📘', label: 'Consectetur adipiscing elit sed do eiusmod?' },
-    { icon: '💬', label: 'Tempor incididunt ut labore et dolore?' },
-    { icon: '🎓', label: 'Magna aliqua ut enim ad minim veniam?' },
-    { icon: '🧩', label: 'Quis nostrud exercitation ullamco laboris?' },
-    { icon: '🛡️', label: 'Nisi ut aliquip ex ea commodo consequat?' },
-  ]
+  const faqItems = faqRows.length
+    ? faqRows.map((item) => ({
+      icon: item.icon || '❓',
+      label: item.pertanyaan,
+      answer: item.jawaban,
+    }))
+    : DEFAULT_FAQ_ITEMS
 
   const currentSlide = heroSlides[activeSlide]
 
@@ -967,6 +977,41 @@ function HomePage() {
     return () => {
       window.removeEventListener('scroll', onScroll)
       if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadFaqs = async () => {
+      setFaqLoading(true)
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/faqs`)
+        const payload = await response.json()
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'Data FAQ gagal dimuat.')
+        }
+
+        if (!cancelled) {
+          setFaqRows(Array.isArray(payload.data) ? payload.data : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setFaqRows([])
+        }
+      } finally {
+        if (!cancelled) {
+          setFaqLoading(false)
+        }
+      }
+    }
+
+    void loadFaqs()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -1267,11 +1312,11 @@ function HomePage() {
                       <span className="faq-icon-badge" aria-hidden="true">{item.icon}</span>
                       <span>{item.label}</span>
                     </span>
-                    <span className="faq-chevron" aria-hidden="true">⌄</span>
                   </summary>
-                  <div className="faq-answer">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.</div>
+                  <div className="faq-answer">{item.answer}</div>
                 </details>
               ))}
+              {faqLoading ? <div className="faq-loading-note">Memuat FAQ...</div> : null}
             </div>
           </div>
 
