@@ -5,6 +5,7 @@ import niceonImage from '../../niceon.png'
 import './App.css'
 
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+//const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://api.niceon.id'
 const AUTH_STORAGE_KEY = 'niceon.auth.user'
 const ADMIN_SIDEBAR_COLLAPSED_KEY = 'niceon.admin.sidebarCollapsed'
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
@@ -110,6 +111,25 @@ const DEFAULT_FAQ_ITEMS = [
   { icon: '🧩', label: 'Quis nostrud exercitation ullamco laboris?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
   { icon: '🛡️', label: 'Nisi ut aliquip ex ea commodo consequat?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
 ]
+
+function createPackageFormFromDetail(detail = {}) {
+  return {
+    kategori: detail.kategori ?? 'CPNS',
+    formasi: detail.formasi ?? '',
+    jadwal: detail.jadwal ?? '',
+    nama_paket: detail.nama_paket ?? '',
+    harga: detail.harga !== undefined && detail.harga !== null ? String(detail.harga) : '',
+    ket: detail.ket ?? '',
+  }
+}
+
+function parseCurrencyToNumber(value) {
+  const normalized = String(value ?? '')
+    .replace(/[^\d]/g, '')
+    .trim()
+
+  return normalized ? Number(normalized) : ''
+}
 
 function AdminTopbar({
   title,
@@ -261,15 +281,16 @@ function AdminLogoutModal({ open, onCancel, onConfirm, title = 'Keluar dari akun
   )
 }
 
-function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error }) {
+function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah Paket', submitLabel = 'Simpan Paket', helpText = 'Isi data paket sesuai kolom yang tersedia di tabel paket.' }) {
   if (!open) return null
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
       <div className="admin-modal admin-package-modal" role="dialog" aria-modal="true" aria-labelledby="adminPackageTitle" onClick={(event) => event.stopPropagation()}>
         <div className="admin-modal-icon" aria-hidden="true">📦</div>
-        <h3 id="adminPackageTitle">Tambah Paket</h3>
-        <p>Isi data paket sesuai kolom yang tersedia di tabel paket.</p>
+        <h3 id="adminPackageTitle">{title}</h3>
+        <p>{helpText}</p>
+        {loading ? <div className="admin-package-form-loading">Memuat data paket...</div> : null}
 
         <form className="admin-package-form" onSubmit={onSubmit}>
           {error ? <div className="admin-package-form-error">{error}</div> : null}
@@ -277,7 +298,7 @@ function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, 
           <div className="admin-package-form-grid">
             <label className="admin-package-field">
               <span>Kategori</span>
-              <select value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)}>
+               <select value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)} disabled={loading}>
                 <option value="CPNS">CPNS</option>
                 <option value="PPPK">PPPK</option>
               </select>
@@ -285,33 +306,33 @@ function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, 
 
             <label className="admin-package-field">
               <span>Nama Paket</span>
-              <input type="text" value={form.nama_paket} onChange={(event) => onFieldChange('nama_paket', event.target.value)} placeholder="Contoh: Paket Premium CPNS" />
+              <input type="text" value={form.nama_paket} onChange={(event) => onFieldChange('nama_paket', event.target.value)} placeholder="Contoh: Paket Premium CPNS" disabled={loading} />
             </label>
 
             <label className="admin-package-field">
               <span>Formasi</span>
-              <input type="text" value={form.formasi} onChange={(event) => onFieldChange('formasi', event.target.value)} placeholder="Contoh: Online / Offline" />
+              <input type="text" value={form.formasi} onChange={(event) => onFieldChange('formasi', event.target.value)} placeholder="Contoh: Online / Offline" disabled={loading} />
             </label>
 
             <label className="admin-package-field">
               <span>Jadwal</span>
-              <input type="text" value={form.jadwal} onChange={(event) => onFieldChange('jadwal', event.target.value)} placeholder="Contoh: Batch 1 - Mei 2026" />
+              <input type="text" value={form.jadwal} onChange={(event) => onFieldChange('jadwal', event.target.value)} placeholder="Contoh: Batch 1 - Mei 2026" disabled={loading} />
             </label>
 
             <label className="admin-package-field admin-package-field-full">
               <span>Harga</span>
-              <input type="number" min="0" step="1" value={form.harga} onChange={(event) => onFieldChange('harga', event.target.value)} placeholder="Contoh: 250000" />
+              <input type="number" min="0" step="1" value={form.harga} onChange={(event) => onFieldChange('harga', event.target.value)} placeholder="Contoh: 250000" disabled={loading} />
             </label>
 
             <label className="admin-package-field admin-package-field-full">
               <span>Keterangan</span>
-              <textarea value={form.ket} onChange={(event) => onFieldChange('ket', event.target.value)} placeholder="Deskripsi singkat paket"></textarea>
+              <textarea value={form.ket} onChange={(event) => onFieldChange('ket', event.target.value)} placeholder="Deskripsi singkat paket" disabled={loading}></textarea>
             </label>
           </div>
 
           <div className="admin-modal-actions admin-package-form-actions">
             <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
-            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : 'Simpan Paket'}</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : submitLabel}</button>
           </div>
         </form>
       </div>
@@ -745,7 +766,6 @@ function HomePage() {
   const heroCardRef = useRef(null)
   const [activeSlide, setActiveSlide] = useState(0)
   const [activeTestimonial, setActiveTestimonial] = useState(0)
-  const [isPromoVisible, setIsPromoVisible] = useState(true)
   const [storedUser, setStoredUser] = useState(() => readStoredUser())
   const [packageRows, setPackageRows] = useState([])
   const [selectedProgram, setSelectedProgram] = useState('CPNS')
@@ -949,8 +969,6 @@ function HomePage() {
     })
   }
 
-  const handlePromoClose = () => setIsPromoVisible(false)
-
   useEffect(() => {
     const layers = Array.from(document.querySelectorAll('[data-parallax]'))
     if (!layers.length) return
@@ -1070,18 +1088,6 @@ function HomePage() {
 
   return (
     <div className="app">
-      {isPromoVisible ? (
-        <div className="promo" data-parallax data-speed="0.04">
-          <div className="container promo-inner">
-            <span className="promo-copy">Satu langkah kecil hari ini, peluang besar di hari seleksi.</span>
-            <span className="promo-pill">Klaim Kelas Trial Gratis -&gt;</span>
-            <button type="button" className="promo-close" onClick={handlePromoClose} aria-label="Tutup promo">
-              ×
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <header className="topbar">
         <div className="container topbar-inner">
           <div className="logo">
@@ -1676,7 +1682,18 @@ function RegisterPage() {
                   {captchaLoading ? 'Memuat...' : 'Muat Ulang'}
                 </button>
               </div>
-              <input id="captchaAnswer" type="text" placeholder="Ketik kode captcha" autoComplete="off" value={form.captchaAnswer} onChange={updateField('captchaAnswer')} />
+              <input
+                id="captchaAnswer"
+                type="text"
+                placeholder="Ketik kode captcha"
+                autoComplete="off"
+                value={form.captchaAnswer}
+                onChange={(event) => {
+                  const value = event.target.value.toUpperCase()
+                  setForm((current) => ({ ...current, captchaAnswer: value }))
+                  setFieldErrors((current) => ({ ...current, captcha_answer: undefined }))
+                }}
+              />
               {fieldErrors.captcha_answer ? <div className="field-error">{fieldErrors.captcha_answer[0]}</div> : null}
               {captchaChallenge?.token ? <input type="hidden" name="captchaToken" value={captchaChallenge.token} readOnly /> : null}
             </div>
@@ -3390,7 +3407,22 @@ function AdminUserManagementPage() {
                       <td>
                         <div className="admin-row-actions">
                           <button type="button" className="admin-row-action">👁</button>
-                          <button type="button" className="admin-row-action">✎</button>
+                           <button
+                             type="button"
+                             className="admin-row-action admin-row-action-edit"
+                             title="Edit paket"
+                             aria-label={`Edit paket ${row.name}`}
+                             onMouseDown={(event) => {
+                               event.preventDefault()
+                               void openEditPackageModal(row)
+                             }}
+                             onClick={(event) => {
+                               event.preventDefault()
+                               void openEditPackageModal(row)
+                             }}
+                           >
+                             ✎<span>Edit</span>
+                           </button>
                           <button type="button" className="admin-row-action danger">🗑</button>
                         </div>
                       </td>
@@ -3448,6 +3480,8 @@ function AdminPackageManagementPage() {
   const [isSavingPackage, setIsSavingPackage] = useState(false)
   const [packageSubmitError, setPackageSubmitError] = useState(null)
   const [packageSubmitSuccess, setPackageSubmitSuccess] = useState(null)
+  const [packageModalMode, setPackageModalMode] = useState('create')
+  const [editingPackagePid, setEditingPackagePid] = useState(null)
   const [packageForm, setPackageForm] = useState({
     kategori: 'CPNS',
     formasi: '',
@@ -3556,6 +3590,8 @@ function AdminPackageManagementPage() {
       packageSuccessTimerRef.current = null
     }
 
+    setPackageModalMode('create')
+    setEditingPackagePid(null)
     setPackageSubmitError(null)
     setPackageSubmitSuccess(null)
     setPackageForm({
@@ -3567,6 +3603,45 @@ function AdminPackageManagementPage() {
       ket: '',
     })
     setShowAddPackageModal(true)
+  }
+
+  const openEditPackageModal = async (row) => {
+    if (packageSuccessTimerRef.current) {
+      window.clearTimeout(packageSuccessTimerRef.current)
+      packageSuccessTimerRef.current = null
+    }
+
+    setPackageModalMode('edit')
+    setEditingPackagePid(row?.pid ?? null)
+    setPackageSubmitError(null)
+    setPackageSubmitSuccess(null)
+    setShowAddPackageModal(true)
+    setPackageForm({
+      kategori: row?.program || 'CPNS',
+      formasi: row?.type || '',
+      jadwal: '',
+      nama_paket: row?.name || '',
+      harga: parseCurrencyToNumber(row?.price),
+      ket: row?.desc || '',
+    })
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/packages/${row?.pid}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Detail paket gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setPackageForm(createPackageFormFromDetail(payload?.data ?? {}))
+    } catch (error) {
+      // Keep the modal usable even if detail fetch fails.
+    } finally {
+      // Keep modal responsive; detail fetch is optional.
+    }
   }
 
   const closeAddPackageModal = () => {
@@ -3589,7 +3664,7 @@ function AdminPackageManagementPage() {
     }))
   }
 
-  const handleAddPackageSubmit = async (event) => {
+  const handlePackageSubmit = async (event) => {
     event.preventDefault()
 
     if (!packageForm.kategori.trim() || !packageForm.nama_paket.trim() || String(packageForm.harga).trim() === '') {
@@ -3602,8 +3677,9 @@ function AdminPackageManagementPage() {
     setPackageSubmitSuccess(null)
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/packages`, {
-        method: 'POST',
+      const isEditMode = packageModalMode === 'edit' && editingPackagePid !== null
+      const response = await fetch(`${BACKEND_URL}/api/admin/packages${isEditMode ? `/${editingPackagePid}` : ''}`, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -3627,8 +3703,9 @@ function AdminPackageManagementPage() {
         throw new Error(message)
       }
 
-      setPackageSubmitSuccess('Data paket berhasil disimpan.')
+      setPackageSubmitSuccess(isEditMode ? 'Data paket berhasil diperbarui.' : 'Data paket berhasil disimpan.')
       setShowAddPackageModal(false)
+      setEditingPackagePid(null)
       setPackageForm({
         kategori: 'CPNS',
         formasi: '',
@@ -3909,9 +3986,19 @@ function AdminPackageManagementPage() {
                       <td>{row.sold}</td>
                       <td>
                         <div className="admin-row-actions admin-package-row-actions">
-                          <button type="button" className="admin-row-action">👁</button>
-                          <button type="button" className="admin-row-action">✎</button>
-                          <button type="button" className="admin-row-action danger">🗑</button>
+                          <button type="button" className="admin-row-action" title="Lihat paket" aria-label={`Lihat paket ${row.name}`}>👁</button>
+                          <button
+                            type="button"
+                            className="admin-row-action admin-row-action-edit"
+                            title="Edit paket"
+                            aria-label={`Edit paket ${row.name}`}
+                            onClick={() => {
+                              void openEditPackageModal(row)
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button type="button" className="admin-row-action danger" title="Hapus paket" aria-label={`Hapus paket ${row.name}`}>🗑</button>
                         </div>
                       </td>
                     </tr>
@@ -3943,11 +4030,14 @@ function AdminPackageManagementPage() {
           <AdminPackageFormModal
             open={showAddPackageModal}
             onCancel={closeAddPackageModal}
-            onSubmit={handleAddPackageSubmit}
+            onSubmit={handlePackageSubmit}
             form={packageForm}
             onFieldChange={handlePackageFieldChange}
             loading={isSavingPackage}
             error={packageSubmitError}
+            title={packageModalMode === 'edit' ? 'Edit Paket' : 'Tambah Paket'}
+            submitLabel={packageModalMode === 'edit' ? 'Perbarui Paket' : 'Simpan Paket'}
+            helpText={packageModalMode === 'edit' ? 'Ubah data paket lalu simpan perubahan.' : 'Isi data paket sesuai kolom yang tersedia di tabel paket.'}
           />
 
           <AdminLogoutModal

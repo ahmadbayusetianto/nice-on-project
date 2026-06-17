@@ -4229,6 +4229,12 @@
   font-size: 14px;
 }
 
+.admin-package-form-loading {
+  margin: 10px 0 14px;
+  color: #6a7ea7;
+  font-size: 14px;
+}
+
 .admin-package-form-actions {
   margin-top: 18px;
 }
@@ -5727,13 +5733,29 @@
 }
 
 .admin-row-action {
-  width: 34px;
-  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 1px solid rgba(22, 47, 91, 0.08);
   border-radius: 10px;
   background: #f8faff;
   color: #17305b;
   cursor: pointer;
+}
+
+.admin-row-action-edit {
+  width: auto;
+  min-width: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-row-action-edit span {
+  line-height: 1;
 }
 
 .admin-row-action.danger {

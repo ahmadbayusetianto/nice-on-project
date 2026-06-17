@@ -282,6 +282,96 @@ Route::post('/admin/packages', function (Request $request) {
     ], 201);
 });
 
+Route::get('/admin/packages/{pid}', function ($pid) {
+    $package = DB::table('tbl_paket')
+        ->select([
+            'pid',
+            'kategori',
+            'formasi',
+            'jadwal',
+            'nama_paket',
+            'harga',
+            'ket',
+            'created_at',
+            'created_by',
+            'updated_at',
+            'updated_by',
+        ])
+        ->where('pid', $pid)
+        ->first();
+
+    if (!$package) {
+        return response()->json([
+            'message' => 'Paket tidak ditemukan.',
+        ], 404);
+    }
+
+    return response()->json([
+        'message' => 'Detail paket berhasil dimuat.',
+        'data' => [
+            'pid' => (int) $package->pid,
+            'kategori' => $package->kategori,
+            'formasi' => $package->formasi,
+            'jadwal' => $package->jadwal,
+            'nama_paket' => $package->nama_paket,
+            'harga' => (float) $package->harga,
+            'ket' => $package->ket,
+            'created_at' => $package->created_at,
+            'created_by' => $package->created_by,
+            'updated_at' => $package->updated_at,
+            'updated_by' => $package->updated_by,
+        ],
+    ]);
+});
+
+Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
+    $validator = Validator::make($request->all(), [
+        'kategori' => ['required', 'string', 'max:100'],
+        'formasi' => ['nullable', 'string', 'max:100'],
+        'jadwal' => ['nullable', 'string', 'max:150'],
+        'nama_paket' => ['required', 'string', 'max:150'],
+        'harga' => ['required', 'numeric', 'min:0'],
+        'ket' => ['nullable', 'string'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi paket gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $existingPackage = DB::table('tbl_paket')->where('pid', $pid)->first();
+
+    if (!$existingPackage) {
+        return response()->json([
+            'message' => 'Paket tidak ditemukan.',
+        ], 404);
+    }
+
+    $validated = $validator->validated();
+
+    DB::table('tbl_paket')
+        ->where('pid', $pid)
+        ->update([
+            'kategori' => $validated['kategori'],
+            'formasi' => $validated['formasi'] ?? null,
+            'jadwal' => $validated['jadwal'] ?? null,
+            'nama_paket' => $validated['nama_paket'],
+            'harga' => $validated['harga'],
+            'ket' => $validated['ket'] ?? null,
+            'updated_at' => now(),
+            'updated_by' => $request->user()->pid ?? null,
+        ]);
+
+    return response()->json([
+        'message' => 'Paket berhasil diperbarui.',
+        'data' => DB::table('tbl_paket')
+            ->where('pid', $pid)
+            ->first(),
+    ]);
+});
+
 Route::get('/admin/transactions', function (Request $request) {
     $search = trim((string) $request->query('search', ''));
     $status = trim((string) $request->query('status', ''));
