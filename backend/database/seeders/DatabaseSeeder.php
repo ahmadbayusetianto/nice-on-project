@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             TblUserSeeder::class,
             PackageSeeder::class,
             FAQSeeder::class,
+            ParameterSeeder::class,
         ]);
     }
 }

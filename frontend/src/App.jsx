@@ -4,8 +4,8 @@ import faviconImage from '../../favicon.png'
 import niceonImage from '../../niceon.png'
 import './App.css'
 
-const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
-//const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://api.niceon.id'
+const DEFAULT_BACKEND_URL = import.meta.env.PROD ? 'https://api.niceon.id' : 'http://127.0.0.1:8000'
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BACKEND_URL
 const AUTH_STORAGE_KEY = 'niceon.auth.user'
 const ADMIN_SIDEBAR_COLLAPSED_KEY = 'niceon.admin.sidebarCollapsed'
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
@@ -92,12 +92,22 @@ function formatAdminDate(value, options = {}) {
   }).format(date)
 }
 
+function formatReferenceDisplay(detail = {}) {
+  const reference = String(detail.refference ?? '').trim()
+  const referenceOther = String(detail.reference_other ?? '').trim()
+
+  if (!reference) return 'Belum diisi'
+  if (reference === 'Lainnya' && referenceOther) return `Lainnya: ${referenceOther}`
+
+  return reference
+}
+
 function getFriendlyFetchError(error, fallbackMessage) {
   const message = error instanceof Error ? error.message : ''
   const normalized = message.toLowerCase()
 
   if (normalized.includes('failed to fetch') || normalized.includes('networkerror') || normalized.includes('load failed') || normalized.includes('fetch failed')) {
-    return 'Backend tidak dapat dijangkau. Pastikan server Laravel berjalan di http://127.0.0.1:8000.'
+    return 'Backend tidak dapat dijangkau. Pastikan server Laravel berjalan di https://api.niceon.id.'
   }
 
   return message || fallbackMessage
@@ -123,12 +133,35 @@ function createPackageFormFromDetail(detail = {}) {
   }
 }
 
+function createParameterFormFromDetail(detail = {}) {
+  return {
+    kode: detail.kode ?? '',
+    nama: detail.nama ?? '',
+    kategori: detail.kategori ?? 'Aplikasi',
+    nilai: detail.nilai ?? '',
+    tipe: detail.tipe ?? 'text',
+    deskripsi: detail.deskripsi ?? '',
+    is_active: Boolean(detail.status_key ? detail.status_key === 'active' : detail.status !== 'Nonaktif'),
+  }
+}
+
 function parseCurrencyToNumber(value) {
   const normalized = String(value ?? '')
     .replace(/[^\d]/g, '')
     .trim()
 
   return normalized ? Number(normalized) : ''
+}
+
+function formatParameterValue(detail = {}) {
+  const type = String(detail.tipe ?? 'text')
+  const value = String(detail.nilai ?? '')
+
+  if (type === 'boolean') {
+    return value === '1' || value.toLowerCase() === 'true' ? 'Aktif' : 'Nonaktif'
+  }
+
+  return value || '-'
 }
 
 function AdminTopbar({
@@ -340,6 +373,82 @@ function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, 
   )
 }
 
+function AdminParameterFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah Parameter', submitLabel = 'Simpan Parameter', helpText = 'Atur nilai parameter aplikasi yang dipakai oleh sistem.' }) {
+  if (!open) return null
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-parameter-modal" role="dialog" aria-modal="true" aria-labelledby="adminParameterTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-modal-icon" aria-hidden="true">⚙</div>
+        <h3 id="adminParameterTitle">{title}</h3>
+        <p>{helpText}</p>
+        {loading ? <div className="admin-package-form-loading">Memuat data parameter...</div> : null}
+
+        <form className="admin-package-form admin-parameter-form" onSubmit={onSubmit}>
+          {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+          <div className="admin-package-form-grid admin-parameter-form-grid">
+            <label className="admin-package-field">
+              <span>Kode</span>
+              <input type="text" value={form.kode} onChange={(event) => onFieldChange('kode', event.target.value)} placeholder="Contoh: app.name" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Nama</span>
+              <input type="text" value={form.nama} onChange={(event) => onFieldChange('nama', event.target.value)} placeholder="Contoh: Nama Aplikasi" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Kategori</span>
+              <input type="text" value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)} placeholder="Contoh: Aplikasi" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Tipe</span>
+              <select value={form.tipe} onChange={(event) => onFieldChange('tipe', event.target.value)} disabled={loading}>
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="select">Select</option>
+              </select>
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Nilai</span>
+              <input type="text" value={form.nilai} onChange={(event) => onFieldChange('nilai', event.target.value)} placeholder="Contoh: Nice On Learning Hub" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Deskripsi</span>
+              <textarea value={form.deskripsi} onChange={(event) => onFieldChange('deskripsi', event.target.value)} placeholder="Penjelasan singkat parameter" disabled={loading}></textarea>
+            </label>
+
+            <label className="admin-package-field admin-package-field-full admin-parameter-toggle-field">
+              <span>Status Aktif</span>
+              <button
+                type="button"
+                className={`admin-parameter-toggle${form.is_active ? ' active' : ''}`}
+                onClick={() => onFieldChange('is_active', !form.is_active)}
+                disabled={loading}
+              >
+                <span className="admin-parameter-toggle-track" aria-hidden="true">
+                  <span className="admin-parameter-toggle-thumb" />
+                </span>
+                <span>{form.is_active ? 'Aktif' : 'Nonaktif'}</span>
+              </button>
+            </label>
+          </div>
+
+          <div className="admin-modal-actions admin-package-form-actions">
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : submitLabel}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function AdminTransactionManagementPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -388,7 +497,7 @@ function AdminTransactionManagementPage() {
   ]
 
   const adminSystemMenu = [
-    { label: 'Pengaturan', href: '#' },
+    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters' },
     { label: 'Admin', href: '#' },
     { label: 'Log Aktivitas', href: '#' },
   ]
@@ -1805,10 +1914,28 @@ function CompleteProfilePage() {
     nohp: '',
     alamat: '',
     refference: '',
+    referenceOther: '',
   })
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitMessage, setSubmitMessage] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const onboardingSteps = [
+    { number: '1', label: 'Buat Akun', state: 'complete' },
+    { number: '2', label: 'Lengkapi Profil', state: 'current' },
+    { number: '3', label: 'Mulai Belajar', state: 'pending' },
+  ]
+  const referenceOptions = ['Instagram', 'Teman', 'Google', 'TikTok', 'YouTube', 'Sekolah/Kampus', 'Lainnya']
+  const completedOnboardingSteps = onboardingSteps.filter((step) => step.state === 'complete').length
+  const profileProgress = Math.round((completedOnboardingSteps / onboardingSteps.length) * 100)
+
+  const sanitizePhoneNumber = (value) => {
+    const normalized = String(value ?? '').replace(/[^0-9+]/g, '')
+    if (!normalized.includes('+')) return normalized
+
+    const leadingPlus = normalized.startsWith('+') ? '+' : ''
+    const digitsOnly = normalized.slice(leadingPlus ? 1 : 0).replace(/\+/g, '')
+    return `${leadingPlus}${digitsOnly}`
+  }
 
   const updateField = (field) => (event) => {
     const value = event.target.value
@@ -1843,6 +1970,7 @@ function CompleteProfilePage() {
           nohp: form.nohp,
           alamat: form.alamat,
           refference: form.refference,
+          reference_other: form.refference === 'Lainnya' ? form.referenceOther : '',
         }),
       })
 
@@ -1866,38 +1994,41 @@ function CompleteProfilePage() {
   }
 
   return (
-    <div className="auth-page auth-page-blue onboarding-page">
-      <div className="onboarding-shell">
-        <header className="onboarding-header-card onboarding-surface-card">
-          <div>
-            <div className="onboarding-success-pill">Akun Berhasil Dibuat</div>
+    <div className="auth-page auth-page-blue onboarding-page complete-profile-page">
+      <div className="complete-profile-shell">
+        <header className="complete-profile-hero onboarding-surface-card">
+          <div className="complete-profile-hero-copy">
+            <div className="onboarding-success-pill complete-profile-badge">Almost there</div>
             <h1>Bagus, akunmu sudah siap. Tinggal lengkapi profil untuk lanjut belajar.</h1>
-            <p>Kami ubah tahap ini jadi onboarding, bukan layar login biasa, supaya progresmu terasa jelas dari awal.</p>
+            <p>Kami siapkan langkah onboarding yang lebih rapi supaya pengalaman belajarmu terasa lebih personal dan terarah.</p>
+
+            <div className="complete-profile-stepper" aria-label="Progress onboarding">
+              {onboardingSteps.map((step) => (
+                <div key={step.label} className={`complete-profile-step is-${step.state}`}>
+                  <span>{step.state === 'complete' ? '✓' : step.number}</span>
+                  <strong>{step.label}</strong>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="onboarding-stepper" aria-label="Progress onboarding">
-            <div className="onboarding-step is-complete">
-              <span>1</span>
-              <strong>Buat Akun</strong>
-            </div>
-            <div className="onboarding-step is-current">
-              <span>2</span>
-              <strong>Lengkapi Profil</strong>
-            </div>
-            <div className="onboarding-step">
-              <span>3</span>
-              <strong>Mulai Belajar</strong>
+          <div className="complete-profile-progress-wrap" aria-label="Progress selesai 25 persen">
+            <div className="complete-profile-progress-ring" style={{ '--progress-angle': `${profileProgress * 3.6}deg` }}>
+              <div className="complete-profile-progress-inner">
+                <strong>{profileProgress}%</strong>
+                <span>Selesai</span>
+              </div>
             </div>
           </div>
         </header>
 
-        <div className="onboarding-body onboarding-surface-card">
-          <aside className="onboarding-summary-panel onboarding-summary-surface">
+        <div className="complete-profile-grid">
+          <aside className="onboarding-summary-panel onboarding-summary-surface complete-profile-side-card">
             <img src={niceonImage} alt="Nice On" className="onboarding-stage-logo" />
-            <p className="onboarding-stage-kicker">Next step</p>
-            <h2>Lengkapi identitas dasar agar sistem bisa menyiapkan pengalaman belajar yang pas.</h2>
+            <p className="onboarding-stage-kicker">Next Step</p>
+            <h2>Lengkapi identitas dasar agar pengalaman belajar lebih pas.</h2>
 
-            <div className="onboarding-summary-grid">
+            <div className="onboarding-summary-grid complete-profile-summary-grid">
               <div className="onboarding-summary-card">
                 <span>Email Terdaftar</span>
                 <strong>{registeredUser?.email ?? 'Belum tersedia'}</strong>
@@ -1912,7 +2043,7 @@ function CompleteProfilePage() {
               </div>
             </div>
 
-            <div className="onboarding-bullet-card">
+            <div className="onboarding-bullet-card complete-profile-benefits-card">
               <strong>Setelah profil selesai</strong>
               <ul>
                 <li>Data akun jadi lebih lengkap dan siap dipakai</li>
@@ -1924,55 +2055,131 @@ function CompleteProfilePage() {
 
           <section className="register-card complete-profile-card onboarding-form-card onboarding-form-surface">
             <div className="auth-secondary-logo onboarding-mini-brand" aria-label="Nice On">NICE ON</div>
-            <h2 className="complete-profile-title">Lengkapi Profil</h2>
-            <p className="register-sub">Isi data inti dulu supaya akunmu siap dipakai belajar.</p>
+            <p className="complete-profile-kicker">Lengkapi Profil</p>
+            <h2 className="complete-profile-title">Informasi tentang dirimu</h2>
+            <p className="register-sub complete-profile-sub">Isi data dasar dengan benar agar pengalaman belajar bisa disesuaikan lebih optimal.</p>
 
-            <div className="submit-message success onboarding-account-banner">
+            <div className="submit-message success onboarding-account-banner complete-profile-banner">
               <strong>Akun onboarding aktif.</strong> {registeredUser ? <>Email <strong>{registeredUser.email}</strong> sudah tercatat dengan ID <strong>{registeredUser.pid}</strong>.</> : 'Lanjutkan dengan melengkapi profil dasar.'}
             </div>
 
-            <form className="register-form" onSubmit={(event) => void handleCompleteProfileSubmit(event)}>
-              <label htmlFor="profileName">Nama</label>
-              <input id="profileName" type="text" placeholder="Masukkan nama lengkap" value={form.nama} onChange={updateField('nama')} />
-              {fieldErrors.nama ? <div className="field-error">{fieldErrors.nama[0]}</div> : null}
+            <form className="register-form complete-profile-form" onSubmit={(event) => void handleCompleteProfileSubmit(event)}>
+              <div className="complete-profile-fields">
+                <div className="complete-profile-field full">
+                  <label htmlFor="profileName">Nama Lengkap</label>
+                  <input id="profileName" type="text" placeholder="Masukkan nama lengkap" value={form.nama} onChange={updateField('nama')} />
+                  {fieldErrors.nama ? <div className="field-error">{fieldErrors.nama[0]}</div> : null}
+                </div>
 
-              <label htmlFor="profileTtl">Tempat, Tanggal Lahir</label>
-              <input id="profileTtl" type="text" placeholder="Contoh: Jakarta, 01 Januari 2000" value={form.ttl} onChange={updateField('ttl')} />
-              {fieldErrors.ttl ? <div className="field-error">{fieldErrors.ttl[0]}</div> : null}
+                <div className="complete-profile-field full">
+                  <label htmlFor="profileTtl">Tempat, Tanggal Lahir</label>
+                  <input id="profileTtl" type="text" placeholder="Contoh: Jakarta, 01 Januari 2000" value={form.ttl} onChange={updateField('ttl')} />
+                  {fieldErrors.ttl ? <div className="field-error">{fieldErrors.ttl[0]}</div> : null}
+                </div>
 
-              <label htmlFor="profileGender">Jenis Kelamin</label>
-              <select id="profileGender" value={form.gender} onChange={updateField('gender')}>
-                <option value="" disabled>Pilih jenis kelamin</option>
-                <option value="L">Laki-laki</option>
-                <option value="P">Perempuan</option>
-              </select>
-              {fieldErrors.gender ? <div className="field-error">{fieldErrors.gender[0]}</div> : null}
+                <div className="complete-profile-field">
+                  <label htmlFor="profileGender">Jenis Kelamin</label>
+                  <select id="profileGender" value={form.gender} onChange={updateField('gender')}>
+                    <option value="" disabled>Pilih jenis kelamin</option>
+                    <option value="L">Laki-laki</option>
+                    <option value="P">Perempuan</option>
+                  </select>
+                  {fieldErrors.gender ? <div className="field-error">{fieldErrors.gender[0]}</div> : null}
+                </div>
 
-              <label htmlFor="profilePhone">No. HP</label>
-              <input id="profilePhone" type="tel" placeholder="08xxxxxxxxxx" value={form.nohp} onChange={updateField('nohp')} />
-              {fieldErrors.nohp ? <div className="field-error">{fieldErrors.nohp[0]}</div> : null}
+                <div className="complete-profile-field">
+                  <label htmlFor="profilePhone">No. HP</label>
+                  <input
+                    id="profilePhone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="08xxxxxxxxxx"
+                    value={form.nohp}
+                    onChange={(event) => {
+                      const value = sanitizePhoneNumber(event.target.value)
+                      setForm((current) => ({ ...current, nohp: value }))
+                      setFieldErrors((current) => ({ ...current, nohp: undefined }))
+                    }}
+                  />
+                  {fieldErrors.nohp ? <div className="field-error">{fieldErrors.nohp[0]}</div> : null}
+                </div>
 
-              <label htmlFor="profileAddress">Alamat</label>
-              <textarea id="profileAddress" placeholder="Masukkan alamat lengkap" value={form.alamat} onChange={updateField('alamat')}></textarea>
-              {fieldErrors.alamat ? <div className="field-error">{fieldErrors.alamat[0]}</div> : null}
+                <div className="complete-profile-field full">
+                  <label htmlFor="profileAddress">Alamat</label>
+                  <textarea id="profileAddress" placeholder="Masukkan alamat lengkap" value={form.alamat} onChange={updateField('alamat')}></textarea>
+                  {fieldErrors.alamat ? <div className="field-error">{fieldErrors.alamat[0]}</div> : null}
+                </div>
 
-              <label htmlFor="profileReference">Referensi</label>
-              <input id="profileReference" type="text" placeholder="Contoh: Instagram, Teman, Internal" value={form.refference} onChange={updateField('refference')} />
-              {fieldErrors.refference ? <div className="field-error">{fieldErrors.refference[0]}</div> : null}
+                <div className="complete-profile-field full">
+                  <label htmlFor="profileReference">Referensi (Opsional)</label>
+                  <select
+                    id="profileReference"
+                    value={form.refference}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setForm((current) => ({
+                        ...current,
+                        refference: value,
+                        referenceOther: value === 'Lainnya' ? current.referenceOther : '',
+                      }))
+                      setFieldErrors((current) => ({
+                        ...current,
+                        refference: undefined,
+                        reference_other: undefined,
+                      }))
+                    }}
+                  >
+                    <option value="">Pilih referensi</option>
+                    {referenceOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  {fieldErrors.refference ? <div className="field-error">{fieldErrors.refference[0]}</div> : null}
+                </div>
 
-              {fieldErrors.pid_user ? <div className="field-error">{fieldErrors.pid_user[0]}</div> : null}
+                {form.refference === 'Lainnya' ? (
+                  <div className="complete-profile-field full">
+                    <label htmlFor="profileReferenceOther">Referensi Lainnya</label>
+                    <input
+                      id="profileReferenceOther"
+                      type="text"
+                      placeholder="Tulis referensi lainnya"
+                      value={form.referenceOther}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setForm((current) => ({ ...current, referenceOther: value }))
+                        setFieldErrors((current) => ({ ...current, reference_other: undefined }))
+                      }}
+                    />
+                    {fieldErrors.reference_other ? <div className="field-error">{fieldErrors.reference_other[0]}</div> : null}
+                  </div>
+                ) : null}
 
-              {submitMessage ? <div className={`submit-message ${submitMessage.type}`}>{submitMessage.text}</div> : null}
+                {fieldErrors.pid_user ? <div className="field-error complete-profile-error full">{fieldErrors.pid_user[0]}</div> : null}
 
-              <button type="submit" className="register-btn" disabled={isSubmitting}>
-                {isSubmitting ? 'Menyimpan...' : 'Simpan dan Lanjut'}
+                {submitMessage ? <div className={`submit-message ${submitMessage.type} complete-profile-submit full`}>{submitMessage.text}</div> : null}
+              </div>
+
+              <button type="submit" className="register-btn complete-profile-btn" disabled={isSubmitting}>
+                <span>{isSubmitting ? 'Menyimpan...' : 'Simpan dan Lanjut'}</span>
+                <span className="complete-profile-btn-arrow" aria-hidden="true">→</span>
               </button>
 
-              <div className="onboarding-footer-note">Setelah ini kamu bisa lanjut ke tahap belajar dengan identitas akun yang sudah lebih lengkap.</div>
+              <div className="onboarding-footer-note complete-profile-security-note">Data kamu aman. Kami tidak akan membagikan informasi pribadimu ke pihak lain.</div>
 
-              <Link to="/login" className="back-home">Lanjut ke Login</Link>
+              <Link to="/login" className="back-home complete-profile-back-link">Lanjut ke Login</Link>
             </form>
           </section>
+        </div>
+
+        <div className="complete-profile-footer">
+          <strong>Langkah 2 dari 3</strong>
+          <div className="complete-profile-dots" aria-hidden="true">
+            <span className="is-active"></span>
+            <span></span>
+            <span></span>
+          </div>
         </div>
       </div>
     </div>
@@ -2006,7 +2213,7 @@ function AccountProfileEditModal({ open, onClose, profile }) {
             ['Jenis Kelamin', detail.gender === 'L' ? 'Laki-laki' : detail.gender === 'P' ? 'Perempuan' : 'Belum diisi'],
             ['No. HP', detail.nohp || 'Belum diisi'],
             ['Alamat', detail.alamat || 'Belum diisi'],
-            ['Referensi', detail.refference || 'Belum diisi'],
+            ['Referensi', formatReferenceDisplay(detail)],
           ].map(([label, value]) => (
             <label className="account-profile-field" key={label}>
               <span>{label}</span>
@@ -2123,7 +2330,7 @@ function AccountProfilePage() {
     ['Jenis Kelamin', genderLabel],
     ['No. HP', detail.nohp || 'Belum diisi'],
     ['Alamat', detail.alamat || 'Belum diisi'],
-    ['Referensi', detail.refference || 'Belum diisi'],
+    ['Referensi', formatReferenceDisplay(detail)],
   ]
 
   const sidebarItems = [
@@ -2806,7 +3013,12 @@ function AdminDashboardPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
-  const [totalPackages, setTotalPackages] = useState('24')
+  const [dashboardSummary, setDashboardSummary] = useState({
+    total_user: 0,
+    total_transaksi: 0,
+    total_pendapatan: 0,
+    total_paket: 0,
+  })
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
@@ -2818,10 +3030,10 @@ function AdminDashboardPage() {
 
   const displayName = user?.email?.split('@')?.[0] || 'Admin'
   const summaryCards = [
-    { label: 'Total User', value: '1.248', delta: '↑ 12.5% dari minggu lalu', accent: 'blue', icon: '👥' },
-    { label: 'Total Transaksi', value: '320', delta: '↑ 8.2% dari minggu lalu', accent: 'green', icon: '🛒' },
-    { label: 'Total Pendapatan', value: 'Rp 24.560.000', delta: '↑ 15.3% dari minggu lalu', accent: 'orange', icon: '💳' },
-    { label: 'Total Paket', value: totalPackages, delta: 'Tidak berubah', accent: 'purple', icon: '📦' },
+    { label: 'Total User', value: String(dashboardSummary.total_user ?? 0), delta: 'Data dari tbl_user', accent: 'blue', icon: '👥' },
+    { label: 'Total Transaksi', value: String(dashboardSummary.total_transaksi ?? 0), delta: 'Data dari tbl_transaksi', accent: 'green', icon: '🛒' },
+    { label: 'Total Pendapatan', value: formatCurrency(dashboardSummary.total_pendapatan ?? 0), delta: 'Transaksi berstatus paid', accent: 'orange', icon: '💳' },
+    { label: 'Total Paket', value: String(dashboardSummary.total_paket ?? 0), delta: 'Data dari tbl_paket', accent: 'purple', icon: '📦' },
   ]
   const activityItems = [
     { icon: '👤', title: 'User baru mendaftar', subtitle: 'Budi Santoso', time: '10 menit lalu', tone: 'blue' },
@@ -2862,7 +3074,7 @@ function AdminDashboardPage() {
     { label: 'Laporan', href: '#' },
   ]
   const adminSystemMenu = [
-    { label: 'Pengaturan', href: '#', active: false },
+    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters', active: false },
     { label: 'Admin', href: '#', active: false },
     { label: 'Log Aktivitas', href: '#', active: false },
   ]
@@ -2891,10 +3103,15 @@ function AdminDashboardPage() {
         if (!response.ok) return
 
         const payload = await response.json()
-        const nextTotal = payload?.data?.total_paket
+        const nextSummary = payload?.data
 
-        if (!cancelled && nextTotal !== undefined && nextTotal !== null) {
-          setTotalPackages(String(nextTotal))
+        if (!cancelled && nextSummary) {
+          setDashboardSummary({
+            total_user: Number(nextSummary.total_user ?? 0),
+            total_transaksi: Number(nextSummary.total_transaksi ?? 0),
+            total_pendapatan: Number(nextSummary.total_pendapatan ?? 0),
+            total_paket: Number(nextSummary.total_paket ?? 0),
+          })
         }
       } catch {
         // Keep fallback value.
@@ -3158,7 +3375,7 @@ function AdminUserManagementPage() {
   ]
 
   const adminSystemMenu = [
-    { label: 'Pengaturan', href: '#' },
+    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters' },
     { label: 'Admin', href: '#' },
     { label: 'Log Aktivitas', href: '#' },
   ]
@@ -3520,7 +3737,7 @@ function AdminPackageManagementPage() {
   ]
 
   const adminSystemMenu = [
-    { label: 'Pengaturan', href: '#' },
+    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters' },
     { label: 'Admin', href: '#' },
     { label: 'Log Aktivitas', href: '#' },
   ]
@@ -4051,6 +4268,570 @@ function AdminPackageManagementPage() {
   )
 }
 
+function AdminSettingsParameterPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [parameterRows, setParameterRows] = useState([])
+  const [parameterCategories, setParameterCategories] = useState([])
+  const [isLoadingParameters, setIsLoadingParameters] = useState(true)
+  const [parameterError, setParameterError] = useState(null)
+  const [parameterSearch, setParameterSearch] = useState('')
+  const [selectedParameterCategory, setSelectedParameterCategory] = useState('Semua Kategori')
+  const [selectedParameterStatus, setSelectedParameterStatus] = useState('Semua Status')
+  const [parameterCurrentPage, setParameterCurrentPage] = useState(1)
+  const [parameterPageSize, setParameterPageSize] = useState(10)
+  const [showParameterModal, setShowParameterModal] = useState(false)
+  const [isSavingParameter, setIsSavingParameter] = useState(false)
+  const [parameterSubmitError, setParameterSubmitError] = useState(null)
+  const [parameterSubmitSuccess, setParameterSubmitSuccess] = useState(null)
+  const [parameterModalMode, setParameterModalMode] = useState('create')
+  const [editingParameterPid, setEditingParameterPid] = useState(null)
+  const [parameterForm, setParameterForm] = useState({
+    kode: '',
+    nama: '',
+    kategori: 'Aplikasi',
+    nilai: '',
+    tipe: 'text',
+    deskripsi: '',
+    is_active: true,
+  })
+  const [parameterSummary, setParameterSummary] = useState({ total_parameter: 0, parameter_aktif: 0, parameter_nonaktif: 0 })
+  const parameterSuccessTimerRef = useRef(null)
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+
+  if (!user || Number(user?.is_admin ?? 0) !== 1) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-admin/settings/parameters' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.email?.split('@')?.[0] || 'Admin'
+  const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+    .format(new Date())
+    .replace(/^./, (char) => char.toUpperCase())
+
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
+
+  const adminSettingsMenu = [
+    { label: 'Parameter', href: '/dashboard-admin/settings/parameters', active: true },
+    { label: 'Kategori', href: '#' },
+    { label: 'Metode Pembayaran', href: '#' },
+    { label: 'Notifikasi', href: '#' },
+  ]
+
+  const parameterSummaryCards = [
+    { label: 'Total Parameter', value: String(parameterSummary.total_parameter ?? 0), delta: 'Semua parameter', accent: 'blue', icon: '⚙' },
+    { label: 'Parameter Aktif', value: String(parameterSummary.parameter_aktif ?? 0), delta: 'Parameter yang dipakai sistem', accent: 'green', icon: '✅' },
+    { label: 'Parameter Nonaktif', value: String(parameterSummary.parameter_nonaktif ?? 0), delta: 'Parameter sementara dimatikan', accent: 'orange', icon: '⏸' },
+    { label: 'Kategori Tersedia', value: String(Math.max(0, parameterCategories.length - 1)), delta: 'Filter kategori', accent: 'purple', icon: '🗂' },
+  ]
+
+  const loadParameters = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingParameters(true)
+    }
+
+    setParameterError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (parameterSearch.trim()) params.set('search', parameterSearch.trim())
+      if (selectedParameterCategory !== 'Semua Kategori') params.set('category', selectedParameterCategory)
+      if (selectedParameterStatus !== 'Semua Status') params.set('status', selectedParameterStatus)
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/parameters${params.toString() ? `?${params.toString()}` : ''}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data parameter gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setParameterRows(Array.isArray(payload?.data) ? payload.data : [])
+        setParameterSummary(payload?.summary ?? { total_parameter: 0, parameter_aktif: 0, parameter_nonaktif: 0 })
+        setParameterCategories(['Semua Kategori', ...(Array.isArray(payload?.categories) ? payload.categories : [])])
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data parameter gagal dimuat.')
+        setParameterError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingParameters(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadParameters({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [parameterSearch, selectedParameterCategory, selectedParameterStatus])
+
+  const openAddParameterModal = () => {
+    if (parameterSuccessTimerRef.current) {
+      window.clearTimeout(parameterSuccessTimerRef.current)
+      parameterSuccessTimerRef.current = null
+    }
+
+    setParameterModalMode('create')
+    setEditingParameterPid(null)
+    setParameterSubmitError(null)
+    setParameterSubmitSuccess(null)
+    setParameterForm({
+      kode: '',
+      nama: '',
+      kategori: selectedParameterCategory !== 'Semua Kategori' ? selectedParameterCategory : 'Aplikasi',
+      nilai: '',
+      tipe: 'text',
+      deskripsi: '',
+      is_active: true,
+    })
+    setShowParameterModal(true)
+  }
+
+  const openEditParameterModal = async (row) => {
+    if (parameterSuccessTimerRef.current) {
+      window.clearTimeout(parameterSuccessTimerRef.current)
+      parameterSuccessTimerRef.current = null
+    }
+
+    setParameterModalMode('edit')
+    setEditingParameterPid(row?.pid ?? null)
+    setParameterSubmitError(null)
+    setParameterSubmitSuccess(null)
+    setShowParameterModal(true)
+    setParameterForm({
+      kode: row?.kode || '',
+      nama: row?.nama || '',
+      kategori: row?.kategori || 'Aplikasi',
+      nilai: row?.nilai || '',
+      tipe: row?.tipe || 'text',
+      deskripsi: row?.deskripsi || '',
+      is_active: (row?.status_key || 'active') === 'active',
+    })
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/parameters/${row?.pid}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Detail parameter gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setParameterForm(createParameterFormFromDetail(payload?.data ?? {}))
+    } catch {
+      // Keep the modal usable even if detail fetch fails.
+    }
+  }
+
+  const closeParameterModal = () => {
+    if (isSavingParameter) return
+
+    if (parameterSuccessTimerRef.current) {
+      window.clearTimeout(parameterSuccessTimerRef.current)
+      parameterSuccessTimerRef.current = null
+    }
+
+    setShowParameterModal(false)
+    setParameterSubmitError(null)
+    setParameterSubmitSuccess(null)
+  }
+
+  const handleParameterFieldChange = (field, value) => {
+    setParameterForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  const handleParameterSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!parameterForm.kode.trim() || !parameterForm.nama.trim() || !parameterForm.nilai.trim()) {
+      setParameterSubmitError('Kode, nama, dan nilai wajib diisi.')
+      return
+    }
+
+    setIsSavingParameter(true)
+    setParameterSubmitError(null)
+    setParameterSubmitSuccess(null)
+
+    try {
+      const isEditMode = parameterModalMode === 'edit' && editingParameterPid !== null
+      const response = await fetch(`${BACKEND_URL}/api/admin/parameters${isEditMode ? `/${editingParameterPid}` : ''}`, {
+        method: isEditMode ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          kode: parameterForm.kode.trim(),
+          nama: parameterForm.nama.trim(),
+          kategori: parameterForm.kategori.trim(),
+          nilai: parameterForm.nilai.trim(),
+          tipe: parameterForm.tipe,
+          deskripsi: parameterForm.deskripsi.trim(),
+          is_active: Boolean(parameterForm.is_active),
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Parameter gagal disimpan (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setParameterSubmitSuccess(isEditMode ? 'Parameter berhasil diperbarui.' : 'Parameter berhasil disimpan.')
+      setShowParameterModal(false)
+      setEditingParameterPid(null)
+      setParameterForm({
+        kode: '',
+        nama: '',
+        kategori: 'Aplikasi',
+        nilai: '',
+        tipe: 'text',
+        deskripsi: '',
+        is_active: true,
+      })
+
+      await loadParameters({ cancelled: () => false, showLoading: false })
+
+      if (parameterSuccessTimerRef.current) {
+        window.clearTimeout(parameterSuccessTimerRef.current)
+      }
+
+      parameterSuccessTimerRef.current = window.setTimeout(() => {
+        setParameterSubmitSuccess(null)
+        parameterSuccessTimerRef.current = null
+      }, 2800)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Parameter gagal disimpan.'
+      setParameterSubmitError(message)
+    } finally {
+      setIsSavingParameter(false)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (parameterSuccessTimerRef.current) {
+        window.clearTimeout(parameterSuccessTimerRef.current)
+      }
+    }
+  }, [])
+
+  const visibleParameterRows = parameterRows
+
+  const totalParameterPages = Math.max(1, Math.ceil(visibleParameterRows.length / parameterPageSize))
+  const safeParameterCurrentPage = Math.min(parameterCurrentPage, totalParameterPages)
+  const parameterStartIndex = (safeParameterCurrentPage - 1) * parameterPageSize
+  const parameterPaginatedRows = visibleParameterRows.slice(parameterStartIndex, parameterStartIndex + parameterPageSize)
+
+  useEffect(() => {
+    setParameterCurrentPage(1)
+  }, [parameterSearch, selectedParameterCategory, selectedParameterStatus, parameterPageSize])
+
+  useEffect(() => {
+    if (parameterCurrentPage > totalParameterPages) {
+      setParameterCurrentPage(totalParameterPages)
+    }
+  }, [parameterCurrentPage, totalParameterPages])
+
+  const renderParameterPaginationPages = () => {
+    if (totalParameterPages <= 1) return [1]
+
+    const pages = new Set([1, totalParameterPages, safeParameterCurrentPage])
+    if (safeParameterCurrentPage > 1) pages.add(safeParameterCurrentPage - 1)
+    if (safeParameterCurrentPage < totalParameterPages) pages.add(safeParameterCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
+    clearAuthUser()
+
+    navigate('/login', { replace: true })
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  return (
+    <div className="admin-dashboard-page admin-parameter-page">
+      <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <div className="admin-brand-block">
+            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
+              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
+                <strong>Admin Panel</strong>
+                <span>Learning Hub</span>
+              </div>
+            </Link>
+          </div>
+
+          <div className="admin-sidebar-group-label">Main</div>
+          <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
+            {adminMainMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="admin-sidebar-group-label">Pengaturan</div>
+          <nav className="admin-sidebar-nav admin-settings-nav" aria-label="Menu pengaturan admin">
+            {adminSettingsMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar-item secondary admin-settings-item${item.active ? ' active' : ''}${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="admin-sidebar-footer-card">
+            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
+              <span aria-hidden="true">⎋</span>
+              <span>Keluar</span>
+            </button>
+          </div>
+        </aside>
+
+        <main className="admin-main admin-parameter-main">
+          <AdminTopbar
+            title="Parameter"
+            searchPlaceholder="Cari parameter..."
+            currentDateLabel={currentDateLabel}
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
+            onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
+          />
+
+          <section className="admin-hero-row admin-parameter-hero">
+            <div>
+              <h2>Daftar Parameter</h2>
+              <div className="admin-breadcrumb">
+                Dashboard <span>›</span> Pengaturan <span>›</span> Parameter
+              </div>
+            </div>
+
+            <div className="admin-package-actions admin-parameter-actions">
+              <button type="button" className="admin-outline-action">⬇ Ekspor Data</button>
+              <button type="button" className="admin-primary-action" onClick={openAddParameterModal}>＋ Tambah Parameter</button>
+            </div>
+          </section>
+
+          <section className="admin-summary-grid admin-parameter-summary-grid">
+            {parameterSummaryCards.map((card) => (
+              <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                <div className="admin-summary-copy">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <p>{card.delta}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="admin-card admin-parameter-filter-card">
+            {parameterError ? <div className="admin-user-message error">{parameterError}</div> : null}
+            {isLoadingParameters ? <div className="admin-user-message">Memuat data parameter...</div> : null}
+
+            <div className="admin-package-filters admin-parameter-filters">
+              <label className="admin-package-search">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="Cari parameter..." value={parameterSearch} onChange={(event) => setParameterSearch(event.target.value)} />
+              </label>
+
+              <div className="admin-package-filter-group admin-parameter-filter-group">
+                <select className="admin-package-select" value={selectedParameterCategory} onChange={(event) => setSelectedParameterCategory(event.target.value)}>
+                  {(parameterCategories.length ? parameterCategories : ['Semua Kategori']).map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <select className="admin-package-select" value={selectedParameterStatus} onChange={(event) => setSelectedParameterStatus(event.target.value)}>
+                  {['Semua Status', 'Aktif', 'Nonaktif'].map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={parameterPageSize}
+                    onChange={(event) => setParameterPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="admin-package-reset"
+                  onClick={() => {
+                    setParameterSearch('')
+                    setSelectedParameterCategory('Semua Kategori')
+                    setSelectedParameterStatus('Semua Status')
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="admin-card admin-parameter-table-card">
+            {parameterSubmitSuccess ? <div className="admin-package-banner success">{parameterSubmitSuccess}</div> : null}
+            <div className="admin-user-table-wrap">
+              <table className="admin-user-table admin-parameter-table">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th>Kode</th>
+                    <th>Kategori</th>
+                    <th>Nilai</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parameterPaginatedRows.map((row) => (
+                    <tr key={row.pid}>
+                      <td>
+                        <div className="admin-user-cell admin-parameter-cell">
+                          <div className={`admin-user-avatar admin-parameter-avatar ${row.status_key === 'active' ? 'active' : 'inactive'}`}>{row.nama.slice(0, 1)}</div>
+                          <div>
+                            <strong>{row.nama}</strong>
+                            <span>{row.deskripsi || '-'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><code className="admin-parameter-code">{row.kode}</code></td>
+                      <td><span className="admin-parameter-category-pill">{row.kategori}</span></td>
+                      <td>{formatParameterValue(row)}</td>
+                      <td><span className={`admin-status-pill ${row.status_key === 'active' ? 'success' : 'cancelled'}`}>{row.status}</span></td>
+                      <td>
+                        <div className="admin-row-actions admin-package-row-actions">
+                          <button type="button" className="admin-row-action" title="Lihat parameter" aria-label={`Lihat parameter ${row.nama}`}>👁</button>
+                          <button
+                            type="button"
+                            className="admin-row-action admin-row-action-edit"
+                            title="Edit parameter"
+                            aria-label={`Edit parameter ${row.nama}`}
+                            onClick={() => {
+                              void openEditParameterModal(row)
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button type="button" className="admin-row-action danger" title="Hapus parameter" aria-label={`Hapus parameter ${row.nama}`}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-package-footer admin-user-footer">
+              <p>Menampilkan {parameterPaginatedRows.length} data dari {visibleParameterRows.length} parameter</p>
+              <div className="admin-pagination">
+                <button type="button" className="admin-pagination-arrow" disabled={safeParameterCurrentPage === 1} onClick={() => setParameterCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                {renderParameterPaginationPages().map((page, index, array) => {
+                  const previousPage = array[index - 1]
+                  const shouldShowDots = previousPage && page - previousPage > 1
+
+                  return (
+                    <span key={page}>
+                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                      <button type="button" className={`admin-pagination-page${page === safeParameterCurrentPage ? ' active' : ''}`} onClick={() => setParameterCurrentPage(page)}>{page}</button>
+                    </span>
+                  )
+                })}
+                <button type="button" className="admin-pagination-arrow" disabled={safeParameterCurrentPage === totalParameterPages} onClick={() => setParameterCurrentPage((current) => Math.min(totalParameterPages, current + 1))}>›</button>
+              </div>
+            </div>
+          </section>
+
+          <AdminParameterFormModal
+            open={showParameterModal}
+            onCancel={closeParameterModal}
+            onSubmit={handleParameterSubmit}
+            form={parameterForm}
+            onFieldChange={handleParameterFieldChange}
+            loading={isSavingParameter}
+            error={parameterSubmitError}
+            title={parameterModalMode === 'edit' ? 'Edit Parameter' : 'Tambah Parameter'}
+            submitLabel={parameterModalMode === 'edit' ? 'Perbarui Parameter' : 'Simpan Parameter'}
+            helpText={parameterModalMode === 'edit' ? 'Ubah data parameter lalu simpan perubahan.' : 'Isi parameter baru untuk pengaturan aplikasi.'}
+          />
+
+          <AdminLogoutModal
+            open={showLogoutConfirm}
+            onCancel={() => setShowLogoutConfirm(false)}
+            onConfirm={confirmLogout}
+          />
+        </main>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   useEffect(() => {
     document.title = 'Nice On'
@@ -4108,6 +4889,14 @@ function App() {
       <Route
         path="/dashboard-admin/transactions"
         element={<AdminTransactionManagementPage />}
+      />
+      <Route
+        path="/dashboard-admin/settings"
+        element={<Navigate to="/dashboard-admin/settings/parameters" replace />}
+      />
+      <Route
+        path="/dashboard-admin/settings/parameters"
+        element={<AdminSettingsParameterPage />}
       />
     </Routes>
   )

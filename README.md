@@ -57,3 +57,5 @@ Build frontend for production:
 ```bash
 npm run build
 ```
+
+Production frontend output is written to `public_html/` at the repo root so it can be committed and deployed directly to `niceon.id`.

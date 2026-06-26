@@ -1,0 +1,16 @@
+<svg width="1200" height="700" viewBox="0 0 1200 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1200" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7ED5FF"/>
+      <stop offset="1" stop-color="#1577B7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#bg3)"/>
+  <circle cx="250" cy="250" r="120" fill="white" fill-opacity="0.35"/>
+  <circle cx="600" cy="250" r="120" fill="white" fill-opacity="0.28"/>
+  <circle cx="950" cy="250" r="120" fill="white" fill-opacity="0.35"/>
+  <rect x="120" y="410" width="960" height="170" rx="24" fill="white" fill-opacity="0.33"/>
+  <path d="M190 490H1010" stroke="#0B4A8A" stroke-opacity="0.55" stroke-width="14" stroke-linecap="round"/>
+  <path d="M250 530H950" stroke="#0B4A8A" stroke-opacity="0.55" stroke-width="14" stroke-linecap="round"/>
+  <text x="120" y="90" fill="white" font-family="Arial, sans-serif" font-size="52" font-weight="700">DUMMY GALERI - KOMUNITAS BELAJAR</text>
+</svg>

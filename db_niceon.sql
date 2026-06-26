@@ -28,6 +28,7 @@ CREATE TABLE tbl_detail_user (
     nohp VARCHAR(30),
     alamat TEXT,
     refference VARCHAR(150),
+    reference_other VARCHAR(150),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
     updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -41,7 +42,25 @@ CREATE TABLE tbl_detail_user (
 );
 
 -- =========================
--- 3. TABEL PAKET
+-- 3. TABEL PARAMETER
+-- =========================
+CREATE TABLE tbl_parameter (
+    pid BIGINT AUTO_INCREMENT PRIMARY KEY,
+    kode VARCHAR(100) NOT NULL UNIQUE,
+    nama VARCHAR(150) NOT NULL,
+    kategori VARCHAR(100) NOT NULL,
+    nilai VARCHAR(255) NOT NULL,
+    tipe ENUM('text', 'number', 'boolean', 'select') DEFAULT 'text',
+    deskripsi VARCHAR(255),
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT NULL,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+    updated_by BIGINT NULL
+);
+
+-- =========================
+-- 4. TABEL PAKET
 -- =========================
 CREATE TABLE tbl_paket (
     pid BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -58,7 +77,7 @@ CREATE TABLE tbl_paket (
 );
 
 -- =========================
--- 4. TABEL FAQ
+-- 5. TABEL FAQ
 -- =========================
 CREATE TABLE tbl_faq (
     pid BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -75,7 +94,7 @@ CREATE TABLE tbl_faq (
 );
 
 -- =========================
--- 5. TABEL TRANSAKSI
+-- 6. TABEL TRANSAKSI
 -- =========================
 CREATE TABLE tbl_transaksi (
     pid BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -103,6 +122,21 @@ CREATE TABLE tbl_transaksi (
 
 
 -- =========================
+-- SEEDER PARAMETER
+-- =========================
+INSERT INTO tbl_parameter
+(kode, nama, kategori, nilai, tipe, deskripsi, is_active, created_by)
+VALUES
+('app.name', 'Nama Aplikasi', 'Aplikasi', 'Nice On Learning Hub', 'text', 'Nama utama aplikasi.', 1, 1),
+('app.currency', 'Mata Uang Default', 'Keuangan', 'IDR', 'text', 'Mata uang yang digunakan.', 1, 1),
+('mail.from.address', 'Email Pengirim', 'Email & Notifikasi', 'noreply@niceon.id', 'text', 'Email default untuk pengiriman.', 1, 1),
+('tax.ppn', 'PPN (%)', 'Keuangan', '11', 'number', 'Persentase pajak pertambahan nilai.', 1, 1),
+('academic.year', 'Tahun Ajaran Aktif', 'Aplikasi', '2025/2026', 'text', 'Tahun ajaran yang sedang berjalan.', 1, 1),
+('payment.methods', 'Metode Pembayaran Aktif', 'Keuangan', 'bank_transfer,ewallet', 'select', 'Metode pembayaran yang tersedia.', 1, 1),
+('session.lifetime', 'Durasi Sesi (menit)', 'Aplikasi', '120', 'number', 'Durasi sesi login pengguna.', 1, 1),
+('upload.max_size', 'Ukuran Upload Maks (MB)', 'Lainnya', '10', 'number', 'Batas maksimal ukuran file upload.', 1, 1);
+
+-- =========================
 -- SEEDER FAQ
 -- =========================
 INSERT INTO tbl_faq
@@ -122,19 +156,19 @@ VALUES
 INSERT INTO tbl_user 
 (email, password, status, is_admin, created_by)
 VALUES
-('admin@example.com', '$2y$10$abcdefghijklmnopqrstuv1234567890abcdefghi', 'active', 1, NULL),
-('user1@example.com', '$2y$10$abcdefghijklmnopqrstuv1234567890abcdefghi', 'active', 0, 1),
-('user2@example.com', '$2y$10$abcdefghijklmnopqrstuv1234567890abcdefghi', 'active', 0, 1);
+('admin123@gmail.com', '$2y$10$wg9gYahAoXbRAMQRMhcVl.XX0KyO3HMbStRMLQfQjyAmbIlCZvaa6', 'active', 1, NULL),
+('user1@example.com', '$2y$10$wg9gYahAoXbRAMQRMhcVl.XX0KyO3HMbStRMLQfQjyAmbIlCZvaa6', 'active', 0, 1),
+('user2@example.com', '$2y$10$wg9gYahAoXbRAMQRMhcVl.XX0KyO3HMbStRMLQfQjyAmbIlCZvaa6', 'active', 0, 1);
 
 -- =========================
 -- SEEDER DETAIL USER
 -- =========================
 INSERT INTO tbl_detail_user
-(pid_user, nama, ttl, gender, nohp, alamat, refference, created_by)
+(pid_user, nama, ttl, gender, nohp, alamat, refference, reference_other, created_by)
 VALUES
-(1, 'Administrator', 'Jakarta, 01 Januari 1990', 'L', '081111111111', 'Jakarta', 'Internal', 1),
-(2, 'Budi Santoso', 'Bandung, 12 Mei 1998', 'L', '082222222222', 'Bandung', 'Instagram', 1),
-(3, 'Siti Aminah', 'Surabaya, 20 Agustus 1999', 'P', '083333333333', 'Surabaya', 'Teman', 1);
+(1, 'Administrator', 'Jakarta, 01 Januari 1990', 'L', '081111111111', 'Jakarta', 'Internal', NULL, 1),
+(2, 'Budi Santoso', 'Bandung, 12 Mei 1998', 'L', '082222222222', 'Bandung', 'Instagram', NULL, 1),
+(3, 'Siti Aminah', 'Surabaya, 20 Agustus 1999', 'P', '083333333333', 'Surabaya', 'Teman', NULL, 1);
 
 -- =========================
 -- SEEDER PAKET
