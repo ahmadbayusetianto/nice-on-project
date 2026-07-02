@@ -398,6 +398,89 @@ function AdminTopbar({
   )
 }
 
+function AdminBrandBlock({ isCollapsed }) {
+  return (
+    <div className="admin-brand-block">
+      <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
+        <div className="admin-brand-logo-shell">
+          <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+        </div>
+        <div className={`admin-brand-copy${isCollapsed ? ' collapsed' : ''}`}>
+          <strong>Admin Panel</strong>
+          <span>Learning Hub</span>
+        </div>
+      </Link>
+    </div>
+  )
+}
+
+function AdminSystemMenu({ currentPath, navigate }) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(() => currentPath.startsWith('/dashboard-admin/settings'))
+
+  const settingsItems = [
+    { label: 'Parameter', href: '/dashboard-admin/settings/parameters' },
+    { label: 'FAQ', href: '/dashboard-admin/settings/faqs' },
+    { label: 'Kategori', href: '#' },
+    { label: 'Metode Pembayaran', href: '#' },
+    { label: 'Notifikasi', href: '#' },
+  ]
+
+  const systemItems = [
+    { label: 'Admin', href: '#' },
+    { label: 'Log Aktivitas', href: '#' },
+  ]
+
+  const isSettingsActive = currentPath.startsWith('/dashboard-admin/settings')
+
+  return (
+    <>
+      <div className="admin-sidebar-group-label">System</div>
+      <div className="admin-system-menu">
+        <button
+          type="button"
+          className={`admin-system-parent${isSettingsOpen || isSettingsActive ? ' active' : ''}`}
+          onClick={() => setIsSettingsOpen((current) => !current)}
+          aria-expanded={isSettingsOpen}
+        >
+          <span className="admin-sidebar-icon" aria-hidden="true">P</span>
+          <span>Pengaturan</span>
+          <span className="admin-system-parent-indicator" aria-hidden="true">{isSettingsOpen ? '▴' : '▾'}</span>
+        </button>
+
+        {isSettingsOpen ? (
+          <div className="admin-system-submenu" aria-label="Submenu pengaturan admin">
+            {settingsItems.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-system-subitem${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-system-subitem-icon" aria-hidden="true">•</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <nav className="admin-sidebar-nav admin-system-nav" aria-label="Menu sistem admin">
+          {systemItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+              onClick={() => item.href !== '#' && navigate(item.href)}
+            >
+              <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+    </>
+  )
+}
+
 function AdminLogoutModal({ open, onCancel, onConfirm, title = 'Keluar dari akun?', message = 'Pastikan semua pekerjaan sudah disimpan sebelum Anda logout.', confirmLabel = 'Ya, keluar' }) {
   if (!open) return null
 
@@ -683,6 +766,47 @@ function AdminFaqFormModal({ open, onCancel, onSubmit, form, onFieldChange, load
   )
 }
 
+function PackageInfoModal({ open, packageData, onCancel }) {
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onCancel()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, onCancel])
+
+  if (!open || !packageData) return null
+
+  const title = packageData.nama_paket || packageData.name || 'Keterangan Paket'
+  const description = String(packageData.ket || packageData.desc || '').trim() || 'Belum ada keterangan.'
+
+  return (
+    <div className="package-info-backdrop" role="presentation" onClick={onCancel}>
+      <div className="package-info-modal" role="dialog" aria-modal="true" aria-labelledby="packageInfoTitle" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="package-info-close" aria-label="Tutup keterangan paket" onClick={onCancel}>×</button>
+        <div className="package-info-content">
+          <div className="package-info-icon" aria-hidden="true">i</div>
+          <div className="package-info-copy">
+            <h3 id="packageInfoTitle">{title}</h3>
+            <p className="package-info-text">{description}</p>
+          </div>
+        </div>
+        <div className="package-info-footer">
+          <button type="button" className="package-info-action" onClick={onCancel}>
+            <span>Tutup</span>
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AdminTransactionManagementPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -728,12 +852,6 @@ function AdminTransactionManagementPage() {
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
-  ]
-
-  const adminSystemMenu = [
-    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters' },
-    { label: 'Admin', href: '#' },
-    { label: 'Log Aktivitas', href: '#' },
   ]
 
   const transactionSummaryCards = [
@@ -866,17 +984,7 @@ function AdminTransactionManagementPage() {
     <div className="admin-dashboard-page admin-transaction-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="admin-brand-block">
-            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <div className="admin-brand-logo-shell">
-                <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
-              </div>
-              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
-                <strong>Admin Panel</strong>
-                <span>Learning Hub</span>
-              </div>
-            </Link>
-          </div>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
           <div className="admin-sidebar-group-label">Main</div>
           <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
@@ -893,20 +1001,7 @@ function AdminTransactionManagementPage() {
             ))}
           </nav>
 
-          <div className="admin-sidebar-group-label">System</div>
-          <nav className="admin-sidebar-nav" aria-label="Menu sistem admin">
-            {adminSystemMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className="admin-sidebar-item secondary"
-                onClick={() => item.href !== '#' && navigate(item.href)}
-              >
-                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
@@ -1115,6 +1210,7 @@ function HomePage() {
   const [selectedProgram, setSelectedProgram] = useState('CPNS')
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
+  const [activePackageInfo, setActivePackageInfo] = useState(null)
   const [faqRows, setFaqRows] = useState([])
   const [faqLoading, setFaqLoading] = useState(true)
   const isLoggedIn = Boolean(storedUser)
@@ -1385,6 +1481,7 @@ function HomePage() {
       title: namaPaket,
       subtitle,
       note,
+      source: item,
       bullets: bullets.length ? bullets : [ketText || 'Paket belajar terarah.', 'Informasi paket tersedia di detail.'],
       newPrice: formatCurrency(basePrice),
       icon: kategori.toUpperCase() === 'PPPK' ? '🎯' : kategori.toUpperCase() === 'CPNS' ? '📋' : '📦',
@@ -1786,6 +1883,14 @@ function HomePage() {
                   {card.bullets.map((bullet) => <li key={bullet}>✓ {bullet}</li>)}
                 </ul>
                 <div className="course-price course-price-ref">
+                  <button
+                    type="button"
+                    className="course-info-button"
+                    onClick={() => setActivePackageInfo(card.source)}
+                    aria-label={`Lihat keterangan ${card.title}`}
+                  >
+                    📝
+                  </button>
                   {/* Diskon dan harga lama belum ditampilkan sampai data tersedia di database. */}
                   <span className="new-price">{card.newPrice}</span>
                 </div>
@@ -1794,6 +1899,12 @@ function HomePage() {
           ))}
         </div>
       </section>
+
+      <PackageInfoModal
+        open={Boolean(activePackageInfo)}
+        packageData={activePackageInfo}
+        onCancel={() => setActivePackageInfo(null)}
+      />
 
       <section className="faq-wrap" id="faq" data-nav-section>
         <div className="container faq faq-inner">
@@ -3463,12 +3574,6 @@ function AdminDashboardPage() {
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
   ]
-  const adminSystemMenu = [
-    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters', active: false },
-    { label: 'Admin', href: '#', active: false },
-    { label: 'Log Aktivitas', href: '#', active: false },
-  ]
-
   const handleLogout = () => {
     setShowLogoutConfirm(true)
   }
@@ -3519,17 +3624,7 @@ function AdminDashboardPage() {
     <div className="admin-dashboard-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="admin-brand-block">
-            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <div className="admin-brand-logo-shell">
-                <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
-              </div>
-              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
-                <strong>Admin Panel</strong>
-                <span>Learning Hub</span>
-              </div>
-            </Link>
-          </div>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
           <div className="admin-sidebar-group-label">Main</div>
           <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
@@ -3546,20 +3641,7 @@ function AdminDashboardPage() {
             ))}
           </nav>
 
-          <div className="admin-sidebar-group-label">System</div>
-          <nav className="admin-sidebar-nav" aria-label="Menu sistem admin">
-            {adminSystemMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className="admin-sidebar-item secondary"
-                onClick={() => item.href !== '#' && navigate(item.href)}
-              >
-                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
@@ -3764,12 +3846,6 @@ function AdminUserManagementPage() {
     { label: 'Laporan', href: '#' },
   ]
 
-  const adminSystemMenu = [
-    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters' },
-    { label: 'Admin', href: '#' },
-    { label: 'Log Aktivitas', href: '#' },
-  ]
-
   useEffect(() => {
     let cancelled = false
 
@@ -3867,17 +3943,7 @@ function AdminUserManagementPage() {
     <div className="admin-dashboard-page admin-user-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="admin-brand-block">
-            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <div className="admin-brand-logo-shell">
-                <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
-              </div>
-              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
-                <strong>Admin Panel</strong>
-                <span>Learning Hub</span>
-              </div>
-            </Link>
-          </div>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
           <div className="admin-sidebar-group-label">Main</div>
           <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
@@ -3894,20 +3960,7 @@ function AdminUserManagementPage() {
             ))}
           </nav>
 
-          <div className="admin-sidebar-group-label">System</div>
-          <nav className="admin-sidebar-nav" aria-label="Menu sistem admin">
-            {adminSystemMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className="admin-sidebar-item secondary"
-                onClick={() => item.href !== '#' && navigate(item.href)}
-              >
-                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
@@ -4126,12 +4179,6 @@ function AdminPackageManagementPage() {
     { label: 'Laporan', href: '#' },
   ]
 
-  const adminSystemMenu = [
-    { label: 'Pengaturan', href: '/dashboard-admin/settings/parameters' },
-    { label: 'Admin', href: '#' },
-    { label: 'Log Aktivitas', href: '#' },
-  ]
-
   const packageSummaryCards = [
     { label: 'Total Paket', value: String(packageSummary.total_paket ?? 0), delta: 'Semua paket tersedia', accent: 'blue', icon: '📦' },
     { label: 'Paket Aktif', value: String(packageSummary.paket_aktif ?? 0), delta: 'Paket sedang aktif', accent: 'green', icon: '🏷️' },
@@ -4340,6 +4387,36 @@ function AdminPackageManagementPage() {
     }
   }
 
+  const handleDeletePackage = async (row) => {
+    if (!row?.pid) return
+
+    const confirmed = window.confirm(`Hapus paket ${row.name}? Paket akan disembunyikan dari daftar.`)
+    if (!confirmed) return
+
+    setPackageError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/packages/${row.pid}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Paket gagal dihapus (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      await loadPackages({ cancelled: () => false, showLoading: false })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Paket gagal dihapus.'
+      setPackageError(message)
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (packageSuccessTimerRef.current) {
@@ -4405,15 +4482,7 @@ function AdminPackageManagementPage() {
     <div className="admin-dashboard-page admin-package-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="admin-brand-block">
-            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
-              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
-                <strong>Admin Panel</strong>
-                <span>Learning Hub</span>
-              </div>
-            </Link>
-          </div>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
           <div className="admin-sidebar-group-label">Main</div>
           <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
@@ -4430,20 +4499,7 @@ function AdminPackageManagementPage() {
             ))}
           </nav>
 
-          <div className="admin-sidebar-group-label">System</div>
-          <nav className="admin-sidebar-nav" aria-label="Menu sistem admin">
-            {adminSystemMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className="admin-sidebar-item secondary"
-                onClick={() => item.href !== '#' && navigate(item.href)}
-              >
-                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
@@ -4605,7 +4661,17 @@ function AdminPackageManagementPage() {
                           >
                             ✎
                           </button>
-                          <button type="button" className="admin-row-action danger" title="Hapus paket" aria-label={`Hapus paket ${row.name}`}>🗑</button>
+                          <button
+                            type="button"
+                            className="admin-row-action danger"
+                            title="Hapus paket"
+                            aria-label={`Hapus paket ${row.name}`}
+                            onClick={() => {
+                              void handleDeletePackage(row)
+                            }}
+                          >
+                            🗑
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -4714,14 +4780,6 @@ function AdminSettingsParameterPage() {
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
-  ]
-
-  const adminSettingsMenu = [
-    { label: 'Parameter', href: '/dashboard-admin/settings/parameters', active: true },
-    { label: 'Kategori', href: '#' },
-    { label: 'Metode Pembayaran', href: '#' },
-    { label: 'Notifikasi', href: '#' },
-    { label: 'FAQ', href: '/dashboard-admin/settings/faqs', active: false },
   ]
 
   const parameterSummaryCards = [
@@ -4986,15 +5044,7 @@ function AdminSettingsParameterPage() {
     <div className="admin-dashboard-page admin-parameter-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="admin-brand-block">
-            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
-              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
-                <strong>Admin Panel</strong>
-                <span>Learning Hub</span>
-              </div>
-            </Link>
-          </div>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
           <div className="admin-sidebar-group-label">Main</div>
           <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
@@ -5011,20 +5061,7 @@ function AdminSettingsParameterPage() {
             ))}
           </nav>
 
-          <div className="admin-sidebar-group-label">Pengaturan</div>
-          <nav className="admin-sidebar-nav admin-settings-nav" aria-label="Menu pengaturan admin">
-            {adminSettingsMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={`admin-sidebar-item secondary admin-settings-item${item.active ? ' active' : ''}${currentPath === item.href ? ' active' : ''}`}
-                onClick={() => item.href !== '#' && navigate(item.href)}
-              >
-                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
@@ -5278,14 +5315,6 @@ function AdminSettingsFaqPage() {
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
-  ]
-
-  const adminSettingsMenu = [
-    { label: 'Parameter', href: '/dashboard-admin/settings/parameters', active: false },
-    { label: 'Kategori', href: '#' },
-    { label: 'Metode Pembayaran', href: '#' },
-    { label: 'Notifikasi', href: '#' },
-    { label: 'FAQ', href: '/dashboard-admin/settings/faqs', active: true },
   ]
 
   const faqSummaryCards = [
@@ -5591,15 +5620,7 @@ function AdminSettingsFaqPage() {
     <div className="admin-dashboard-page admin-faq-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="admin-brand-block">
-            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
-              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
-              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
-                <strong>Admin Panel</strong>
-                <span>Learning Hub</span>
-              </div>
-            </Link>
-          </div>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
           <div className="admin-sidebar-group-label">Main</div>
           <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
@@ -5616,20 +5637,7 @@ function AdminSettingsFaqPage() {
             ))}
           </nav>
 
-          <div className="admin-sidebar-group-label">Pengaturan</div>
-          <nav className="admin-sidebar-nav admin-settings-nav" aria-label="Menu pengaturan admin">
-            {adminSettingsMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={`admin-sidebar-item secondary admin-settings-item${item.active ? ' active' : ''}${currentPath === item.href ? ' active' : ''}`}
-                onClick={() => item.href !== '#' && navigate(item.href)}
-              >
-                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>

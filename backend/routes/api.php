@@ -693,6 +693,7 @@ Route::get('/packages', function (Request $request) {
     $kategori = trim((string) $request->query('kategori', ''));
 
     $query = DB::table('tbl_paket')
+        ->whereNull('deleted_at')
         ->select([
             'pid',
             'kategori',
@@ -766,6 +767,7 @@ Route::get('/admin/packages', function (Request $request) {
     $kategori = trim((string) $request->query('kategori', ''));
 
     $query = DB::table('tbl_paket')
+        ->whereNull('deleted_at')
         ->select([
             'pid',
             'kategori',
@@ -809,10 +811,10 @@ Route::get('/admin/packages', function (Request $request) {
     });
 
     $summary = [
-        'total_paket' => (int) DB::table('tbl_paket')->count(),
-        'paket_aktif' => (int) DB::table('tbl_paket')->count(),
-        'paket_nonaktif' => 0,
-        'total_penjualan' => (float) DB::table('tbl_paket')->sum('harga'),
+        'total_paket' => (int) DB::table('tbl_paket')->whereNull('deleted_at')->count(),
+        'paket_aktif' => (int) DB::table('tbl_paket')->whereNull('deleted_at')->count(),
+        'paket_nonaktif' => (int) DB::table('tbl_paket')->whereNotNull('deleted_at')->count(),
+        'total_penjualan' => (float) DB::table('tbl_paket')->whereNull('deleted_at')->sum('harga'),
     ];
 
     return response()->json([
@@ -950,6 +952,31 @@ Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
         'data' => DB::table('tbl_paket')
             ->where('pid', $pid)
             ->first(),
+    ]);
+});
+
+Route::delete('/admin/packages/{pid}', function (Request $request, $pid) {
+    $existingPackage = DB::table('tbl_paket')
+        ->where('pid', $pid)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$existingPackage) {
+        return response()->json([
+            'message' => 'Paket tidak ditemukan.',
+        ], 404);
+    }
+
+    DB::table('tbl_paket')
+        ->where('pid', $pid)
+        ->update([
+            'deleted_at' => now(),
+            'updated_at' => now(),
+            'updated_by' => $request->user()->pid ?? null,
+        ]);
+
+    return response()->json([
+        'message' => 'Paket berhasil dihapus.',
     ]);
 });
 
