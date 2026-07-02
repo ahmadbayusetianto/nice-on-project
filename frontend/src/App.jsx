@@ -102,6 +102,40 @@ function formatReferenceDisplay(detail = {}) {
   return reference
 }
 
+function renderSocialBrandIcon(kind) {
+  switch (kind) {
+    case 'youtube':
+      return (
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <rect x="3" y="10" width="42" height="28" rx="10" fill="currentColor" opacity="0.18" />
+          <path d="M31 24.1 20 17.8v12.6l11-6.3Z" fill="currentColor" />
+        </svg>
+      )
+    case 'instagram':
+      return (
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <rect x="9" y="9" width="30" height="30" rx="9" fill="none" stroke="currentColor" strokeWidth="3.2" />
+          <circle cx="24" cy="24" r="7.5" fill="none" stroke="currentColor" strokeWidth="3.2" />
+          <circle cx="32.8" cy="15.2" r="2.2" fill="currentColor" />
+        </svg>
+      )
+    case 'tiktok':
+      return (
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <path d="M28 10.2c1.6 3.9 4.3 6.4 8.6 7.2v5.6c-2.7 0-5.1-.6-7.2-1.8v8.8c0 5.4-3.8 9.8-10.2 9.8-5.4 0-9.2-3.5-9.2-8.4s3.7-8.7 9.1-8.7c.8 0 1.7.1 2.5.3v5.6c-.7-.2-1.4-.4-2.2-.4-2.1 0-3.8 1.2-3.8 3.2 0 2.2 1.7 3.4 4.1 3.4 3.2 0 5.4-2.1 5.4-5.4V8h5.9c.1.7.2 1.4.3 2.2Z" fill="currentColor" />
+        </svg>
+      )
+    case 'x':
+      return (
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <path d="M12 11h7.7l8.6 11.4L37.9 11H42l-12.1 15.4L42 37H34.3l-9.1-12-9.5 12H6.9l12.8-16.2L12 11Z" fill="currentColor" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 function getFriendlyFetchError(error, fallbackMessage) {
   const message = error instanceof Error ? error.message : ''
   const normalized = message.toLowerCase()
@@ -143,6 +177,74 @@ function createParameterFormFromDetail(detail = {}) {
     deskripsi: detail.deskripsi ?? '',
     is_active: Boolean(detail.status_key ? detail.status_key === 'active' : detail.status !== 'Nonaktif'),
   }
+}
+
+function createFaqFormFromDetail(detail = {}) {
+  return {
+    kategori: detail.kategori ?? 'Umum',
+    pertanyaan: detail.pertanyaan ?? '',
+    jawaban: detail.jawaban ?? '',
+    ikon: detail.ikon ?? '❓',
+    urutan: detail.urutan !== undefined && detail.urutan !== null ? String(detail.urutan) : '0',
+    is_active: Boolean(detail.status_key ? detail.status_key === 'active' : detail.status !== 'Nonaktif'),
+  }
+}
+
+function sanitizeFaqHtml(input = '') {
+  if (typeof window === 'undefined') return String(input ?? '')
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<div>${String(input ?? '')}</div>`, 'text/html')
+  const root = doc.body.firstElementChild
+  if (!root) return ''
+
+  const blockedTags = new Set(['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'])
+
+  const walk = (node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node
+      const tagName = element.tagName.toLowerCase()
+
+      if (blockedTags.has(tagName)) {
+        element.remove()
+        return
+      }
+
+      Array.from(element.attributes).forEach((attribute) => {
+        const name = attribute.name.toLowerCase()
+        if (name.startsWith('on') || name === 'style') {
+          element.removeAttribute(attribute.name)
+        }
+
+        if (tagName !== 'a' && (name === 'href' || name === 'target' || name === 'rel')) {
+          element.removeAttribute(attribute.name)
+        }
+      })
+
+      if (tagName === 'a') {
+        const href = element.getAttribute('href') || '#'
+        if (!/^https?:\/\//i.test(href) && !href.startsWith('#') && !href.startsWith('/')) {
+          element.setAttribute('href', '#')
+        }
+        element.setAttribute('rel', 'noreferrer noopener')
+        if (!element.getAttribute('target')) {
+          element.setAttribute('target', '_blank')
+        }
+      }
+    }
+
+    Array.from(node.childNodes).forEach((child) => walk(child))
+  }
+
+  walk(root)
+  return root.innerHTML
+}
+
+function stripFaqHtml(input = '') {
+  return String(input ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function parseCurrencyToNumber(value) {
@@ -421,6 +523,138 @@ function AdminParameterFormModal({ open, onCancel, onSubmit, form, onFieldChange
             <label className="admin-package-field admin-package-field-full">
               <span>Deskripsi</span>
               <textarea value={form.deskripsi} onChange={(event) => onFieldChange('deskripsi', event.target.value)} placeholder="Penjelasan singkat parameter" disabled={loading}></textarea>
+            </label>
+
+            <label className="admin-package-field admin-package-field-full admin-parameter-toggle-field">
+              <span>Status Aktif</span>
+              <button
+                type="button"
+                className={`admin-parameter-toggle${form.is_active ? ' active' : ''}`}
+                onClick={() => onFieldChange('is_active', !form.is_active)}
+                disabled={loading}
+              >
+                <span className="admin-parameter-toggle-track" aria-hidden="true">
+                  <span className="admin-parameter-toggle-thumb" />
+                </span>
+                <span>{form.is_active ? 'Aktif' : 'Nonaktif'}</span>
+              </button>
+            </label>
+          </div>
+
+          <div className="admin-modal-actions admin-package-form-actions">
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : submitLabel}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function AdminFaqFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah FAQ', submitLabel = 'Simpan FAQ', helpText = 'Kelola pertanyaan dan jawaban yang tampil di landing page.' }) {
+  const editorRef = useRef(null)
+
+  useEffect(() => {
+    if (!open || !editorRef.current) return
+
+    const nextHtml = form.jawaban || ''
+    if (editorRef.current.innerHTML !== nextHtml) {
+      editorRef.current.innerHTML = nextHtml
+    }
+  }, [open, form.jawaban])
+
+  const runEditorCommand = (command, value = null) => {
+    if (loading) return
+    editorRef.current?.focus()
+
+    if (command === 'createLink') {
+      const href = window.prompt('Masukkan URL link:', 'https://')
+      if (!href) return
+      document.execCommand(command, false, href)
+    } else {
+      document.execCommand(command, false, value)
+    }
+
+    onFieldChange('jawaban', editorRef.current?.innerHTML || '')
+  }
+
+  const handleEditorInput = () => {
+    onFieldChange('jawaban', editorRef.current?.innerHTML || '')
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-faq-modal" role="dialog" aria-modal="true" aria-labelledby="adminFaqTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-faq-modal-header">
+          <div>
+            <h3 id="adminFaqTitle">{title}</h3>
+            <p>{helpText}</p>
+          </div>
+          <button type="button" className="admin-faq-close" aria-label="Tutup modal FAQ" onClick={onCancel} disabled={loading}>×</button>
+        </div>
+        {loading ? <div className="admin-package-form-loading">Memuat data FAQ...</div> : null}
+
+        <form className="admin-package-form admin-parameter-form" onSubmit={onSubmit}>
+          {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+          <div className="admin-package-form-grid admin-parameter-form-grid">
+            <label className="admin-package-field">
+              <span>Kategori</span>
+              <select value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)} disabled={loading}>
+                {['Umum', 'Program', 'Pendaftaran', 'Pembayaran', 'Akun', 'Teknis'].map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="admin-package-field">
+              <span>Icon (Opsional)</span>
+              <select value={form.ikon} onChange={(event) => onFieldChange('ikon', event.target.value)} disabled={loading}>
+                {['❓', '📘', '💬', '🎓', '🧩', '🛡️', '⭐', '🔥', '✅', '⚡'].map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Pertanyaan</span>
+              <input type="text" value={form.pertanyaan} onChange={(event) => onFieldChange('pertanyaan', event.target.value)} placeholder="Lorem ipsum dolor sit amet consectetur?" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Jawaban</span>
+              <div className="admin-faq-editor-shell">
+                <div className="admin-faq-toolbar" role="toolbar" aria-label="Toolbar editor FAQ">
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('bold')} disabled={loading} aria-label="Bold"><strong>B</strong></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('italic')} disabled={loading} aria-label="Italic"><em>I</em></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('underline')} disabled={loading} aria-label="Underline"><u>U</u></button>
+                  <span className="admin-faq-toolbar-sep" aria-hidden="true" />
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('insertUnorderedList')} disabled={loading} aria-label="Bullet list">• List</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('insertOrderedList')} disabled={loading} aria-label="Numbered list">1. List</button>
+                  <span className="admin-faq-toolbar-sep" aria-hidden="true" />
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('createLink')} disabled={loading} aria-label="Link">Link</button>
+                  <span className="admin-faq-toolbar-sep" aria-hidden="true" />
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('justifyLeft')} disabled={loading} aria-label="Rata kiri">⟸</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('justifyCenter')} disabled={loading} aria-label="Rata tengah">≡</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runEditorCommand('justifyRight')} disabled={loading} aria-label="Rata kanan">⟹</button>
+                </div>
+                <div
+                  ref={editorRef}
+                  className="admin-faq-editor"
+                  contentEditable={!loading}
+                  suppressContentEditableWarning
+                  onInput={handleEditorInput}
+                  onBlur={handleEditorInput}
+                  data-placeholder="Tulis jawaban FAQ di sini..."
+                />
+              </div>
+            </label>
+
+            <label className="admin-package-field">
+              <span>Urutan</span>
+              <input type="number" min="0" value={form.urutan} onChange={(event) => onFieldChange('urutan', event.target.value)} placeholder="0" disabled={loading} />
             </label>
 
             <label className="admin-package-field admin-package-field-full admin-parameter-toggle-field">
@@ -875,6 +1109,7 @@ function HomePage() {
   const heroCardRef = useRef(null)
   const [activeSlide, setActiveSlide] = useState(0)
   const [activeTestimonial, setActiveTestimonial] = useState(0)
+  const [activeSection, setActiveSection] = useState('beranda')
   const [storedUser, setStoredUser] = useState(() => readStoredUser())
   const [packageRows, setPackageRows] = useState([])
   const [selectedProgram, setSelectedProgram] = useState('CPNS')
@@ -888,6 +1123,7 @@ function HomePage() {
   const dashboardPath = Number(storedUser?.is_admin ?? 0) === 1 ? '/dashboard-admin' : '/dashboard-user'
   const dashboardCtaLabel = Number(storedUser?.is_admin ?? 0) === 1 ? 'Masuk ke Dashboard Admin' : 'Masuk ke Dashboard User'
   const dashboardCtaClass = Number(storedUser?.is_admin ?? 0) === 1 ? 'pill main home-dashboard-cta admin' : 'pill main home-dashboard-cta user'
+  const currentYear = new Date().getFullYear()
 
   const handleHomeLogout = () => {
     clearAuthUser()
@@ -944,6 +1180,59 @@ function HomePage() {
     }
   }, [])
 
+  useEffect(() => {
+    const sections = Array.from(document.querySelectorAll('[data-nav-section]'))
+    if (!sections.length) return undefined
+
+    let rafId = 0
+    const updateActiveSection = () => {
+      const topbar = document.querySelector('.topbar')
+      const offset = (topbar?.offsetHeight || 0) + 24
+
+      const candidates = sections
+        .map((section) => {
+          const rect = section.getBoundingClientRect()
+          return {
+            id: section.id,
+            top: rect.top - offset,
+          }
+        })
+        .filter((entry) => entry.id)
+        .sort((a, b) => a.top - b.top)
+
+      const current = [...candidates].reverse().find((entry) => entry.top <= 0)
+      const nextSection = current?.id || candidates[0]?.id || 'beranda'
+      setActiveSection(nextSection)
+    }
+
+    const onScrollOrResize = () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(updateActiveSection)
+    }
+
+    const hash = window.location.hash.replace('#', '')
+    if (hash) {
+      setActiveSection(hash)
+    }
+
+    const handleHashChange = () => {
+      const nextHash = window.location.hash.replace('#', '')
+      if (nextHash) setActiveSection(nextHash)
+    }
+
+    updateActiveSection()
+    window.addEventListener('scroll', onScrollOrResize, { passive: true })
+    window.addEventListener('resize', onScrollOrResize)
+    window.addEventListener('hashchange', handleHashChange)
+
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize)
+      window.removeEventListener('resize', onScrollOrResize)
+      window.removeEventListener('hashchange', handleHashChange)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
+  }, [])
+
   const heroSlides = [
     {
       badge: 'KELAS OFFLINE',
@@ -985,6 +1274,68 @@ function HomePage() {
     ['IG', '742K+', 'Followers', '↑ 8.2%'],
     ['TT', '389K+', 'Followers', '↑ 15.3%'],
     ['X', '198K+', 'Followers', '↑ 10.1%'],
+  ]
+
+  const socialCards = [
+    {
+      key: 'youtube',
+      platform: 'YouTube',
+      initials: 'YT',
+      description: 'Pembahasan soal CAT dan tips belajar gratis setiap hari.',
+      tone: 'youtube',
+      action: 'Kunjungi',
+    },
+    {
+      key: 'instagram',
+      platform: 'Instagram',
+      initials: 'IG',
+      description: 'Infografis, reminder jadwal, dan update seleksi terbaru.',
+      tone: 'instagram',
+      action: 'Follow',
+    },
+    {
+      key: 'tiktok',
+      platform: 'TikTok',
+      initials: 'TT',
+      description: 'Tips singkat, trik cepat, dan highlight materi penting.',
+      tone: 'tiktok',
+      action: 'Ikuti',
+    },
+    {
+      key: 'x',
+      platform: 'X (Twitter)',
+      initials: 'X',
+      description: 'Update jadwal seleksi, info umum, dan pengumuman cepat.',
+      tone: 'x',
+      action: 'Follow',
+    },
+  ]
+
+  const featureCards = [
+    {
+      icon: '🛡️',
+      title: 'Konten Terpercaya',
+      description: 'Disusun oleh tim ahli dan berpengalaman di bidangnya.',
+      tone: 'blue',
+    },
+    {
+      icon: '⭐',
+      title: 'Update Berkala',
+      description: 'Materi dan soal selalu diperbarui sesuai kebijakan terbaru.',
+      tone: 'green',
+    },
+    {
+      icon: '🎧',
+      title: 'Dukungan Mentor',
+      description: 'Konsultasi dan bantuan cepat dari mentor berpengalaman.',
+      tone: 'violet',
+    },
+    {
+      icon: '🔒',
+      title: 'Akses Fleksibel',
+      description: 'Belajar kapan saja, di mana saja melalui semua perangkat.',
+      tone: 'orange',
+    },
   ]
 
   const testimonials = [
@@ -1064,9 +1415,12 @@ function HomePage() {
     ? faqRows.map((item) => ({
       icon: item.icon || '❓',
       label: item.pertanyaan,
-      answer: item.jawaban,
+      answer: stripFaqHtml(item.jawaban),
     }))
-    : DEFAULT_FAQ_ITEMS
+    : DEFAULT_FAQ_ITEMS.map((item) => ({
+      ...item,
+      answer: item.answer,
+    }))
 
   const currentSlide = heroSlides[activeSlide]
 
@@ -1204,11 +1558,11 @@ function HomePage() {
           </div>
 
           <nav className="menu">
-            <a href="#" className="active">Beranda</a>
-            <a href="#paket">Paket Belajar</a>
-            <a href="#testimoni">Testimoni</a>
-            <a href="#paket">Social Media</a>
-            <a href="#faq">FAQ</a>
+            <a href="#beranda" className={activeSection === 'beranda' ? 'active' : ''}>Beranda</a>
+            <a href="#paket" className={activeSection === 'paket' ? 'active' : ''}>Paket Belajar</a>
+            <a href="#testimoni" className={activeSection === 'testimoni' ? 'active' : ''}>Testimoni</a>
+            <a href="#social-media" className={activeSection === 'social-media' ? 'active' : ''}>Social Media</a>
+            <a href="#faq" className={activeSection === 'faq' ? 'active' : ''}>FAQ</a>
           </nav>
 
           {isLoggedIn ? (
@@ -1231,10 +1585,10 @@ function HomePage() {
         </div>
       </header>
 
-      <section className="hero container" data-parallax data-speed="-0.06">
+      <section className="hero container" id="beranda" data-nav-section data-parallax data-speed="-0.06">
         <div className="hero-copy">
           <div className="hero-badge">Dipakai ribuan pejuang ASN di seluruh Indonesia</div>
-          <h1>Satu Langkah<br /><span>Menuju ASN.</span></h1>
+          <h1>Satu Langkah<br /><span>Menuju ASN</span></h1>
           <p>Persiapan yang tepat dapat mengubah keraguan menjadi keyakinan.</p>
           <p>Dengan pendekatan belajar yang terstruktur, latihan yang relevan, dan bimbingan yang responsif, kamu dapat fokus pada hal yang benar-benar penting: meningkatkan peluang kelulusan.</p>
           <ul className="hero-points">
@@ -1305,20 +1659,49 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="stats container" data-parallax data-speed="-0.08">
-        <div className="stats-card" data-parallax data-speed="-0.1">
-          {stats.map(([icon, value, label, growth]) => (
-            <div className="stat" key={icon}>
-              <div className="stat-icon">{icon}</div>
-              <div className="stat-value">{value}</div>
-              <div className="stat-label">{label}</div>
-              <div className="stat-growth">{growth}</div>
-            </div>
+      <section className="socials container" id="social-media" data-nav-section aria-label="Media Sosial NiceOn">
+        <div className="hero-social-panel social-media-panel">
+          <div className="hero-social-head">
+            <h3>Dapatkan Tips &amp; Info Terbaru di Media Sosial NiceOn</h3>
+            <p>Ribuan soal, tips belajar, dan informasi seleksi kami bagikan secara gratis melalui seluruh media sosial NiceOn.</p>
+          </div>
+
+          <div className="hero-social-grid">
+            {socialCards.map((card) => (
+              <article className={`hero-social-card ${card.tone}`} key={card.key}>
+                <div className={`hero-social-logo ${card.tone}`} aria-hidden="true">
+                  {renderSocialBrandIcon(card.tone)}
+                </div>
+                <div className="hero-social-copy">
+                  <h4>{card.platform}</h4>
+                  <p>{card.description}</p>
+                </div>
+                <a href="#" className={`hero-social-button ${card.tone}`} aria-label={`Buka ${card.platform}`}>
+                  {card.action} <span aria-hidden="true">→</span>
+                </a>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="features container" aria-label="Keunggulan Nice On">
+        <div className="features-grid">
+          {featureCards.map((feature) => (
+            <article className="feature-card" key={feature.title}>
+              <div className={`feature-icon ${feature.tone}`} aria-hidden="true">
+                {feature.icon}
+              </div>
+              <div className="feature-copy">
+                <h3>{feature.title}</h3>
+                <p>{feature.description}</p>
+              </div>
+            </article>
           ))}
         </div>
       </section>
 
-      <section className="testimonials container" id="testimoni">
+      <section className="testimonials container" id="testimoni" data-nav-section>
         <div className="testimonials-head testimonials-head-ref">
           <div className="testimonials-head-center">
             <div className="section-kicker testimonials-kicker">💬 KATA MEREKA</div>
@@ -1368,7 +1751,7 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="package container" id="paket">
+      <section className="package container" id="paket" data-nav-section>
         <div className="section-kicker package-kicker">PAKET BELAJAR</div>
         <h2 className="section-title package-heading">Paket Belajar Terbaik untukmu</h2>
         <p className="section-subtitle package-subtitle">Pilih program yang sesuai dengan tujuanmu dan mulai persiapan sekarang.</p>
@@ -1412,7 +1795,7 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="faq-wrap" id="faq">
+      <section className="faq-wrap" id="faq" data-nav-section>
         <div className="container faq faq-inner">
           <div className="faq-content">
             <div className="section-kicker faq-kicker">FAQ</div>
@@ -1445,6 +1828,13 @@ function HomePage() {
           </aside>
         </div>
       </section>
+
+      <footer className="site-footer" aria-label="Footer Nice On">
+        <div className="container site-footer-inner">
+          <div className="site-footer-copy">© {currentYear} Nice On. All rights reserved.</div>
+        </div>
+      </footer>
+
     </div>
   )
 }
@@ -4331,6 +4721,7 @@ function AdminSettingsParameterPage() {
     { label: 'Kategori', href: '#' },
     { label: 'Metode Pembayaran', href: '#' },
     { label: 'Notifikasi', href: '#' },
+    { label: 'FAQ', href: '/dashboard-admin/settings/faqs', active: false },
   ]
 
   const parameterSummaryCards = [
@@ -4832,6 +5223,621 @@ function AdminSettingsParameterPage() {
   )
 }
 
+function AdminSettingsFaqPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [faqRows, setFaqRows] = useState([])
+  const [faqCategories, setFaqCategories] = useState([])
+  const [isLoadingFaqs, setIsLoadingFaqs] = useState(true)
+  const [faqError, setFaqError] = useState(null)
+  const [faqSearch, setFaqSearch] = useState('')
+  const [selectedFaqCategory, setSelectedFaqCategory] = useState('Semua Kategori')
+  const [selectedFaqStatus, setSelectedFaqStatus] = useState('Semua Status')
+  const [faqCurrentPage, setFaqCurrentPage] = useState(1)
+  const [faqPageSize, setFaqPageSize] = useState(10)
+  const [showFaqModal, setShowFaqModal] = useState(false)
+  const [isSavingFaq, setIsSavingFaq] = useState(false)
+  const [faqSubmitError, setFaqSubmitError] = useState(null)
+  const [faqSubmitSuccess, setFaqSubmitSuccess] = useState(null)
+  const [faqModalMode, setFaqModalMode] = useState('create')
+  const [editingFaqPid, setEditingFaqPid] = useState(null)
+  const [faqForm, setFaqForm] = useState({
+    kategori: 'Umum',
+    pertanyaan: '',
+    jawaban: '',
+    ikon: '❓',
+    urutan: '0',
+    is_active: true,
+  })
+  const [faqSummary, setFaqSummary] = useState({ total_faq: 0, faq_aktif: 0, faq_nonaktif: 0 })
+  const faqSuccessTimerRef = useRef(null)
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+
+  if (!user || Number(user?.is_admin ?? 0) !== 1) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-admin/settings/faqs' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.email?.split('@')?.[0] || 'Admin'
+  const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+    .format(new Date())
+    .replace(/^./, (char) => char.toUpperCase())
+
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
+
+  const adminSettingsMenu = [
+    { label: 'Parameter', href: '/dashboard-admin/settings/parameters', active: false },
+    { label: 'Kategori', href: '#' },
+    { label: 'Metode Pembayaran', href: '#' },
+    { label: 'Notifikasi', href: '#' },
+    { label: 'FAQ', href: '/dashboard-admin/settings/faqs', active: true },
+  ]
+
+  const faqSummaryCards = [
+    { label: 'Total FAQ', value: String(faqSummary.total_faq ?? 0), delta: 'Semua pertanyaan', accent: 'blue', icon: '❓' },
+    { label: 'FAQ Aktif', value: String(faqSummary.faq_aktif ?? 0), delta: 'Tampil di landing page', accent: 'green', icon: '✅' },
+    { label: 'FAQ Nonaktif', value: String(faqSummary.faq_nonaktif ?? 0), delta: 'Disembunyikan sementara', accent: 'orange', icon: '⏸' },
+    { label: 'Kategori', value: String(Math.max(0, faqCategories.length - 1)), delta: 'Filter kategori', accent: 'purple', icon: '🗂' },
+  ]
+
+  const loadFaqs = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingFaqs(true)
+    }
+
+    setFaqError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (faqSearch.trim()) params.set('search', faqSearch.trim())
+      if (selectedFaqCategory !== 'Semua Kategori') params.set('category', selectedFaqCategory)
+      if (selectedFaqStatus !== 'Semua Status') params.set('status', selectedFaqStatus)
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/faqs${params.toString() ? `?${params.toString()}` : ''}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data FAQ gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setFaqRows(Array.isArray(payload?.data) ? payload.data : [])
+        setFaqSummary(payload?.summary ?? { total_faq: 0, faq_aktif: 0, faq_nonaktif: 0 })
+        setFaqCategories(['Semua Kategori', ...(Array.isArray(payload?.categories) ? payload.categories : [])])
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data FAQ gagal dimuat.')
+        setFaqError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingFaqs(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadFaqs({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [faqSearch, selectedFaqCategory, selectedFaqStatus])
+
+  const openAddFaqModal = () => {
+    if (faqSuccessTimerRef.current) {
+      window.clearTimeout(faqSuccessTimerRef.current)
+      faqSuccessTimerRef.current = null
+    }
+
+    setFaqModalMode('create')
+    setEditingFaqPid(null)
+    setFaqSubmitError(null)
+    setFaqSubmitSuccess(null)
+    setFaqForm({
+      kategori: selectedFaqCategory !== 'Semua Kategori' ? selectedFaqCategory : 'Umum',
+      pertanyaan: '',
+      jawaban: '',
+      ikon: '❓',
+      urutan: String(faqRows.length + 1),
+      is_active: true,
+    })
+    setShowFaqModal(true)
+  }
+
+  const openEditFaqModal = async (row) => {
+    if (faqSuccessTimerRef.current) {
+      window.clearTimeout(faqSuccessTimerRef.current)
+      faqSuccessTimerRef.current = null
+    }
+
+    setFaqModalMode('edit')
+    setEditingFaqPid(row?.pid ?? null)
+    setFaqSubmitError(null)
+    setFaqSubmitSuccess(null)
+    setShowFaqModal(true)
+    setFaqForm({
+      kategori: row?.kategori || 'Umum',
+      pertanyaan: row?.pertanyaan || '',
+      jawaban: row?.jawaban || '',
+      ikon: row?.ikon || '❓',
+      urutan: String(row?.urutan ?? 0),
+      is_active: (row?.status_key || 'active') === 'active',
+    })
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/faqs/${row?.pid}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Detail FAQ gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setFaqForm(createFaqFormFromDetail(payload?.data ?? {}))
+    } catch {
+      // Keep the modal usable even if detail fetch fails.
+    }
+  }
+
+  const closeFaqModal = () => {
+    if (isSavingFaq) return
+
+    if (faqSuccessTimerRef.current) {
+      window.clearTimeout(faqSuccessTimerRef.current)
+      faqSuccessTimerRef.current = null
+    }
+
+    setShowFaqModal(false)
+    setFaqSubmitError(null)
+    setFaqSubmitSuccess(null)
+  }
+
+  const handleFaqFieldChange = (field, value) => {
+    setFaqForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  const handleFaqSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!faqForm.kategori.trim() || !faqForm.pertanyaan.trim() || !faqForm.jawaban.trim()) {
+      setFaqSubmitError('Kategori, pertanyaan, dan jawaban wajib diisi.')
+      return
+    }
+
+    setIsSavingFaq(true)
+    setFaqSubmitError(null)
+    setFaqSubmitSuccess(null)
+
+    try {
+      const isEditMode = faqModalMode === 'edit' && editingFaqPid !== null
+      const response = await fetch(`${BACKEND_URL}/api/admin/faqs${isEditMode ? `/${editingFaqPid}` : ''}`, {
+        method: isEditMode ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          kategori: faqForm.kategori.trim(),
+          pertanyaan: faqForm.pertanyaan.trim(),
+          jawaban: faqForm.jawaban.trim(),
+          ikon: faqForm.ikon.trim(),
+          urutan: Number(faqForm.urutan) || 0,
+          is_active: Boolean(faqForm.is_active),
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `FAQ gagal disimpan (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setFaqSubmitSuccess(isEditMode ? 'FAQ berhasil diperbarui.' : 'FAQ berhasil disimpan.')
+      setShowFaqModal(false)
+      setEditingFaqPid(null)
+      setFaqForm({
+        kategori: 'Umum',
+        pertanyaan: '',
+        jawaban: '',
+        ikon: '❓',
+        urutan: '0',
+        is_active: true,
+      })
+
+      await loadFaqs({ cancelled: () => false, showLoading: false })
+
+      if (faqSuccessTimerRef.current) {
+        window.clearTimeout(faqSuccessTimerRef.current)
+      }
+
+      faqSuccessTimerRef.current = window.setTimeout(() => {
+        setFaqSubmitSuccess(null)
+        faqSuccessTimerRef.current = null
+      }, 2800)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'FAQ gagal disimpan.'
+      setFaqSubmitError(message)
+    } finally {
+      setIsSavingFaq(false)
+    }
+  }
+
+  const handleDeleteFaq = async (row) => {
+    if (!window.confirm(`Hapus FAQ "${row?.pertanyaan || ''}"?`)) return
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/faqs/${row?.pid}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      })
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `FAQ gagal dihapus (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      await loadFaqs({ cancelled: () => false, showLoading: false })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'FAQ gagal dihapus.'
+      setFaqError(message)
+    }
+  }
+
+  const handleToggleFaqStatus = async (row) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/faqs/${row?.pid}/toggle`, {
+        method: 'PATCH',
+        headers: { Accept: 'application/json' },
+      })
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Status FAQ gagal diperbarui (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      await loadFaqs({ cancelled: () => false, showLoading: false })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Status FAQ gagal diperbarui.'
+      setFaqError(message)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (faqSuccessTimerRef.current) {
+        window.clearTimeout(faqSuccessTimerRef.current)
+      }
+    }
+  }, [])
+
+  const visibleFaqRows = faqRows
+  const totalFaqPages = Math.max(1, Math.ceil(visibleFaqRows.length / faqPageSize))
+  const safeFaqCurrentPage = Math.min(faqCurrentPage, totalFaqPages)
+  const faqStartIndex = (safeFaqCurrentPage - 1) * faqPageSize
+  const faqPaginatedRows = visibleFaqRows.slice(faqStartIndex, faqStartIndex + faqPageSize)
+
+  useEffect(() => {
+    setFaqCurrentPage(1)
+  }, [faqSearch, selectedFaqCategory, selectedFaqStatus, faqPageSize])
+
+  useEffect(() => {
+    if (faqCurrentPage > totalFaqPages) {
+      setFaqCurrentPage(totalFaqPages)
+    }
+  }, [faqCurrentPage, totalFaqPages])
+
+  const renderFaqPaginationPages = () => {
+    if (totalFaqPages <= 1) return [1]
+
+    const pages = new Set([1, totalFaqPages, safeFaqCurrentPage])
+    if (safeFaqCurrentPage > 1) pages.add(safeFaqCurrentPage - 1)
+    if (safeFaqCurrentPage < totalFaqPages) pages.add(safeFaqCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
+    clearAuthUser()
+
+    navigate('/login', { replace: true })
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  return (
+    <div className="admin-dashboard-page admin-faq-page">
+      <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <div className="admin-brand-block">
+            <Link to="/" className="admin-brand-link" aria-label="Beranda Nice On">
+              <img src={niceonImage} alt="Nice On" className="admin-brand-logo" />
+              <div className={`admin-brand-copy${isSidebarCollapsed ? ' collapsed' : ''}`}>
+                <strong>Admin Panel</strong>
+                <span>Learning Hub</span>
+              </div>
+            </Link>
+          </div>
+
+          <div className="admin-sidebar-group-label">Main</div>
+          <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
+            {adminMainMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="admin-sidebar-group-label">Pengaturan</div>
+          <nav className="admin-sidebar-nav admin-settings-nav" aria-label="Menu pengaturan admin">
+            {adminSettingsMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar-item secondary admin-settings-item${item.active ? ' active' : ''}${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="admin-sidebar-footer-card">
+            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
+              <span aria-hidden="true">⎋</span>
+              <span>Keluar</span>
+            </button>
+          </div>
+        </aside>
+
+        <main className="admin-main admin-faq-main">
+          <AdminTopbar
+            title="FAQ"
+            searchPlaceholder="Cari FAQ..."
+            currentDateLabel={currentDateLabel}
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
+            onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
+          />
+
+          <section className="admin-hero-row admin-faq-hero">
+            <div>
+              <h2>Daftar FAQ</h2>
+              <div className="admin-breadcrumb">
+                Dashboard <span>›</span> Pengaturan <span>›</span> FAQ
+              </div>
+            </div>
+
+            <div className="admin-package-actions admin-faq-actions">
+              <button type="button" className="admin-outline-action">⬇ Ekspor Data</button>
+              <button type="button" className="admin-primary-action" onClick={openAddFaqModal}>＋ Tambah FAQ</button>
+            </div>
+          </section>
+
+          <section className="admin-summary-grid admin-faq-summary-grid">
+            {faqSummaryCards.map((card) => (
+              <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                <div className="admin-summary-copy">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <p>{card.delta}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="admin-card admin-faq-filter-card">
+            {faqError ? <div className="admin-user-message error">{faqError}</div> : null}
+            {isLoadingFaqs ? <div className="admin-user-message">Memuat data FAQ...</div> : null}
+
+            <div className="admin-package-filters admin-faq-filters">
+              <label className="admin-package-search">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="Cari FAQ..." value={faqSearch} onChange={(event) => setFaqSearch(event.target.value)} />
+              </label>
+
+              <div className="admin-package-filter-group admin-faq-filter-group">
+                <select className="admin-package-select" value={selectedFaqCategory} onChange={(event) => setSelectedFaqCategory(event.target.value)}>
+                  {(faqCategories.length ? faqCategories : ['Semua Kategori']).map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <select className="admin-package-select" value={selectedFaqStatus} onChange={(event) => setSelectedFaqStatus(event.target.value)}>
+                  {['Semua Status', 'Aktif', 'Nonaktif'].map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={faqPageSize}
+                    onChange={(event) => setFaqPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="admin-package-reset"
+                  onClick={() => {
+                    setFaqSearch('')
+                    setSelectedFaqCategory('Semua Kategori')
+                    setSelectedFaqStatus('Semua Status')
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="admin-card admin-faq-table-card">
+            {faqSubmitSuccess ? <div className="admin-package-banner success">{faqSubmitSuccess}</div> : null}
+            <div className="admin-user-table-wrap">
+              <table className="admin-user-table admin-faq-table">
+                <thead>
+                  <tr>
+                    <th>FAQ</th>
+                    <th>Kategori</th>
+                    <th>Urutan</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {faqPaginatedRows.map((row) => (
+                    <tr key={row.pid}>
+                      <td>
+                        <div className="admin-user-cell admin-faq-cell">
+                          <div className={`admin-user-avatar admin-parameter-avatar ${row.status_key === 'active' ? 'active' : 'inactive'}`}>{row.ikon || '❓'}</div>
+                          <div>
+                            <strong>{row.pertanyaan}</strong>
+                            <span>{String(row.jawaban || '-').slice(0, 120)}{String(row.jawaban || '').length > 120 ? '...' : ''}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span className="admin-parameter-category-pill">{row.kategori}</span></td>
+                      <td><span className="admin-faq-order-pill">#{row.urutan}</span></td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`admin-faq-status-toggle${row.status_key === 'active' ? ' active' : ''}`}
+                          onClick={() => { void handleToggleFaqStatus(row) }}
+                          aria-pressed={row.status_key === 'active'}
+                          aria-label={`Ubah status FAQ ${row.pertanyaan}`}
+                        >
+                          <span className="admin-faq-status-track" aria-hidden="true">
+                            <span className="admin-faq-status-thumb" />
+                          </span>
+                          <span>{row.status_key === 'active' ? 'Aktif' : 'Nonaktif'}</span>
+                        </button>
+                      </td>
+                      <td>
+                        <div className="admin-row-actions admin-package-row-actions">
+                          <button
+                            type="button"
+                            className="admin-row-action admin-row-action-edit"
+                            title="Edit FAQ"
+                            aria-label={`Edit FAQ ${row.pertanyaan}`}
+                            onClick={() => {
+                              void openEditFaqModal(row)
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button type="button" className="admin-row-action danger" title="Hapus FAQ" aria-label={`Hapus FAQ ${row.pertanyaan}`} onClick={() => { void handleDeleteFaq(row) }}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-package-footer admin-user-footer">
+              <p>Menampilkan {faqPaginatedRows.length} data dari {visibleFaqRows.length} FAQ</p>
+              <div className="admin-pagination">
+                <button type="button" className="admin-pagination-arrow" disabled={safeFaqCurrentPage === 1} onClick={() => setFaqCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                {renderFaqPaginationPages().map((page, index, array) => {
+                  const previousPage = array[index - 1]
+                  const shouldShowDots = previousPage && page - previousPage > 1
+
+                  return (
+                    <span key={page}>
+                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                      <button type="button" className={`admin-pagination-page${page === safeFaqCurrentPage ? ' active' : ''}`} onClick={() => setFaqCurrentPage(page)}>{page}</button>
+                    </span>
+                  )
+                })}
+                <button type="button" className="admin-pagination-arrow" disabled={safeFaqCurrentPage === totalFaqPages} onClick={() => setFaqCurrentPage((current) => Math.min(totalFaqPages, current + 1))}>›</button>
+              </div>
+            </div>
+          </section>
+
+          <AdminFaqFormModal
+            open={showFaqModal}
+            onCancel={closeFaqModal}
+            onSubmit={handleFaqSubmit}
+            form={faqForm}
+            onFieldChange={handleFaqFieldChange}
+            loading={isSavingFaq}
+            error={faqSubmitError}
+            title={faqModalMode === 'edit' ? 'Edit FAQ' : 'Tambah FAQ'}
+            submitLabel={faqModalMode === 'edit' ? 'Perbarui FAQ' : 'Simpan FAQ'}
+            helpText={faqModalMode === 'edit' ? 'Ubah data FAQ lalu simpan perubahan.' : 'Isi pertanyaan dan jawaban FAQ untuk ditampilkan di landing page.'}
+          />
+
+          <AdminLogoutModal
+            open={showLogoutConfirm}
+            onCancel={() => setShowLogoutConfirm(false)}
+            onConfirm={confirmLogout}
+          />
+        </main>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   useEffect(() => {
     document.title = 'Nice On'
@@ -4897,6 +5903,10 @@ function App() {
       <Route
         path="/dashboard-admin/settings/parameters"
         element={<AdminSettingsParameterPage />}
+      />
+      <Route
+        path="/dashboard-admin/settings/faqs"
+        element={<AdminSettingsFaqPage />}
       />
     </Routes>
   )

@@ -773,7 +773,7 @@
     <section class="hero container">
         <div>
             <div class="hero-badge">Dipakai 200.000+ pejuang ASN di seluruh Indonesia</div>
-            <h1>Satu Langkah <span>Menuju ASN.</span></h1>
+            <h1>Satu Langkah <span>Menuju ASN</span></h1>
             <p>Persiapan yang tepat dapat mengubah keraguan menjadi keyakinan.</p>
             <p>Dengan pendekatan belajar yang terstruktur, latihan yang relevan, dan bimbingan yang responsif, kamu dapat fokus pada hal yang benar-benar penting: meningkatkan peluang kelulusan.</p>
             <ul class="hero-points">
