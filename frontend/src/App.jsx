@@ -76,6 +76,22 @@ function formatCurrency(value) {
   }).format(Number(value) || 0)
 }
 
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0)
+  if (value <= 0) return '0 B'
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = value
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  return `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: unitIndex === 0 ? 0 : 1 }).format(size)} ${units[unitIndex]}`
+}
+
 function formatAdminDate(value, options = {}) {
   if (!value) return '-'
 
@@ -90,6 +106,32 @@ function formatAdminDate(value, options = {}) {
     minute: options.hour === false ? undefined : '2-digit',
     ...(options.hour === false ? { hour: undefined, minute: undefined } : {}),
   }).format(date)
+}
+
+function formatProfileJoinDate(value) {
+  if (!value) return 'Belum tersedia'
+
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Belum tersedia'
+
+  return new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatTryoutCountdown(totalSeconds) {
+  const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0))
+  const hours = Math.floor(safeSeconds / 3600)
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+  const seconds = safeSeconds % 60
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
 function formatReferenceDisplay(detail = {}) {
@@ -164,6 +206,18 @@ function createPackageFormFromDetail(detail = {}) {
     nama_paket: detail.nama_paket ?? '',
     harga: detail.harga !== undefined && detail.harga !== null ? String(detail.harga) : '',
     ket: detail.ket ?? '',
+  }
+}
+
+function createMaterialFormFromDetail(detail = {}) {
+  return {
+    package_id: detail.package_id !== undefined && detail.package_id !== null ? String(detail.package_id) : '',
+    judul: detail.judul ?? '',
+    deskripsi: detail.deskripsi ?? '',
+    sort_order: detail.sort_order !== undefined && detail.sort_order !== null ? String(detail.sort_order) : '0',
+    is_published: Boolean(detail.status_key ? detail.status_key === 'published' : detail.is_published !== false),
+    file: null,
+    file_label: detail.original_name ?? '',
   }
 }
 
@@ -547,49 +601,127 @@ function AdminSystemMenu({ currentPath, navigate }) {
   )
 }
 
+function AdminUserMenu({ profileUser, displayName, onResumeProfile, onLogout }) {
+  const profileInitials = (displayName || 'AD')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'AD'
+
+  return (
+    <div className="admin-user-menu-wrap">
+      <div className="admin-sidebar-group-label">Akun</div>
+      <div className="admin-sidebar-footer-card admin-user-menu-card">
+        <div className="admin-sidebar-user">
+          <div className="admin-sidebar-avatar admin-sidebar-avatar-admin" aria-hidden="true">{profileInitials}</div>
+          <div className="admin-sidebar-user-copy">
+            <strong>{displayName || 'Admin'}</strong>
+            <span>{profileUser?.email || 'Akun admin'}</span>
+          </div>
+        </div>
+
+        <button type="button" className="admin-sidebar-logout" onClick={onLogout}>
+          <span aria-hidden="true">⎋</span>
+          <span>Keluar Akun</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function UserSidebar({ currentPath, isCollapsed, onToggleCollapsed, navigate, user, displayName, isProfileComplete, onLogout }) {
+  const profileInitials = (displayName || 'US')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'US'
+
+  const sidebarItems = [
+    { label: 'Dashboard', href: '/dashboard-user' },
+    { label: 'Materi', href: '/dashboard-user/materials' },
+    { label: 'Tryout', href: '/dashboard-user/tryout' },
+    { label: 'Jadwal', href: '#' },
+    { label: 'Bantuan', href: '#' },
+  ]
+
+  return (
+    <aside className={`dashboard-sidebar dashboard-sidebar-v2${isCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <div className="dashboard-sidebar-brand-row">
+        <div className="dashboard-brand-lockup">
+          <Link to="/" className="dashboard-brand-link" aria-label="Beranda Nice On">
+            <div className="dashboard-brand-logo-shell">
+              <img src={niceonImage} alt="Nice On" className="dashboard-brand-logo" />
+            </div>
+          </Link>
+        </div>
+
+        <button
+          type="button"
+          className="dashboard-sidebar-collapse"
+          aria-label={isCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
+          onClick={onToggleCollapsed}
+        >
+          {isCollapsed ? '»' : '«'}
+        </button>
+      </div>
+
+      <nav className="dashboard-nav" aria-label="Navigasi user">
+        {sidebarItems.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            className={`dashboard-nav-item${currentPath === item.href || (item.label === 'Tryout' && currentPath.startsWith('/dashboard-user/tryout')) ? ' active' : ''}`}
+            onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}
+          >
+            <span className="dashboard-nav-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="dashboard-sidebar-section-label">Akun</div>
+
+      <div className="dashboard-account-card">
+        <div className="dashboard-account-avatar">{profileInitials}</div>
+        <div>
+          <div className="dashboard-account-name">{displayName}</div>
+          <div className="dashboard-account-meta">{user?.email ?? 'Belum tersedia'}</div>
+        </div>
+      </div>
+
+      <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/complete-profile', { state: { registeredUser: user } })}>
+        <strong>Tetap tingkatkan kemampuanmu!</strong>
+        <p>{isProfileComplete ? 'Belajar rutin dan jaga ritme progresmu.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
+        <span className="dashboard-upgrade-cta">Lihat Progress</span>
+      </button>
+
+      <button type="button" className="dashboard-logout-button" onClick={onLogout} aria-label="Keluar Akun">
+        <span aria-hidden="true">⎋</span>
+        <span className="dashboard-button-label">Keluar Akun</span>
+      </button>
+    </aside>
+  )
+}
+
 function AdminQuestionMenu({ currentPath, navigate }) {
   const isQuestionPage = currentPath.startsWith('/dashboard-admin/questions')
-  const [isQuestionOpen, setIsQuestionOpen] = useState(isQuestionPage)
-
-  useEffect(() => {
-    setIsQuestionOpen(isQuestionPage)
-  }, [isQuestionPage])
-
-  const questionItems = [
-    { label: 'Daftar Soal', href: '/dashboard-admin/questions', icon: '•' },
-    { label: 'Tambah Soal', href: '/dashboard-admin/questions', icon: '+', state: { openQuestionModal: true } },
-    { label: 'Import Soal', href: '/dashboard-admin/questions', icon: '↓' },
-    { label: 'Kategori Soal', href: '/dashboard-admin/questions', icon: '◫' },
-  ]
 
   return (
     <div className="admin-question-menu-wrap">
       <button
         type="button"
         className={`admin-question-parent${isQuestionPage ? ' active' : ''}`}
-        onClick={() => setIsQuestionOpen((current) => !current)}
-        aria-expanded={isQuestionOpen}
+        onClick={() => navigate('/dashboard-admin/questions')}
+        aria-label="Buka Bank Soal"
       >
         <span className="admin-sidebar-icon" aria-hidden="true">Q</span>
         <span className="admin-question-parent-label">Bank Soal</span>
-        <span className="admin-system-parent-indicator" aria-hidden="true">{isQuestionOpen ? '▴' : '▾'}</span>
+        <span className="admin-system-parent-indicator" aria-hidden="true">›</span>
       </button>
-
-      {isQuestionOpen ? (
-        <div className="admin-question-submenu" aria-label="Submenu bank soal admin">
-          {questionItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={`admin-question-subitem${item.label === 'Daftar Soal' && isQuestionPage ? ' active' : ''}`}
-              onClick={() => navigate(item.href, { state: { openQuestionModal: Boolean(item.state?.openQuestionModal) } })}
-            >
-              <span className="admin-question-subitem-icon" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -907,6 +1039,44 @@ function PackageInfoModal({ open, packageData, onCancel }) {
           <div className="package-info-copy">
             <h3 id="packageInfoTitle">{title}</h3>
             <p className="package-info-text">{description}</p>
+          </div>
+        </div>
+        <div className="package-info-footer">
+          <button type="button" className="package-info-action" onClick={onCancel}>
+            <span>Tutup</span>
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MaintenanceModal({ open, onCancel }) {
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onCancel()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, onCancel])
+
+  if (!open) return null
+
+  return (
+    <div className="package-info-backdrop" role="presentation" onClick={onCancel}>
+      <div className="package-info-modal maintenance-modal" role="dialog" aria-modal="true" aria-labelledby="maintenanceTitle" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="package-info-close" aria-label="Tutup informasi" onClick={onCancel}>×</button>
+        <div className="package-info-content maintenance-modal-content">
+          <div className="package-info-icon maintenance-icon" aria-hidden="true">🛠️</div>
+          <div className="package-info-copy">
+            <h3 id="maintenanceTitle">Under maintenance</h3>
+            <p className="package-info-text">Fitur ini sedang dalam perbaikan. Silakan coba lagi nanti.</p>
           </div>
         </div>
         <div className="package-info-footer">
@@ -1324,6 +1494,7 @@ function AdminQuestionManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -1753,12 +1924,7 @@ function AdminQuestionManagementPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Keluar</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main admin-question-main">
@@ -2046,6 +2212,7 @@ function AdminTransactionManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
@@ -2203,12 +2370,7 @@ function AdminTransactionManagementPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Keluar</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main admin-transaction-main">
@@ -2411,6 +2573,7 @@ function HomePage() {
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
   const [activePackageInfo, setActivePackageInfo] = useState(null)
+  const [activeMaintenance, setActiveMaintenance] = useState(false)
   const [faqRows, setFaqRows] = useState([])
   const [faqLoading, setFaqLoading] = useState(true)
   const isLoggedIn = Boolean(storedUser)
@@ -3089,15 +3252,31 @@ function HomePage() {
                 <ul className="course-list">
                   {card.bullets.map((bullet) => <li key={bullet}>✓ {bullet}</li>)}
                 </ul>
+                <div className="course-cta-row" aria-label={`Aksi paket ${card.title}`}>
+                  <div className="course-action-group">
+                    <button
+                      type="button"
+                      className="course-detail-link"
+                      onClick={() => setActivePackageInfo(card.source)}
+                      aria-label={`Lihat detail ${card.title}`}
+                    >
+                      <span className="course-detail-label">Detail</span>
+                    </button>
+                    <a
+                      href="#"
+                      className="course-cart-button"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        setActiveMaintenance(true)
+                      }}
+                      aria-label={`Buka paket ${card.title}`}
+                      title="#"
+                    >
+                      <span aria-hidden="true">🛒</span>
+                    </a>
+                  </div>
+                </div>
                 <div className="course-price course-price-ref">
-                  <button
-                    type="button"
-                    className="course-info-button"
-                    onClick={() => setActivePackageInfo(card.source)}
-                    aria-label={`Lihat keterangan ${card.title}`}
-                  >
-                    📝
-                  </button>
                   {/* Diskon dan harga lama belum ditampilkan sampai data tersedia di database. */}
                   <span className="new-price">{card.newPrice}</span>
                 </div>
@@ -3111,6 +3290,11 @@ function HomePage() {
         open={Boolean(activePackageInfo)}
         packageData={activePackageInfo}
         onCancel={() => setActivePackageInfo(null)}
+      />
+
+      <MaintenanceModal
+        open={activeMaintenance}
+        onCancel={() => setActiveMaintenance(false)}
       />
 
       <section className="faq-wrap" id="faq" data-nav-section>
@@ -3142,7 +3326,12 @@ function HomePage() {
             </div>
             <h3>Masih ada pertanyaan lain?</h3>
             <p>Tim kami siap membantu Anda kapan saja.</p>
-            <a href="#" className="faq-help-button">Hubungi Kami <span aria-hidden="true">🎧</span></a>
+            <a
+              href="mailto:nicecendekia@gmail.com?subject=Halo%20Nice%20Cendekia&body=Halo%20Tim%20Nice%20Cendekia%2C%0A%0ASaya%20ingin%20bertanya%20mengenai..."
+              className="faq-help-button"
+            >
+              Hubungi Kami <span aria-hidden="true">🎧</span>
+            </a>
           </aside>
         </div>
       </section>
@@ -4032,21 +4221,28 @@ function AccountProfilePage() {
   const backDashboardPath = Number(activeProfile?.is_admin ?? user?.is_admin ?? 0) === 1 ? '/dashboard-admin' : '/dashboard-user'
   const genderLabel = detail.gender === 'L' ? 'Laki-laki' : detail.gender === 'P' ? 'Perempuan' : 'Belum diisi'
   const formattedBirthDate = detail.ttl || 'Belum diisi'
-  const biodataItems = [
+
+  const currentPath = location.pathname
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
+  const isAdminProfile = Number(activeProfile?.is_admin ?? user?.is_admin ?? 0) === 1
+  const profileJoinedAt = formatProfileJoinDate(activeProfile?.created_at ?? user?.created_at)
+  const roleLabel = isAdminProfile ? 'Super Admin' : 'User'
+  const bioText = String(detail.alamat ?? '').trim()
+  const personalInfoItems = [
     ['Nama Lengkap', displayName],
     ['Tempat, Tanggal Lahir', formattedBirthDate],
     ['Jenis Kelamin', genderLabel],
-    ['No. HP', detail.nohp || 'Belum diisi'],
-    ['Alamat', detail.alamat || 'Belum diisi'],
+    ['No. HP', detail.nohp || '-'],
+    ['Alamat', detail.alamat || '-'],
     ['Referensi', formatReferenceDisplay(detail)],
-  ]
-
-  const sidebarItems = [
-    { label: 'Dashboard' },
-    { label: 'Materi' },
-    { label: 'Tryout' },
-    { label: 'Jadwal' },
-    { label: 'Bantuan' },
   ]
 
   const handleLogout = () => {
@@ -4060,204 +4256,227 @@ function AccountProfilePage() {
   }
 
   return (
-    <div className="dashboard-page dashboard-page-v2 account-profile-page">
-      <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <aside className={`dashboard-sidebar dashboard-sidebar-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="dashboard-sidebar-brand-row">
-            <div className="dashboard-brand-lockup">
-              <Link to="/" className="dashboard-brand-link" aria-label="Beranda Nice On">
-                <div className="dashboard-brand-logo-shell">
-                  <img src={niceonImage} alt="Nice On" className="dashboard-brand-logo" />
-                </div>
-              </Link>
-            </div>
-            <button
-              type="button"
-              className="dashboard-sidebar-collapse"
-              aria-label={isSidebarCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
-              onClick={() => setIsSidebarCollapsed((current) => !current)}
-            >
-              {isSidebarCollapsed ? '»' : '«'}
-            </button>
-          </div>
+    <div className={`${isAdminProfile ? 'admin-dashboard-page' : 'dashboard-page dashboard-page-v2'} account-profile-page`}>
+      <div className={`${isAdminProfile ? 'admin-dashboard-shell' : 'dashboard-shell dashboard-shell-v2'}${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        {isAdminProfile ? (
+          <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+            <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
 
-          <nav className="dashboard-nav" aria-label="Navigasi dashboard">
-            {sidebarItems.map((item) => (
-              <button key={item.label} type="button" className={`dashboard-nav-item${item.label === 'Dashboard' ? ' active' : ''}`}>
-                <span className="dashboard-nav-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
+            <div className="admin-sidebar-group-label">Main</div>
+            <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
+              {adminMainMenu.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+                  onClick={() => item.href !== '#' && navigate(item.href)}
+                >
+                  <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
 
-          <div className="dashboard-sidebar-section-label">Akun</div>
+            <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="dashboard-account-card">
-            <div className="dashboard-account-avatar">{displayName.slice(0, 2).toUpperCase()}</div>
-            <div>
-              <div className="dashboard-account-name">{displayName}</div>
-              <div className="dashboard-account-meta">{emailLabel}</div>
-            </div>
-          </div>
+            <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/complete-profile', { state: { registeredUser: activeProfile } })}>
-            <strong>Tetap tingkatkan kemampuanmu!</strong>
-            <p>{detail.nama ? 'Data profil sudah tersimpan. Kamu bisa memperbarui kapan saja.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
-            <span className="dashboard-upgrade-cta">Lihat Progress</span>
-          </button>
+            <AdminUserMenu
+              profileUser={activeProfile}
+              displayName={displayName}
+              onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+              onLogout={handleLogout}
+            />
+          </aside>
+        ) : (
+          <UserSidebar
+            currentPath={currentPath}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+            navigate={navigate}
+            user={activeProfile}
+            displayName={displayName}
+            isProfileComplete={activeProfile?.profile_completed !== false}
+            onLogout={handleLogout}
+          />
+        )}
 
-          <button type="button" className="dashboard-logout-button" onClick={handleLogout} aria-label="Keluar Akun">
-            <span aria-hidden="true">⎋</span>
-            <span className="dashboard-button-label">Keluar Akun</span>
-          </button>
-        </aside>
-
-        <main className="dashboard-main dashboard-main-v2 account-profile-main">
-          <header className="dashboard-topbar">
-            <div className="dashboard-topbar-left">
-              <button
-                type="button"
-                className="dashboard-menu-button"
-                aria-label={isSidebarCollapsed ? 'Buka navigasi' : 'Sembunyikan navigasi'}
-                onClick={() => setIsSidebarCollapsed((current) => !current)}
-              >
-                ☰
-              </button>
-              <p>Profil akun <strong>{displayName}</strong></p>
-            </div>
-
-            <div className="dashboard-topbar-right">
-              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/')}>
-                🏠
-              </button>
-              <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">
-                🔔<span className="dashboard-notification-dot" />
-              </button>
-              <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
+        <main className={`${isAdminProfile ? 'admin-main' : 'dashboard-main dashboard-main-v2'} account-profile-main`}>
+          <div className="account-profile-shell">
+            <header className="dashboard-topbar account-profile-topbar">
+              <div className="dashboard-topbar-left account-profile-topbar-left">
                 <button
                   type="button"
-                  className="dashboard-profile-chip"
-                  aria-haspopup="menu"
-                  aria-expanded={isProfileMenuOpen}
-                  onClick={() => setIsProfileMenuOpen((current) => !current)}
+                  className="dashboard-menu-button"
+                  aria-label={isSidebarCollapsed ? 'Buka navigasi' : 'Sembunyikan navigasi'}
+                  onClick={() => setIsSidebarCollapsed((current) => !current)}
                 >
-                  <span className="dashboard-profile-avatar">{displayName.slice(0, 2).toUpperCase()}</span>
-                  <span>{displayName}</span>
-                  <span aria-hidden="true">⌄</span>
+                  ☰
                 </button>
-
-                {isProfileMenuOpen ? (
-                  <div className="dashboard-profile-dropdown" role="menu" aria-label="Menu akun">
-                    <button
-                      type="button"
-                      className="dashboard-profile-dropdown-item"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        navigate('/account-profile', { state: { user: activeProfile } })
-                      }}
-                    >
-                      <span className="dashboard-profile-dropdown-label">Resume Profile</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-profile-dropdown-item danger"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        handleLogout()
-                      }}
-                    >
-                      <span className="dashboard-profile-dropdown-label">Logout</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </header>
-
-          <section className="account-profile-hero-card">
-            <div className="account-profile-cover">
-              <div className="account-profile-avatar-frame">
-                <div className="account-profile-avatar-circle" aria-hidden="true">
-                  <span>{displayName.slice(0, 2).toUpperCase()}</span>
+                <div className="account-profile-breadcrumb">
+                  <span>Dashboard</span>
+                  <span aria-hidden="true">›</span>
+                  <span>{isAdminProfile ? 'Admin' : 'User'}</span>
+                  <span aria-hidden="true">›</span>
+                  <strong>Profil</strong>
                 </div>
               </div>
-            </div>
 
-            <section className="account-profile-header-row">
-              <div className="account-profile-title-block">
-                <h1>{displayName}</h1>
-                <p>{username}</p>
-                <span>{emailLabel}</span>
+              <div className="dashboard-topbar-right account-profile-topbar-right">
+                <label className="account-profile-topbar-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input type="search" placeholder="Cari sesuatu..." />
+                  <kbd>⌘K</kbd>
+                </label>
+                <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">
+                  🔔<span className="dashboard-notification-dot" />
+                </button>
+                <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
+                  <button
+                    type="button"
+                    className="dashboard-profile-chip"
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileMenuOpen}
+                    onClick={() => setIsProfileMenuOpen((current) => !current)}
+                  >
+                    <span className="dashboard-profile-avatar">{displayName.slice(0, 2).toUpperCase()}</span>
+                    <span>{displayName}</span>
+                    <span aria-hidden="true">⌄</span>
+                  </button>
+
+                  {isProfileMenuOpen ? (
+                    <div className="dashboard-profile-dropdown" role="menu" aria-label="Menu akun">
+                      <button
+                        type="button"
+                        className="dashboard-profile-dropdown-item danger"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false)
+                          handleLogout()
+                        }}
+                      >
+                        <span className="dashboard-profile-dropdown-label">Logout</span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </header>
+
+            {profileError ? <div className="account-profile-alert error">{profileError}</div> : null}
+            {isLoadingProfile ? <div className="account-profile-alert">Memuat data profil...</div> : null}
+
+            <section className="account-profile-hero-card">
+              <div className="account-profile-cover">
+                <div className="account-profile-avatar-frame">
+                  <div className="account-profile-avatar-circle" aria-hidden="true">
+                    <span>{displayName.slice(0, 2).toUpperCase()}</span>
+                  </div>
+                  <span className="account-profile-avatar-camera" aria-hidden="true">📷</span>
+                </div>
               </div>
 
-              <div className="account-profile-tabs" aria-label="Navigasi profil">
-                <button type="button" className="account-profile-tab active">Personal Info</button>
+              <div className="account-profile-hero-content">
+                <div className="account-profile-title-block">
+                  <div className="account-profile-title-line">
+                    <h1>{displayName}</h1>
+                    <span className="account-profile-role-badge">{roleLabel}</span>
+                  </div>
+                  <div className="account-profile-hero-meta">
+                    <span>{username}</span>
+                    <span>{emailLabel}</span>
+                    <span>Bergabung {profileJoinedAt}</span>
+                  </div>
+                </div>
+
+                <button type="button" className="account-profile-hero-edit" onClick={() => setShowEditModal(true)}>
+                  Edit Profil
+                </button>
               </div>
             </section>
-          </section>
 
-          {profileError ? <div className="account-profile-alert error">{profileError}</div> : null}
-          {isLoadingProfile ? <div className="account-profile-alert">Memuat data profil...</div> : null}
-
-          <section className="account-profile-grid-layout">
-            <div className="account-profile-column">
-              <article className="account-profile-card">
-                <div className="account-profile-card-head">
-                  <h2>Biodata</h2>
-                  <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit ✎</button>
-                </div>
-                <div className="account-profile-card-body">
-                  {biodataItems.map(([label, value]) => (
-                    <div className="account-profile-row" key={label}>
-                      <span className="account-profile-row-label">{label}</span>
-                      <strong className="account-profile-row-value">{value}</strong>
+            <section className="account-profile-grid-layout">
+              <div className="account-profile-column">
+                <article className="account-profile-card">
+                  <div className="account-profile-card-head">
+                    <div className="account-profile-card-title">
+                      <span className="account-profile-card-icon" aria-hidden="true">👤</span>
+                      <h2>Informasi Pribadi</h2>
                     </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="account-profile-card account-profile-empty-card">
-                <div className="account-profile-card-head">
-                  <h2>Job Roles</h2>
-                </div>
-                <div className="account-profile-empty-state">
-                  <strong>Tidak Ada Data</strong>
-                  <p>Mohon pilih minimal satu job role</p>
-                </div>
-              </article>
-            </div>
-
-            <div className="account-profile-column">
-              <article className="account-profile-card">
-                <div className="account-profile-card-head">
-                  <h2>Biografi</h2>
-                  <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit ✎</button>
-                </div>
-                <div className="account-profile-card-body">
-                  <div className="account-profile-bio-box">
-                    <p>{detail.alamat || 'Biografi belum diisi untuk akun ini.'}</p>
+                    <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit</button>
                   </div>
-                </div>
-              </article>
+                  <div className="account-profile-card-body">
+                    {personalInfoItems.map(([label, value]) => (
+                      <div className="account-profile-row" key={label}>
+                        <span className="account-profile-row-label">{label}</span>
+                        <strong className="account-profile-row-value">{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </article>
 
-              <article className="account-profile-card account-profile-empty-card">
-                <div className="account-profile-card-head">
-                  <h2>Riwayat</h2>
-                </div>
-                <div className="account-profile-empty-state account-profile-history-empty">
-                  <strong>Tidak Ada Data</strong>
-                  <p>Riwayat belajar akan tampil setelah aktivitas tersedia.</p>
-                </div>
-              </article>
+                <article className="account-profile-card account-profile-empty-card">
+                  <div className="account-profile-card-head">
+                    <div className="account-profile-card-title">
+                      <span className="account-profile-card-icon" aria-hidden="true">💼</span>
+                      <h2>Job Roles</h2>
+                    </div>
+                  </div>
+                  <div className="account-profile-empty-state account-profile-job-empty">
+                    <div className="account-profile-empty-icon" aria-hidden="true">💼</div>
+                    <strong>Belum ada job role</strong>
+                    <p>Mohon pilih minimal satu job role untuk akun ini.</p>
+                    <button type="button" className="account-profile-empty-action">Kelola Job Role</button>
+                  </div>
+                </article>
+              </div>
+
+              <div className="account-profile-column">
+                <article className="account-profile-card">
+                  <div className="account-profile-card-head">
+                    <div className="account-profile-card-title">
+                      <span className="account-profile-card-icon" aria-hidden="true">📝</span>
+                      <h2>Biografi</h2>
+                    </div>
+                    <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit</button>
+                  </div>
+                  <div className="account-profile-card-body">
+                    {bioText ? (
+                      <div className="account-profile-bio-box">
+                        <p>{bioText}</p>
+                      </div>
+                    ) : (
+                      <div className="account-profile-empty-state account-profile-bio-empty">
+                        <div className="account-profile-empty-icon" aria-hidden="true">📝</div>
+                        <strong>Belum ada biografi</strong>
+                        <p>Tambahkan biografi untuk memperkenalkan diri Anda.</p>
+                        <button type="button" className="account-profile-empty-action" onClick={() => setShowEditModal(true)}>Tambah Biografi</button>
+                      </div>
+                    )}
+                  </div>
+                </article>
+
+                <article className="account-profile-card account-profile-empty-card">
+                  <div className="account-profile-card-head">
+                    <div className="account-profile-card-title">
+                      <span className="account-profile-card-icon" aria-hidden="true">🕘</span>
+                      <h2>Riwayat Aktivitas</h2>
+                    </div>
+                  </div>
+                  <div className="account-profile-empty-state account-profile-history-empty">
+                    <div className="account-profile-empty-icon account-profile-history-icon" aria-hidden="true">🧾</div>
+                    <strong>Tidak ada riwayat aktivitas</strong>
+                    <p>Riwayat aktivitas akan tampil setelah aktivitas tersedia.</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <div className="account-profile-footer-actions">
+              <button type="button" className="dashboard-secondary-action" onClick={() => navigate(backDashboardPath, { state: { user: activeProfile } })}>
+                Kembali ke Dashboard
+              </button>
             </div>
-          </section>
-
-          <div className="account-profile-footer-actions">
-            <button type="button" className="dashboard-secondary-action" onClick={() => navigate(backDashboardPath, { state: { user: activeProfile } })}>
-              Kembali ke Dashboard
-            </button>
           </div>
         </main>
       </div>
@@ -4474,16 +4693,17 @@ function DashboardUserPageV2() {
     return <Navigate to="/login" replace state={{ from: '/dashboard-user' }} />
   }
 
+  const currentPath = location.pathname
   const displayName = user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
   const isProfileComplete = user?.profile_completed !== false
   const initials = displayName.slice(0, 2).toUpperCase()
 
   const sidebarItems = [
-    { label: 'Dashboard', active: true },
-    { label: 'Materi' },
-    { label: 'Tryout' },
-    { label: 'Jadwal' },
-    { label: 'Bantuan' },
+    { label: 'Dashboard', href: '/dashboard-user' },
+    { label: 'Materi', href: '/dashboard-user/materials' },
+    { label: 'Tryout', href: '/dashboard-user/tryout' },
+    { label: 'Jadwal', href: '#' },
+    { label: 'Bantuan', href: '#' },
   ]
 
   const stats = [
@@ -4494,10 +4714,10 @@ function DashboardUserPageV2() {
   ]
 
   const quickActions = [
-    ['Materi', 'Buka materi belajar'],
-    ['Tryout', 'Kerjakan tryout'],
-    ['Jadwal', 'Lihat jadwal kelas'],
-    ['Bantuan', 'Butuh bantuan?'],
+    { label: 'Materi', desc: 'Buka materi belajar', href: '/dashboard-user/materials' },
+    { label: 'Tryout', desc: 'Kerjakan tryout', href: '/dashboard-user/tryout' },
+    { label: 'Jadwal', desc: 'Lihat jadwal kelas', href: '#' },
+    { label: 'Bantuan', desc: 'Butuh bantuan?', href: '#' },
   ]
 
   const nextSteps = [
@@ -4519,55 +4739,16 @@ function DashboardUserPageV2() {
   return (
     <div className="dashboard-page dashboard-page-v2">
       <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <aside className={`dashboard-sidebar dashboard-sidebar-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <div className="dashboard-sidebar-brand-row">
-            <div className="dashboard-brand-lockup">
-              <Link to="/" className="dashboard-brand-link" aria-label="Beranda Nice On">
-                <div className="dashboard-brand-logo-shell">
-                  <img src={niceonImage} alt="Nice On" className="dashboard-brand-logo" />
-                </div>
-              </Link>
-            </div>
-            <button
-              type="button"
-              className="dashboard-sidebar-collapse"
-              aria-label={isSidebarCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
-              onClick={() => setIsSidebarCollapsed((current) => !current)}
-            >
-              {isSidebarCollapsed ? '»' : '«'}
-            </button>
-          </div>
-
-          <nav className="dashboard-nav" aria-label="Navigasi dashboard">
-            {sidebarItems.map((item) => (
-              <button key={item.label} type="button" className={`dashboard-nav-item${item.active ? ' active' : ''}`}>
-                <span className="dashboard-nav-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="dashboard-sidebar-section-label">Akun</div>
-
-          <div className="dashboard-account-card">
-            <div className="dashboard-account-avatar">{initials}</div>
-            <div>
-              <div className="dashboard-account-name">{displayName}</div>
-              <div className="dashboard-account-meta">{user?.email ?? 'Belum tersedia'}</div>
-            </div>
-          </div>
-
-          <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/complete-profile', { state: { registeredUser: user } })}>
-            <strong>Tetap tingkatkan kemampuanmu!</strong>
-            <p>{isProfileComplete ? 'Belajar rutin dan jaga ritme progresmu.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
-            <span className="dashboard-upgrade-cta">Lihat Progress</span>
-          </button>
-
-          <button type="button" className="dashboard-logout-button" onClick={handleLogout} aria-label="Keluar Akun">
-            <span aria-hidden="true">⎋</span>
-            <span className="dashboard-button-label">Keluar Akun</span>
-          </button>
-        </aside>
+        <UserSidebar
+          currentPath={currentPath}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+          navigate={navigate}
+          user={user}
+          displayName={displayName}
+          isProfileComplete={isProfileComplete}
+          onLogout={handleLogout}
+        />
 
         <main className="dashboard-main dashboard-main-v2">
           <header className="dashboard-topbar">
@@ -4690,12 +4871,12 @@ function DashboardUserPageV2() {
                 <span>SHORTCUT</span>
               </div>
               <div className="dashboard-quick-grid">
-                {quickActions.map(([label, desc]) => (
-                  <button key={label} type="button" className="dashboard-quick-tile">
-                    <div className="dashboard-quick-tile-icon">{label.slice(0, 1)}</div>
+                {quickActions.map((item) => (
+                  <button key={item.label} type="button" className="dashboard-quick-tile" onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}>
+                    <div className="dashboard-quick-tile-icon">{item.label.slice(0, 1)}</div>
                     <div className="dashboard-quick-tile-copy">
-                      <strong>{label}</strong>
-                      <span>{desc}</span>
+                      <strong>{item.label}</strong>
+                      <span>{item.desc}</span>
                     </div>
                     <span aria-hidden="true">→</span>
                   </button>
@@ -4715,6 +4896,661 @@ function DashboardUserPageV2() {
       />
     </div>
   )
+}
+
+function UserTryoutPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const profileMenuRef = useRef(null)
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+  const autoFinishTriggeredRef = useRef(false)
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [packageRows, setPackageRows] = useState([])
+  const [packageLoading, setPackageLoading] = useState(true)
+  const [packageError, setPackageError] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState('ALL')
+  const [tryoutData, setTryoutData] = useState(null)
+  const [tryoutLoading, setTryoutLoading] = useState(true)
+  const [tryoutError, setTryoutError] = useState(null)
+  const [answerMap, setAnswerMap] = useState({})
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [remainingSeconds, setRemainingSeconds] = useState(0)
+  const [isStarting, setIsStarting] = useState(false)
+  const [isFinishing, setIsFinishing] = useState(false)
+  const [resultData, setResultData] = useState(null)
+
+  useEffect(() => {
+    const handleDocumentPointerDown = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    const handleDocumentKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+    document.addEventListener('keydown', handleDocumentKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handleDocumentPointerDown)
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadPackages = async () => {
+      setPackageLoading(true)
+      setPackageError(null)
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/packages`)
+        const payload = await response.json()
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'Data paket gagal dimuat.')
+        }
+
+        if (!cancelled) {
+          setPackageRows(Array.isArray(payload.data) ? payload.data : [])
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPackageError(getFriendlyFetchError(error, 'Data paket gagal dimuat.'))
+        }
+      } finally {
+        if (!cancelled) {
+          setPackageLoading(false)
+        }
+      }
+    }
+
+    void loadPackages()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user?.pid) {
+      setTryoutLoading(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadCurrentTryout = async () => {
+      setTryoutLoading(true)
+      setTryoutError(null)
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/tryout/current?user_id=${user.pid}`)
+        const contentType = response.headers.get('content-type') || ''
+        const rawBody = await response.text()
+        const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+        if (!response.ok) {
+          throw new Error(payload?.message || 'Sesi tryout gagal dimuat.')
+        }
+
+        if (!cancelled) {
+          setTryoutData(payload?.data ?? null)
+          setResultData(payload?.data?.session?.is_finished ? payload.data : null)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : 'Sesi tryout gagal dimuat.'
+          setTryoutError(message.includes('Tidak ada sesi tryout aktif') ? null : message)
+          setTryoutData(null)
+          setResultData(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setTryoutLoading(false)
+        }
+      }
+    }
+
+    void loadCurrentTryout()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.pid])
+
+  useEffect(() => {
+    if (!tryoutData) return
+
+    const nextAnswers = {}
+    tryoutData.questions.forEach((question) => {
+      if (question.selected_option_id) {
+        nextAnswers[String(question.id)] = String(question.selected_option_id)
+      }
+    })
+
+    setAnswerMap(nextAnswers)
+    const firstUnansweredIndex = tryoutData.questions.findIndex((question) => !question.selected_option_id)
+    setCurrentQuestionIndex(firstUnansweredIndex >= 0 ? firstUnansweredIndex : 0)
+    setResultData(tryoutData.session?.is_finished ? tryoutData : null)
+    autoFinishTriggeredRef.current = false
+  }, [tryoutData])
+
+  useEffect(() => {
+    if (!tryoutData || tryoutData.session?.is_finished) {
+      setRemainingSeconds(0)
+      return undefined
+    }
+
+    const durationMinutes = Number(tryoutData.settings?.duration_minutes || 90)
+    const startedAt = new Date(tryoutData.session.created_at).getTime()
+    const durationSeconds = durationMinutes * 60
+
+    const updateTimer = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+      const nextRemaining = Math.max(0, durationSeconds - elapsed)
+      setRemainingSeconds(nextRemaining)
+
+      if (nextRemaining <= 0 && tryoutData.settings?.auto_submit && !autoFinishTriggeredRef.current) {
+        autoFinishTriggeredRef.current = true
+        void finishTryout()
+      }
+    }
+
+    updateTimer()
+    const timer = window.setInterval(updateTimer, 1000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [tryoutData, isFinishing])
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-user/tryout' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
+  const initials = displayName.slice(0, 2).toUpperCase()
+  const isProfileComplete = user?.profile_completed !== false
+
+  const sidebarItems = [
+    { label: 'Dashboard', href: '/dashboard-user' },
+    { label: 'Materi', href: '#' },
+    { label: 'Tryout', href: '/dashboard-user/tryout' },
+    { label: 'Jadwal', href: '#' },
+    { label: 'Bantuan', href: '#' },
+  ]
+
+  const quickStats = [
+    ['Paket Aktif', String(packageRows.length)],
+    ['Sesi Berjalan', tryoutData ? '1' : '0'],
+    ['Jawaban Tersimpan', tryoutData ? String(Object.keys(answerMap).length) : '0'],
+  ]
+
+  const filteredPackages = packageRows.filter((item) => {
+    if (selectedCategory === 'ALL') return true
+    return String(item.kategori || '').trim().toUpperCase() === selectedCategory
+  })
+
+  const currentQuestions = tryoutData?.questions || []
+  const currentQuestion = currentQuestions[currentQuestionIndex] || currentQuestions[0] || null
+  const answeredCount = currentQuestions.filter((question) => answerMap[String(question.id)]).length
+  const progressPercent = currentQuestions.length ? Math.round((answeredCount / currentQuestions.length) * 100) : 0
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
+    clearAuthUser()
+
+    navigate('/login', { replace: true })
+  }
+
+  const startTryout = async (packageRow) => {
+    if (!packageRow?.pid || !user?.pid) return
+
+    setIsStarting(true)
+    setTryoutError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tryout/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.pid,
+          package_id: packageRow.pid,
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Tryout gagal dimulai.')
+      }
+
+      setTryoutData(payload?.data ?? null)
+      setResultData(null)
+    } catch (error) {
+      setTryoutError(error instanceof Error ? error.message : 'Tryout gagal dimulai.')
+    } finally {
+      setIsStarting(false)
+    }
+  }
+
+  const saveAnswer = async (questionId, optionId) => {
+    if (!tryoutData?.session?.id || !user?.pid) return
+
+    setAnswerMap((current) => ({
+      ...current,
+      [String(questionId)]: String(optionId),
+    }))
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tryout/${tryoutData.session.id}/answer`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.pid,
+          question_id: questionId,
+          option_id: optionId,
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Jawaban gagal disimpan.')
+      }
+    } catch (error) {
+      setTryoutError(error instanceof Error ? error.message : 'Jawaban gagal disimpan.')
+    }
+  }
+
+  const finishTryout = async () => {
+    if (!tryoutData?.session?.id || !user?.pid || isFinishing) return
+
+    setIsFinishing(true)
+    setTryoutError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tryout/${tryoutData.session.id}/finish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ user_id: user.pid }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Tryout gagal diselesaikan.')
+      }
+
+      setTryoutData(payload?.data ?? null)
+      setResultData(payload?.data ?? null)
+      setRemainingSeconds(0)
+    } catch (error) {
+      setTryoutError(error instanceof Error ? error.message : 'Tryout gagal diselesaikan.')
+    } finally {
+      setIsFinishing(false)
+    }
+  }
+
+  const questionStatus = (question) => {
+    const selected = answerMap[String(question.id)]
+    if (selected) return 'sudah'
+    return 'belum'
+  }
+
+  return (
+    <div className="dashboard-page dashboard-page-v2 user-tryout-page">
+      <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <UserSidebar
+          currentPath={currentPath}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+          navigate={navigate}
+          user={user}
+          displayName={displayName}
+          isProfileComplete={isProfileComplete}
+          onLogout={handleLogout}
+        />
+
+        <main className="dashboard-main dashboard-main-v2 user-tryout-main">
+          <header className="dashboard-topbar">
+            <div className="dashboard-topbar-left">
+              <button
+                type="button"
+                className="dashboard-menu-button"
+                aria-label={isSidebarCollapsed ? 'Buka navigasi' : 'Sembunyikan navigasi'}
+                onClick={() => setIsSidebarCollapsed((current) => !current)}
+              >
+                ☰
+              </button>
+              <p>Simulasi Tryout <strong>{displayName}</strong></p>
+            </div>
+
+            <div className="dashboard-topbar-right">
+              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/dashboard-user', { state: { user } })}>
+                🏠
+              </button>
+              <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">
+                🔔<span className="dashboard-notification-dot" />
+              </button>
+              <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
+                <button
+                  type="button"
+                  className="dashboard-profile-chip"
+                  aria-haspopup="menu"
+                  aria-expanded={isProfileMenuOpen}
+                  onClick={() => setIsProfileMenuOpen((current) => !current)}
+                >
+                  <span className="dashboard-profile-avatar">{initials}</span>
+                  <span>{displayName}</span>
+                  <span aria-hidden="true">⌄</span>
+                </button>
+
+                {isProfileMenuOpen ? (
+                  <div className="dashboard-profile-dropdown" role="menu" aria-label="Menu akun">
+                    <button
+                      type="button"
+                      className="dashboard-profile-dropdown-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        navigate('/account-profile', { state: { user } })
+                      }}
+                    >
+                      <span className="dashboard-profile-dropdown-label">Resume Profile</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-profile-dropdown-item danger"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        handleLogout()
+                      }}
+                    >
+                      <span className="dashboard-profile-dropdown-label">Logout</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </header>
+
+          {tryoutError ? <div className="dashboard-alert error">{tryoutError}</div> : null}
+          {packageError ? <div className="dashboard-alert error">{packageError}</div> : null}
+          {tryoutLoading ? <div className="dashboard-alert">Memuat sesi tryout...</div> : null}
+
+          {tryoutData && !tryoutData.session?.is_finished ? (
+            <section className="user-tryout-active-shell">
+              <div className="user-tryout-active-summary">
+                <div>
+                  <div className="user-tryout-kicker">Sedang Mengerjakan</div>
+                  <h2>{tryoutData.session.package_name}</h2>
+                  <p>{tryoutData.session.package_category || 'Tryout CAT'} · {tryoutData.session.package_formasi || 'Simulasi ujian'}</p>
+                </div>
+
+                <div className="user-tryout-meta-cards">
+                  <article>
+                    <span>Sisa Waktu</span>
+                    <strong>{formatTryoutCountdown(remainingSeconds)}</strong>
+                  </article>
+                  <article>
+                    <span>Terjawab</span>
+                    <strong>{answeredCount}/{currentQuestions.length}</strong>
+                  </article>
+                  <article>
+                    <span>Progress</span>
+                    <strong>{progressPercent}%</strong>
+                  </article>
+                </div>
+              </div>
+
+              <section className="user-tryout-exam-layout">
+                <article className="user-tryout-question-card dashboard-panel-card">
+                  <div className="dashboard-panel-head">
+                    <div>
+                      <h3>Soal {currentQuestionIndex + 1}</h3>
+                      <span>{currentQuestion?.question_group_label || '-'}</span>
+                    </div>
+                    <button type="button" className="dashboard-card-link" onClick={() => void finishTryout()} disabled={isFinishing}>
+                      {isFinishing ? 'Menutup...' : 'Selesai Ujian'}
+                    </button>
+                  </div>
+
+                  {currentQuestion ? (
+                    <div className="user-tryout-question-body">
+                      {currentQuestion.information ? <p className="user-tryout-question-info">{currentQuestion.information}</p> : null}
+                      <div className="user-tryout-question-text">{currentQuestion.question}</div>
+
+                      <div className="user-tryout-option-list">
+                        {currentQuestion.options.map((option, index) => {
+                          const selected = String(answerMap[String(currentQuestion.id)] || '') === String(option.id)
+                          return (
+                            <button
+                              key={option.id ?? `${currentQuestion.id}-${index}`}
+                              type="button"
+                              className={`user-tryout-option${selected ? ' selected' : ''}`}
+                              onClick={() => {
+                                void saveAnswer(currentQuestion.id, option.id)
+                              }}
+                            >
+                              <span className="user-tryout-option-badge">{String.fromCharCode(65 + index)}</span>
+                              <span className="user-tryout-option-text">{option.choise}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="dashboard-alert">Belum ada soal pada sesi ini.</div>
+                  )}
+
+                  <div className="user-tryout-question-nav-actions">
+                    <button
+                      type="button"
+                      className="dashboard-secondary-action"
+                      onClick={() => setCurrentQuestionIndex((current) => Math.max(0, current - 1))}
+                      disabled={currentQuestionIndex <= 0}
+                    >
+                      Soal Sebelumnya
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-primary-action"
+                      onClick={() => setCurrentQuestionIndex((current) => Math.min(currentQuestions.length - 1, current + 1))}
+                      disabled={currentQuestionIndex >= currentQuestions.length - 1}
+                    >
+                      Soal Berikutnya
+                    </button>
+                  </div>
+                </article>
+
+                <aside className="user-tryout-side-panel">
+                  <article className="dashboard-panel-card">
+                    <div className="dashboard-panel-head">
+                      <h3>Navigasi Soal</h3>
+                      <span>{currentQuestions.length} SOAL</span>
+                    </div>
+                    <div className="user-tryout-question-grid">
+                      {currentQuestions.map((question, index) => {
+                        const answered = questionStatus(question) === 'sudah'
+                        const active = index === currentQuestionIndex
+                        return (
+                          <button
+                            key={question.id}
+                            type="button"
+                            className={`user-tryout-question-chip${active ? ' active' : ''}${answered ? ' answered' : ''}`}
+                            onClick={() => setCurrentQuestionIndex(index)}
+                          >
+                            {index + 1}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </article>
+
+                  <article className="dashboard-panel-card">
+                    <div className="dashboard-panel-head">
+                      <h3>Ringkasan</h3>
+                      <span>STATUS</span>
+                    </div>
+                    <div className="user-tryout-summary-list">
+                      <div><span>Paket</span><strong>{tryoutData.session.package_name}</strong></div>
+                      <div><span>Durasi</span><strong>{tryoutData.settings.duration_minutes} menit</strong></div>
+                      <div><span>Jawaban</span><strong>{answeredCount}</strong></div>
+                      <div><span>Sisa</span><strong>{formatTryoutCountdown(remainingSeconds)}</strong></div>
+                    </div>
+                    <button type="button" className="dashboard-primary-action user-tryout-finish-button" onClick={() => void finishTryout()} disabled={isFinishing}>
+                      {isFinishing ? 'Menutup...' : 'Kumpulkan Jawaban'}
+                    </button>
+                  </article>
+                </aside>
+              </section>
+            </section>
+          ) : null}
+
+          {resultData && resultData.session?.is_finished ? (
+            <section className="user-tryout-result-shell">
+              <article className="dashboard-panel-card user-tryout-result-hero">
+                <div className="dashboard-panel-head">
+                  <h3>Hasil Tryout</h3>
+                  <span>Selesai</span>
+                </div>
+                <div className="user-tryout-result-grid">
+                  <div><span>TWK</span><strong>{resultData.session.score_twk}</strong></div>
+                  <div><span>TIU</span><strong>{resultData.session.score_tiu}</strong></div>
+                  <div><span>TKP</span><strong>{resultData.session.score_tkp}</strong></div>
+                  <div><span>Total</span><strong>{resultData.session.score_total}</strong></div>
+                </div>
+              </article>
+
+              <article className="dashboard-panel-card">
+                <div className="dashboard-panel-head">
+                  <h3>Review Jawaban</h3>
+                  <span>{resultData.questions.length} SOAL</span>
+                </div>
+                <div className="user-tryout-review-list">
+                  {resultData.questions.map((question, index) => (
+                    <button
+                      key={question.id}
+                      type="button"
+                      className={`user-tryout-review-item${question.is_correct ? ' correct' : ' wrong'}`}
+                      onClick={() => setCurrentQuestionIndex(index)}
+                    >
+                      <span>{index + 1}</span>
+                      <div>
+                        <strong>{question.question}</strong>
+                        <p>{question.question_group_label}</p>
+                      </div>
+                      <em>{question.is_correct ? 'Benar' : 'Salah'}</em>
+                    </button>
+                  ))}
+                </div>
+                <div className="user-tryout-result-actions">
+                  <button type="button" className="dashboard-secondary-action" onClick={() => { setTryoutData(null); setResultData(null); setAnswerMap({}); setCurrentQuestionIndex(0); }}>
+                    Kembali ke Paket
+                  </button>
+                  <button type="button" className="dashboard-primary-action" onClick={() => navigate('/dashboard-user', { state: { user } })}>
+                    Ke Dashboard
+                  </button>
+                </div>
+              </article>
+            </section>
+          ) : null}
+
+          {!tryoutData && !tryoutLoading ? (
+            <>
+              <section className="user-tryout-hero-card">
+                <div>
+                  <div className="dashboard-status-pill success">Simulasi Tryout</div>
+                  <h2>Latihan CAT dengan alur yang mendekati ujian asli.</h2>
+                  <p>Pilih paket tryout, mulai sesi, dan kerjakan soal dengan timer yang berjalan otomatis.</p>
+                </div>
+                <div className="user-tryout-hero-stats">
+                  {quickStats.map(([label, value]) => (
+                    <article key={label}>
+                      <span>{label}</span>
+                      <strong>{value}</strong>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="user-tryout-filter-row">
+                {['ALL', 'CPNS', 'PPPK'].map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    className={`user-tryout-filter-pill${selectedCategory === category ? ' active' : ''}`}
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    {category === 'ALL' ? 'Semua Paket' : category}
+                  </button>
+                ))}
+              </section>
+
+              <section className="user-tryout-package-grid">
+                {packageLoading ? <div className="dashboard-alert">Memuat paket tryout...</div> : null}
+                {filteredPackages.map((item) => (
+                  <article className="user-tryout-package-card" key={item.pid}>
+                    <div className="user-tryout-package-badge">{String(item.kategori || 'PROGRAM').toUpperCase()}</div>
+                    <h3>{item.nama_paket}</h3>
+                    <p>{item.formasi || item.jadwal || item.ket || 'Paket tryout siap dikerjakan.'}</p>
+                    <div className="user-tryout-package-meta">
+                      <span>{item.jadwal || 'Jadwal fleksibel'}</span>
+                      <strong>{formatCurrency(item.harga)}</strong>
+                    </div>
+                    <button type="button" className="dashboard-primary-action" onClick={() => void startTryout(item)} disabled={isStarting}>
+                      {isStarting ? 'Memulai...' : 'Mulai Simulasi'}
+                    </button>
+                  </article>
+                ))}
+              </section>
+            </>
+          ) : null}
+
+          <AdminLogoutModal
+            open={showLogoutConfirm}
+            onCancel={() => setShowLogoutConfirm(false)}
+            onConfirm={confirmLogout}
+            title="Keluar dari akun user?"
+            message="Pastikan progres atau jawaban yang sedang dikerjakan sudah tersimpan sebelum Anda logout."
+            confirmLabel="Ya, keluar"
+          />
+        </main>
+      </div>
+    </div>
+  )
+
 }
 
 function AdminDashboardPage() {
@@ -4777,6 +5613,7 @@ function AdminDashboardPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
@@ -4853,12 +5690,7 @@ function AdminDashboardPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Logout</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main">
@@ -5051,6 +5883,7 @@ function AdminUserManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
@@ -5175,12 +6008,7 @@ function AdminUserManagementPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Keluar</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main admin-user-main">
@@ -5387,6 +6215,7 @@ function AdminPackageManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
@@ -5717,12 +6546,7 @@ function AdminPackageManagementPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Keluar</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main admin-package-main">
@@ -5993,6 +6817,7 @@ function AdminSettingsParameterPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
@@ -6282,12 +7107,7 @@ function AdminSettingsParameterPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Keluar</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main admin-parameter-main">
@@ -6531,6 +7351,7 @@ function AdminSettingsFaqPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -6858,12 +7679,7 @@ function AdminSettingsFaqPage() {
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
-          <div className="admin-sidebar-footer-card">
-            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
-              <span aria-hidden="true">⎋</span>
-              <span>Keluar</span>
-            </button>
-          </div>
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
         </aside>
 
         <main className="admin-main admin-faq-main">
@@ -7065,6 +7881,789 @@ function AdminSettingsFaqPage() {
   )
 }
 
+function AdminMaterialFormModal({ open, onCancel, onSubmit, form, packages, onFieldChange, onFileChange, loading, error, title = 'Upload Materi', submitLabel = 'Simpan Materi', helpText = 'Unggah PDF per paket dan atur status publikasi materi.' }) {
+  if (!open) return null
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-material-modal" role="dialog" aria-modal="true" aria-labelledby="adminMaterialTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-modal-icon" aria-hidden="true">📄</div>
+        <h3 id="adminMaterialTitle">{title}</h3>
+        <p>{helpText}</p>
+
+        <form className="admin-package-form admin-material-form" onSubmit={onSubmit}>
+          {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+          <div className="admin-package-form-grid admin-material-form-grid">
+            <label className="admin-package-field">
+              <span>Paket</span>
+              <select value={form.package_id} onChange={(event) => onFieldChange('package_id', event.target.value)} disabled={loading}>
+                <option value="">Pilih paket</option>
+                {packages.map((item) => (
+                  <option key={item.pid} value={item.pid}>{item.name} ({item.kategori})</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="admin-package-field">
+              <span>Urutan</span>
+              <input type="number" min="0" step="1" value={form.sort_order} onChange={(event) => onFieldChange('sort_order', event.target.value)} placeholder="0" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Judul Materi</span>
+              <input type="text" value={form.judul} onChange={(event) => onFieldChange('judul', event.target.value)} placeholder="Contoh: Materi TWK Dasar" disabled={loading} />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Deskripsi</span>
+              <textarea value={form.deskripsi} onChange={(event) => onFieldChange('deskripsi', event.target.value)} placeholder="Penjelasan singkat materi" disabled={loading}></textarea>
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>File PDF</span>
+              <input type="file" accept="application/pdf,.pdf" onChange={onFileChange} disabled={loading} />
+              <small className="admin-material-file-note">{form.file_label || 'Belum ada file dipilih'}</small>
+            </label>
+
+            <label className="admin-package-field admin-package-field-full admin-material-toggle-field">
+              <span>Status Publikasi</span>
+              <button type="button" className={`admin-parameter-toggle${form.is_published ? ' active' : ''}`} onClick={() => onFieldChange('is_published', !form.is_published)} disabled={loading}>
+                <span className="admin-parameter-toggle-track" aria-hidden="true"><span className="admin-parameter-toggle-thumb" /></span>
+                <span>{form.is_published ? 'Terbit' : 'Draft'}</span>
+              </button>
+            </label>
+          </div>
+
+          <div className="admin-modal-actions admin-package-form-actions">
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : submitLabel}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function UserMaterialViewerModal({ open, material, src, onClose }) {
+  if (!open || !material) return null
+
+  return (
+    <div className="admin-modal-backdrop user-material-viewer-backdrop" role="presentation" onClick={onClose}>
+      <div className="admin-modal user-material-viewer-modal" role="dialog" aria-modal="true" aria-labelledby="userMaterialViewerTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="user-material-viewer-head">
+          <div>
+            <div className="dashboard-status-pill success">Materi PDF</div>
+            <h3 id="userMaterialViewerTitle">{material.judul}</h3>
+            <p>{material.package_name} · {material.file_size_label}</p>
+          </div>
+          <button type="button" className="admin-faq-close" aria-label="Tutup preview" onClick={onClose}>×</button>
+        </div>
+        <iframe title={material.judul} src={src} className="user-material-viewer-frame" />
+      </div>
+    </div>
+  )
+}
+
+function MaterialEmptyState({ title, description, actionLabel, onAction, accent = 'blue' }) {
+  return (
+    <div className={`material-empty-state ${accent}`}>
+      <div className="material-empty-icon" aria-hidden="true">📄</div>
+      <div className="material-empty-copy">
+        <strong>{title}</strong>
+        <p>{description}</p>
+      </div>
+      {actionLabel ? (
+        <button type="button" className="dashboard-primary-action material-empty-action" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function AdminMaterialManagementPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [materialRows, setMaterialRows] = useState([])
+  const [materialPackages, setMaterialPackages] = useState([])
+  const [materialSummary, setMaterialSummary] = useState({ total_materi: 0, materi_terbit: 0, materi_draft: 0 })
+  const [isLoadingMaterials, setIsLoadingMaterials] = useState(true)
+  const [materialError, setMaterialError] = useState(null)
+  const [materialSearch, setMaterialSearch] = useState('')
+  const [selectedMaterialPackage, setSelectedMaterialPackage] = useState('ALL')
+  const [selectedMaterialStatus, setSelectedMaterialStatus] = useState('ALL')
+  const [showMaterialModal, setShowMaterialModal] = useState(false)
+  const [materialModalMode, setMaterialModalMode] = useState('create')
+  const [editingMaterialPid, setEditingMaterialPid] = useState(null)
+  const [isSavingMaterial, setIsSavingMaterial] = useState(false)
+  const [materialSubmitError, setMaterialSubmitError] = useState(null)
+  const [materialSubmitSuccess, setMaterialSubmitSuccess] = useState(null)
+  const [materialForm, setMaterialForm] = useState(() => createMaterialFormFromDetail())
+  const materialSuccessTimerRef = useRef(null)
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+
+  if (!user || Number(user?.is_admin ?? 0) !== 1) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-admin/materials' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.email?.split('@')?.[0] || 'Admin'
+  const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date()).replace(/^./, (char) => char.toUpperCase())
+
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
+    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
+
+  const materialSummaryCards = [
+    { label: 'Total Materi', value: String(materialSummary.total_materi ?? 0), delta: 'Semua materi', accent: 'blue', icon: '📄' },
+    { label: 'Terbit', value: String(materialSummary.materi_terbit ?? 0), delta: 'Siap diakses user', accent: 'green', icon: '✅' },
+    { label: 'Draft', value: String(materialSummary.materi_draft ?? 0), delta: 'Belum dipublikasikan', accent: 'orange', icon: '📝' },
+  ]
+
+  const loadMaterials = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) setIsLoadingMaterials(true)
+    setMaterialError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (materialSearch.trim()) params.set('search', materialSearch.trim())
+      if (selectedMaterialPackage !== 'ALL') params.set('package_id', selectedMaterialPackage)
+      if (selectedMaterialStatus !== 'ALL') params.set('status', selectedMaterialStatus)
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/materials${params.toString() ? `?${params.toString()}` : ''}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data materi gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setMaterialRows(Array.isArray(payload?.data) ? payload.data : [])
+        setMaterialPackages(Array.isArray(payload?.packages) ? payload.packages : [])
+        setMaterialSummary(payload?.summary ?? { total_materi: 0, materi_terbit: 0, materi_draft: 0 })
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data materi gagal dimuat.')
+        setMaterialError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) setIsLoadingMaterials(false)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    void loadMaterials({ cancelled: () => cancelled, showLoading: true })
+    return () => { cancelled = true }
+  }, [materialSearch, selectedMaterialPackage, selectedMaterialStatus])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  useEffect(() => () => {
+    if (materialSuccessTimerRef.current) window.clearTimeout(materialSuccessTimerRef.current)
+  }, [])
+
+  const openAddMaterialModal = () => {
+    if (materialSuccessTimerRef.current) {
+      window.clearTimeout(materialSuccessTimerRef.current)
+      materialSuccessTimerRef.current = null
+    }
+
+    setMaterialModalMode('create')
+    setEditingMaterialPid(null)
+    setMaterialSubmitError(null)
+    setMaterialSubmitSuccess(null)
+    setMaterialForm(createMaterialFormFromDetail({ package_id: selectedMaterialPackage !== 'ALL' ? selectedMaterialPackage : '' }))
+    setShowMaterialModal(true)
+  }
+
+  const openEditMaterialModal = async (row) => {
+    if (materialSuccessTimerRef.current) {
+      window.clearTimeout(materialSuccessTimerRef.current)
+      materialSuccessTimerRef.current = null
+    }
+
+    setMaterialModalMode('edit')
+    setEditingMaterialPid(row?.pid ?? null)
+    setMaterialSubmitError(null)
+    setMaterialSubmitSuccess(null)
+    setShowMaterialModal(true)
+    setMaterialForm(createMaterialFormFromDetail(row ?? {}))
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/materials/${row?.pid}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Detail materi gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+      setMaterialForm(createMaterialFormFromDetail(payload?.data ?? {}))
+    } catch {
+      // Keep modal usable even if detail fetch fails.
+    }
+  }
+
+  const closeMaterialModal = () => {
+    if (isSavingMaterial) return
+    if (materialSuccessTimerRef.current) {
+      window.clearTimeout(materialSuccessTimerRef.current)
+      materialSuccessTimerRef.current = null
+    }
+    setShowMaterialModal(false)
+    setMaterialSubmitError(null)
+    setMaterialSubmitSuccess(null)
+  }
+
+  const handleMaterialFieldChange = (field, value) => {
+    setMaterialForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const handleMaterialFileChange = (event) => {
+    const file = event.target.files?.[0] ?? null
+    setMaterialForm((current) => ({
+      ...current,
+      file,
+      file_label: file?.name || current.file_label || '',
+    }))
+  }
+
+  const handleMaterialSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!materialForm.package_id || !materialForm.judul.trim()) {
+      setMaterialSubmitError('Paket dan judul materi wajib diisi.')
+      return
+    }
+
+    if (materialModalMode === 'create' && !materialForm.file) {
+      setMaterialSubmitError('File PDF wajib diunggah.')
+      return
+    }
+
+    setIsSavingMaterial(true)
+    setMaterialSubmitError(null)
+    setMaterialSubmitSuccess(null)
+
+    try {
+      const isEditMode = materialModalMode === 'edit' && editingMaterialPid !== null
+      const formData = new FormData()
+      if (isEditMode) {
+        formData.append('_method', 'PUT')
+      }
+      formData.append('package_id', materialForm.package_id)
+      formData.append('judul', materialForm.judul.trim())
+      formData.append('deskripsi', materialForm.deskripsi.trim())
+      formData.append('sort_order', String(materialForm.sort_order || 0))
+      formData.append('is_published', materialForm.is_published ? '1' : '0')
+      if (materialForm.file instanceof File) {
+        formData.append('file', materialForm.file)
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/materials${isEditMode ? `/${editingMaterialPid}` : ''}`, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: formData,
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Materi gagal disimpan (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setMaterialSubmitSuccess(isEditMode ? 'Materi berhasil diperbarui.' : 'Materi berhasil diunggah.')
+      setShowMaterialModal(false)
+      setEditingMaterialPid(null)
+      setMaterialForm(createMaterialFormFromDetail())
+
+      await loadMaterials({ cancelled: () => false, showLoading: false })
+
+      if (materialSuccessTimerRef.current) window.clearTimeout(materialSuccessTimerRef.current)
+      materialSuccessTimerRef.current = window.setTimeout(() => {
+        setMaterialSubmitSuccess(null)
+        materialSuccessTimerRef.current = null
+      }, 2800)
+    } catch (error) {
+      setMaterialSubmitError(error instanceof Error ? error.message : 'Materi gagal disimpan.')
+    } finally {
+      setIsSavingMaterial(false)
+    }
+  }
+
+  const handleDeleteMaterial = async (row) => {
+    if (!row?.pid) return
+    if (!window.confirm(`Hapus materi ${row.judul}? File PDF akan dihapus dari penyimpanan.`)) return
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/materials/${row.pid}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      })
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Materi gagal dihapus (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+      await loadMaterials({ cancelled: () => false, showLoading: false })
+    } catch (error) {
+      setMaterialError(error instanceof Error ? error.message : 'Materi gagal dihapus.')
+    }
+  }
+
+  const handleLogout = () => setShowLogoutConfirm(true)
+  const confirmLogout = () => { clearAuthUser(); navigate('/login', { replace: true }) }
+
+  const filteredRows = materialRows
+
+  return (
+    <div className="admin-dashboard-page admin-material-page">
+      <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
+
+          <div className="admin-sidebar-group-label">Main</div>
+          <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
+            {adminMainMenu.map((item) => (
+              <button key={item.label} type="button" className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`} onClick={() => item.href !== '#' && navigate(item.href)}>
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
+
+          <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
+        </aside>
+
+        <main className="admin-main admin-material-main">
+          <AdminTopbar
+            title="Materi PDF"
+            searchPlaceholder="Cari materi..."
+            currentDateLabel={currentDateLabel}
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
+            showSearch={false}
+            onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
+          />
+
+          <section className="admin-package-hero">
+            <div>
+              <h2>Materi PDF</h2>
+              <div className="admin-breadcrumb">
+                Dashboard <span>›</span> Materi
+              </div>
+            </div>
+
+            <div className="admin-package-actions">
+              <button type="button" className="admin-outline-action">⬇ Ekspor Data</button>
+              <button type="button" className="admin-primary-action" onClick={openAddMaterialModal}>＋ Upload Materi</button>
+            </div>
+          </section>
+
+          <section className="admin-summary-grid admin-package-summary-grid">
+            {materialSummaryCards.map((card) => (
+              <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                <div className="admin-summary-copy">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <p>{card.delta}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="admin-card admin-package-filter-card">
+            {materialError ? <div className="admin-user-message error">{materialError}</div> : null}
+            {isLoadingMaterials ? <div className="admin-user-message">Memuat data materi...</div> : null}
+
+            <div className="admin-package-filters">
+              <label className="admin-package-search">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="Cari materi..." value={materialSearch} onChange={(event) => setMaterialSearch(event.target.value)} />
+              </label>
+
+              <div className="admin-package-filter-group">
+                <select className="admin-package-select" value={selectedMaterialPackage} onChange={(event) => setSelectedMaterialPackage(event.target.value)}>
+                  <option value="ALL">Semua Paket</option>
+                  {materialPackages.map((item) => (
+                    <option key={item.pid} value={String(item.pid)}>{item.name}</option>
+                  ))}
+                </select>
+
+                <select className="admin-package-select" value={selectedMaterialStatus} onChange={(event) => setSelectedMaterialStatus(event.target.value)}>
+                  <option value="ALL">Semua Status</option>
+                  <option value="PUBLISHED">Terbit</option>
+                  <option value="DRAFT">Draft</option>
+                </select>
+
+                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                <button type="button" className="admin-package-reset" onClick={() => { setMaterialSearch(''); setSelectedMaterialPackage('ALL'); setSelectedMaterialStatus('ALL') }}>Reset</button>
+              </div>
+            </div>
+          </section>
+
+          {filteredRows.length ? (
+            <section className="admin-card admin-package-table-card">
+              {materialSubmitSuccess ? <div className="admin-package-banner success">{materialSubmitSuccess}</div> : null}
+              <div className="admin-package-table-wrap">
+                <table className="admin-user-table admin-material-table">
+                  <thead>
+                    <tr>
+                      <th>Materi</th>
+                      <th>Paket</th>
+                      <th>File</th>
+                      <th>Ukuran</th>
+                      <th>Status</th>
+                      <th>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((row) => (
+                      <tr key={row.pid}>
+                        <td>
+                          <div className="admin-package-cell">
+                            <div className="admin-package-thumb blue"><span>PDF</span></div>
+                            <div className="admin-package-name">
+                              <strong>{row.judul}</strong>
+                              <span>{row.deskripsi || 'Tidak ada deskripsi'}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{row.package_name}</td>
+                        <td>{row.original_name}</td>
+                        <td>{row.file_size_label}</td>
+                        <td><span className={`admin-package-type-badge ${row.status_key === 'published' ? 'online' : 'tryout'}`}>{row.status}</span></td>
+                        <td>
+                          <div className="admin-table-actions">
+                            <button type="button" className="admin-table-action" onClick={() => openEditMaterialModal(row)}>Edit</button>
+                            <button type="button" className="admin-table-action danger" onClick={() => handleDeleteMaterial(row)}>Hapus</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : (
+            <section className="admin-card admin-material-empty-card">
+              {materialSubmitSuccess ? <div className="admin-package-banner success">{materialSubmitSuccess}</div> : null}
+              <MaterialEmptyState
+                title="Belum ada materi PDF"
+                description="Upload materi pertama untuk paket tertentu agar user bisa melihatnya setelah transaksi paid."
+                actionLabel="Upload Materi"
+                onAction={openAddMaterialModal}
+                accent="blue"
+              />
+            </section>
+          )}
+        </main>
+      </div>
+
+      <AdminMaterialFormModal
+        open={showMaterialModal}
+        onCancel={closeMaterialModal}
+        onSubmit={handleMaterialSubmit}
+        form={materialForm}
+        packages={materialPackages}
+        onFieldChange={handleMaterialFieldChange}
+        onFileChange={handleMaterialFileChange}
+        loading={isSavingMaterial}
+        error={materialSubmitError}
+        title={materialModalMode === 'edit' ? 'Edit Materi' : 'Upload Materi'}
+        submitLabel={materialModalMode === 'edit' ? 'Perbarui Materi' : 'Simpan Materi'}
+        helpText={materialModalMode === 'edit' ? 'Ubah metadata atau ganti file PDF materi.' : 'Unggah file PDF per paket untuk ditampilkan ke user.'}
+      />
+
+      <AdminLogoutModal
+        open={showLogoutConfirm}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+      />
+    </div>
+  )
+}
+
+function UserMaterialsPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const profileMenuRef = useRef(null)
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [materialRows, setMaterialRows] = useState([])
+  const [materialPackages, setMaterialPackages] = useState([])
+  const [isLoadingMaterials, setIsLoadingMaterials] = useState(true)
+  const [materialError, setMaterialError] = useState(null)
+  const [selectedMaterialPackage, setSelectedMaterialPackage] = useState('ALL')
+  const [materialSearch, setMaterialSearch] = useState('')
+  const [previewMaterial, setPreviewMaterial] = useState(null)
+
+  useEffect(() => {
+    const handleDocumentPointerDown = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    const handleDocumentKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false)
+        setPreviewMaterial(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+    document.addEventListener('keydown', handleDocumentKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handleDocumentPointerDown)
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user?.pid) {
+      setIsLoadingMaterials(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadMaterials = async () => {
+      setIsLoadingMaterials(true)
+      setMaterialError(null)
+
+      try {
+        const params = new URLSearchParams({ user_id: String(user.pid) })
+        if (materialSearch.trim()) params.set('search', materialSearch.trim())
+        if (selectedMaterialPackage !== 'ALL') params.set('package_id', selectedMaterialPackage)
+
+        const response = await fetch(`${BACKEND_URL}/api/materials?${params.toString()}`)
+        const contentType = response.headers.get('content-type') || ''
+        const rawBody = await response.text()
+        const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+        if (!response.ok) {
+          const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data materi gagal dimuat (HTTP ${response.status}).`
+          throw new Error(message)
+        }
+
+        if (!cancelled) {
+          setMaterialRows(Array.isArray(payload?.data) ? payload.data : [])
+          setMaterialPackages(Array.isArray(payload?.packages) ? payload.packages : [])
+        }
+      } catch (error) {
+        if (!cancelled) setMaterialError(getFriendlyFetchError(error, 'Data materi gagal dimuat.'))
+      } finally {
+        if (!cancelled) setIsLoadingMaterials(false)
+      }
+    }
+
+    void loadMaterials()
+
+    return () => { cancelled = true }
+  }, [user?.pid, materialSearch, selectedMaterialPackage])
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-user/materials' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
+  const initials = displayName.slice(0, 2).toUpperCase()
+  const isProfileComplete = user?.profile_completed !== false
+
+  const handleLogout = () => setShowLogoutConfirm(true)
+  const confirmLogout = () => { clearAuthUser(); navigate('/login', { replace: true }) }
+
+  const filteredRows = materialRows
+  const previewSrc = previewMaterial ? `${BACKEND_URL}/api/materials/${previewMaterial.pid}/view?user_id=${user.pid}` : ''
+
+  return (
+    <div className="dashboard-page dashboard-page-v2 user-material-page">
+      <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <UserSidebar
+          currentPath={currentPath}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+          navigate={navigate}
+          user={user}
+          displayName={displayName}
+          isProfileComplete={isProfileComplete}
+          onLogout={handleLogout}
+        />
+
+        <main className="dashboard-main dashboard-main-v2 user-material-main">
+          <header className="dashboard-topbar">
+            <div className="dashboard-topbar-left">
+              <button type="button" className="dashboard-menu-button" aria-label={isSidebarCollapsed ? 'Buka navigasi' : 'Sembunyikan navigasi'} onClick={() => setIsSidebarCollapsed((current) => !current)}>☰</button>
+              <p>Materi Belajar <strong>{displayName}</strong></p>
+            </div>
+
+            <div className="dashboard-topbar-right">
+              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/dashboard-user', { state: { user } })}>🏠</button>
+              <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">🔔<span className="dashboard-notification-dot" /></button>
+              <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
+                <button type="button" className="dashboard-profile-chip" aria-haspopup="menu" aria-expanded={isProfileMenuOpen} onClick={() => setIsProfileMenuOpen((current) => !current)}>
+                  <span className="dashboard-profile-avatar">{initials}</span>
+                  <span>{displayName}</span>
+                  <span aria-hidden="true">⌄</span>
+                </button>
+
+                {isProfileMenuOpen ? (
+                  <div className="dashboard-profile-dropdown" role="menu" aria-label="Menu akun">
+                    <button type="button" className="dashboard-profile-dropdown-item" role="menuitem" onClick={() => { setIsProfileMenuOpen(false); navigate('/account-profile', { state: { user } }) }}>
+                      <span className="dashboard-profile-dropdown-label">Resume Profile</span>
+                    </button>
+                    <button type="button" className="dashboard-profile-dropdown-item danger" role="menuitem" onClick={() => { setIsProfileMenuOpen(false); handleLogout() }}>
+                      <span className="dashboard-profile-dropdown-label">Logout</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </header>
+
+          {materialError ? <div className="dashboard-alert error">{materialError}</div> : null}
+          {isLoadingMaterials ? <div className="dashboard-alert">Memuat materi...</div> : null}
+
+          <section className="user-tryout-hero-card user-material-hero-card">
+            <div>
+              <div className="dashboard-status-pill success">Akses Materi</div>
+              <h2>Materi PDF yang sesuai paketmu.</h2>
+              <p>Materi yang tampil hanya untuk paket yang sudah kamu beli dan bisa dibuka langsung di browser saat login.</p>
+            </div>
+
+            <div className="user-tryout-hero-stats">
+              <article>
+                <span>Materi Aktif</span>
+                <strong>{materialRows.length}</strong>
+              </article>
+              <article>
+                <span>Paket Terakses</span>
+                <strong>{materialPackages.length}</strong>
+              </article>
+              <article>
+                <span>Status</span>
+                <strong>View Only</strong>
+              </article>
+            </div>
+          </section>
+
+          <section className="admin-card admin-package-filter-card">
+            <div className="admin-package-filters">
+              <label className="admin-package-search">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="Cari materi..." value={materialSearch} onChange={(event) => setMaterialSearch(event.target.value)} />
+              </label>
+
+              <div className="admin-package-filter-group">
+                <select className="admin-package-select" value={selectedMaterialPackage} onChange={(event) => setSelectedMaterialPackage(event.target.value)}>
+                  <option value="ALL">Semua Paket</option>
+                  {materialPackages.map((item) => (
+                    <option key={item.pid} value={String(item.pid)}>{item.name}</option>
+                  ))}
+                </select>
+
+                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                <button type="button" className="admin-package-reset" onClick={() => { setMaterialSearch(''); setSelectedMaterialPackage('ALL') }}>Reset</button>
+              </div>
+            </div>
+          </section>
+
+          <section className="user-material-grid">
+            {filteredRows.length ? (
+              filteredRows.map((row) => (
+                <article className="user-material-card" key={row.pid}>
+                  <div className="user-material-card-head">
+                    <span className="user-tryout-package-badge">{row.package_name}</span>
+                    <span className={`admin-package-type-badge ${row.status_key === 'published' ? 'online' : 'tryout'}`}>{row.status}</span>
+                  </div>
+                  <h3>{row.judul}</h3>
+                  <p>{row.deskripsi || 'Tidak ada deskripsi materi.'}</p>
+                  <div className="user-material-meta">
+                    <span>{row.file_size_label}</span>
+                    <span>{row.original_name}</span>
+                  </div>
+                  <button type="button" className="dashboard-primary-action user-material-open-button" onClick={() => setPreviewMaterial(row)}>
+                    Lihat Materi
+                  </button>
+                </article>
+              ))
+            ) : (
+              <MaterialEmptyState
+                title="Belum ada materi yang bisa diakses"
+                description="Materi akan muncul setelah kamu membeli paket yang sesuai."
+                actionLabel="Kembali ke Dashboard"
+                onAction={() => navigate('/dashboard-user', { state: { user } })}
+                accent="green"
+              />
+            )}
+          </section>
+        </main>
+      </div>
+
+      <UserMaterialViewerModal
+        open={Boolean(previewMaterial)}
+        material={previewMaterial}
+        src={previewSrc}
+        onClose={() => setPreviewMaterial(null)}
+      />
+
+      <AdminLogoutModal
+        open={showLogoutConfirm}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+        title="Keluar dari akun user?"
+        message="Pastikan materi yang sedang dibuka sudah selesai dibaca sebelum logout."
+        confirmLabel="Ya, keluar"
+      />
+    </div>
+  )
+}
+
 function App() {
   useEffect(() => {
     document.title = 'Nice On'
@@ -7108,6 +8707,14 @@ function App() {
         element={<DashboardUserPageV2 />}
       />
       <Route
+        path="/dashboard-user/tryout"
+        element={<UserTryoutPage />}
+      />
+      <Route
+        path="/dashboard-user/materials"
+        element={<UserMaterialsPage />}
+      />
+      <Route
         path="/dashboard-admin"
         element={<AdminDashboardPage />}
       />
@@ -7118,6 +8725,10 @@ function App() {
       <Route
         path="/dashboard-admin/packages"
         element={<AdminPackageManagementPage />}
+      />
+      <Route
+        path="/dashboard-admin/materials"
+        element={<AdminMaterialManagementPage />}
       />
       <Route
         path="/dashboard-admin/questions"
