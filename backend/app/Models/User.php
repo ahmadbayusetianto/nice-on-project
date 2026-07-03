@@ -29,4 +29,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function ljk()
+    {
+        return $this->hasMany(Ljk::class, 'user_id');
+    }
 }

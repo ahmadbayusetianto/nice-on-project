@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TblUserSeeder::class,
             PackageSeeder::class,
+            QuestionSeeder::class,
             FAQSeeder::class,
             ParameterSeeder::class,
         ]);

@@ -167,6 +167,72 @@ function createPackageFormFromDetail(detail = {}) {
   }
 }
 
+function createQuestionOptionForm(index = 0, option = {}) {
+  return {
+    key: option.id ?? `option-${Date.now()}-${index}`,
+    choise: option.choise ?? '',
+    answer: Boolean(option.answer),
+    istext: option.istext !== undefined ? Boolean(option.istext) : true,
+  }
+}
+
+function createQuestionFormFromDetail(detail = {}) {
+  const options = Array.isArray(detail.options) && detail.options.length
+    ? detail.options.map((option, index) => createQuestionOptionForm(index, option))
+    : [
+      createQuestionOptionForm(0, { answer: true }),
+      createQuestionOptionForm(1),
+      createQuestionOptionForm(2),
+      createQuestionOptionForm(3),
+      createQuestionOptionForm(4),
+    ]
+
+  while (options.length < 5) {
+    options.push(createQuestionOptionForm(options.length, { answer: options.length === 0 }))
+  }
+
+  if (!options.some((option) => option.answer) && options.length) {
+    options[0].answer = true
+  }
+
+  return {
+    question: detail.question ?? '',
+    question_type: detail.question_type ?? 'single',
+    question_group: Number(detail.question_group ?? 1),
+    istext: detail.istext !== undefined ? Boolean(detail.istext) : true,
+    information: detail.information ?? '',
+    pembahasan: detail.pembahasan ?? '',
+    options,
+  }
+}
+
+function normalizeQuestionOptions(options = []) {
+  return options
+    .map((option) => ({
+      choise: String(option.choise ?? '').trim(),
+      answer: Boolean(option.answer),
+      istext: Boolean(option.istext),
+    }))
+    .filter((option) => option.choise !== '')
+}
+
+function formatQuestionGroupLabel(group) {
+  switch (Number(group)) {
+    case 1:
+      return 'TWK'
+    case 2:
+      return 'TIU'
+    case 3:
+      return 'TKP'
+    default:
+      return 'Unknown'
+  }
+}
+
+function formatQuestionTypeLabel(type) {
+  return String(type || 'single').toLowerCase() === 'single' ? 'Pilihan Ganda' : String(type || '-')
+}
+
 function createParameterFormFromDetail(detail = {}) {
   return {
     kode: detail.kode ?? '',
@@ -478,6 +544,53 @@ function AdminSystemMenu({ currentPath, navigate }) {
         </nav>
       </div>
     </>
+  )
+}
+
+function AdminQuestionMenu({ currentPath, navigate }) {
+  const isQuestionPage = currentPath.startsWith('/dashboard-admin/questions')
+  const [isQuestionOpen, setIsQuestionOpen] = useState(isQuestionPage)
+
+  useEffect(() => {
+    setIsQuestionOpen(isQuestionPage)
+  }, [isQuestionPage])
+
+  const questionItems = [
+    { label: 'Daftar Soal', href: '/dashboard-admin/questions', icon: '•' },
+    { label: 'Tambah Soal', href: '/dashboard-admin/questions', icon: '+', state: { openQuestionModal: true } },
+    { label: 'Import Soal', href: '/dashboard-admin/questions', icon: '↓' },
+    { label: 'Kategori Soal', href: '/dashboard-admin/questions', icon: '◫' },
+  ]
+
+  return (
+    <div className="admin-question-menu-wrap">
+      <button
+        type="button"
+        className={`admin-question-parent${isQuestionPage ? ' active' : ''}`}
+        onClick={() => setIsQuestionOpen((current) => !current)}
+        aria-expanded={isQuestionOpen}
+      >
+        <span className="admin-sidebar-icon" aria-hidden="true">Q</span>
+        <span className="admin-question-parent-label">Bank Soal</span>
+        <span className="admin-system-parent-indicator" aria-hidden="true">{isQuestionOpen ? '▴' : '▾'}</span>
+      </button>
+
+      {isQuestionOpen ? (
+        <div className="admin-question-submenu" aria-label="Submenu bank soal admin">
+          {questionItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={`admin-question-subitem${item.label === 'Daftar Soal' && isQuestionPage ? ' active' : ''}`}
+              onClick={() => navigate(item.href, { state: { openQuestionModal: Boolean(item.state?.openQuestionModal) } })}
+            >
+              <span className="admin-question-subitem-icon" aria-hidden="true">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -807,6 +920,1090 @@ function PackageInfoModal({ open, packageData, onCancel }) {
   )
 }
 
+function AdminQuestionFormModal({
+  open,
+  onCancel,
+  onSubmit,
+  form,
+  onFieldChange,
+  onOptionChange,
+  onAddOption,
+  onRemoveOption,
+  onSetCorrectOption,
+  onResetForm,
+  loading,
+  error,
+  title = 'Tambah Soal',
+  submitLabel = 'Simpan Soal',
+  helpText = 'Kelola soal CAT dengan opsi jawaban yang dapat ditambah atau dihapus secara dinamis.',
+}) {
+  if (!open) return null
+
+  const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+  const questionCount = String(form.question || '').length
+  const informationCount = String(form.information || '').length
+  const pembahasanCount = String(form.pembahasan || '').length
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-question-modal" role="dialog" aria-modal="true" aria-labelledby="adminQuestionTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-question-modal-header">
+          <div className="admin-question-title-block">
+            <div className="admin-question-title-icon" aria-hidden="true">＋</div>
+            <div>
+              <h3 id="adminQuestionTitle">{title}</h3>
+              <p>{helpText}</p>
+            </div>
+          </div>
+          <button type="button" className="admin-question-close" aria-label="Tutup form soal" onClick={onCancel} disabled={loading}>×</button>
+        </div>
+
+        {loading ? <div className="admin-package-form-loading">Memuat data soal...</div> : null}
+        {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+        <form className="admin-question-form" onSubmit={onSubmit}>
+          <div className="admin-question-form-layout">
+            <section className="admin-question-panel admin-question-panel-left">
+              <div className="admin-question-panel-head">
+                <div>
+                  <h4>Informasi Soal</h4>
+                  <p>Isi data utama soal sebelum menambahkan opsi jawaban.</p>
+                </div>
+              </div>
+
+              <div className="admin-question-field-group">
+                <label className="admin-question-field admin-question-field-full">
+                  <span>Tulis pertanyaan <sup>*</sup></span>
+                  <div className="admin-question-editor-shell">
+                    <div className="admin-question-editor-toolbar" aria-hidden="true">
+                      <span>B</span>
+                      <span>I</span>
+                      <span>U</span>
+                      <span>≡</span>
+                      <span>≣</span>
+                      <span>↗</span>
+                      <span>▢</span>
+                      <span>Tx</span>
+                    </div>
+                    <textarea
+                      value={form.question}
+                      onChange={(event) => onFieldChange('question', event.target.value)}
+                      placeholder={form.istext ? 'Ketik atau tempel pertanyaan di sini...' : 'Nama file gambar soal'}
+                      disabled={loading}
+                      rows={7}
+                    />
+                    <div className="admin-question-counter">{questionCount}/2000</div>
+                  </div>
+                </label>
+
+                <div className="admin-question-field-row">
+                  <label className="admin-question-field">
+                    <span>Grup Soal <sup>*</sup></span>
+                    <select value={form.question_group} onChange={(event) => onFieldChange('question_group', Number(event.target.value))} disabled={loading}>
+                      <option value={1}>TWK</option>
+                      <option value={2}>TIU</option>
+                      <option value={3}>TKP</option>
+                    </select>
+                  </label>
+
+                  <label className="admin-question-field">
+                    <span>Tipe Soal <sup>*</sup></span>
+                    <select value={form.question_type} onChange={(event) => onFieldChange('question_type', event.target.value)} disabled={loading}>
+                      <option value="single">Single</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="admin-question-field admin-question-field-full">
+                  <span>Jenis Soal <sup>*</sup></span>
+                  <div className="admin-question-jenis-toggle">
+                    <button
+                      type="button"
+                      className={`admin-question-jenis-option${form.istext ? ' active' : ''}`}
+                      onClick={() => onFieldChange('istext', true)}
+                      disabled={loading}
+                    >
+                      <span aria-hidden="true">T</span>
+                      <strong>Teks</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className={`admin-question-jenis-option${!form.istext ? ' active' : ''}`}
+                      onClick={() => onFieldChange('istext', false)}
+                      disabled={loading}
+                    >
+                      <span aria-hidden="true">◫</span>
+                      <strong>Gambar</strong>
+                    </button>
+                  </div>
+                </label>
+
+                <label className="admin-question-field admin-question-field-full">
+                  <span>Informasi Tambahan (Opsional)</span>
+                  <div className="admin-question-editor-shell compact">
+                    <textarea
+                      value={form.information}
+                      onChange={(event) => onFieldChange('information', event.target.value)}
+                      placeholder="Contoh: sumber, tingkat kesulitan, konteks, dll."
+                      disabled={loading}
+                      rows={4}
+                    />
+                    <div className="admin-question-counter">{informationCount}/500</div>
+                  </div>
+                </label>
+
+                <label className="admin-question-field admin-question-field-full">
+                  <span>Pembahasan (Opsional)</span>
+                  <div className="admin-question-editor-shell">
+                    <div className="admin-question-editor-toolbar" aria-hidden="true">
+                      <span>B</span>
+                      <span>I</span>
+                      <span>U</span>
+                      <span>≡</span>
+                      <span>≣</span>
+                      <span>↗</span>
+                      <span>▢</span>
+                      <span>&lt;/&gt;</span>
+                    </div>
+                    <textarea
+                      value={form.pembahasan}
+                      onChange={(event) => onFieldChange('pembahasan', event.target.value)}
+                      placeholder="Tulis pembahasan soal..."
+                      disabled={loading}
+                      rows={7}
+                    />
+                    <div className="admin-question-counter">{pembahasanCount}/2000</div>
+                  </div>
+                </label>
+
+                <div className="admin-question-status-row">
+                  <span>Status Soal</span>
+                  <div className="admin-question-status-toggle">
+                    <button type="button" className="active" disabled={loading}>
+                      <span className="admin-question-status-dot" />
+                      Aktif
+                    </button>
+                    <button type="button" disabled={loading}>
+                      <span className="admin-question-status-dot" />
+                      Nonaktif
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="admin-question-panel admin-question-panel-right">
+              <div className="admin-question-panel-head admin-question-panel-head-space">
+                <div>
+                  <h4>Opsi Jawaban</h4>
+                  <p>Minimal 2 opsi, pilih 1 jawaban benar.</p>
+                </div>
+                <button type="button" className="admin-outline-action admin-question-add-option" onClick={onAddOption} disabled={loading}>＋ Tambah Opsi</button>
+              </div>
+
+              <div className="admin-question-options-list">
+                {form.options.map((option, index) => (
+                  <div className="admin-question-option-row rich" key={option.key}>
+                    <div className="admin-question-option-badge">{optionLabels[index] || index + 1}</div>
+
+                    <div className="admin-question-option-editor">
+                      <div className="admin-question-option-toolbar" aria-hidden="true">
+                        <span>B</span>
+                        <span>I</span>
+                        <span>U</span>
+                        <span>≡</span>
+                        <span>≣</span>
+                      </div>
+                      <textarea
+                        value={option.choise}
+                        onChange={(event) => onOptionChange(index, 'choise', event.target.value)}
+                        placeholder={`Tulis opsi jawaban ${optionLabels[index] || index + 1}`}
+                        disabled={loading}
+                        rows={2}
+                      />
+                    </div>
+
+                    <label className={`admin-question-option-correct${option.answer ? ' active' : ''}`}>
+                      <input
+                        type="radio"
+                        name="correctOption"
+                        checked={option.answer}
+                        onChange={() => onSetCorrectOption(index)}
+                        disabled={loading}
+                      />
+                      <span>Jawaban benar</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      className="admin-question-option-remove"
+                      onClick={() => onRemoveOption(index)}
+                      disabled={loading || form.options.length <= 2}
+                      title="Hapus opsi"
+                      aria-label="Hapus opsi"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="admin-question-upload-box" aria-label="Tambah gambar opsional">
+                <div className="admin-question-upload-icon" aria-hidden="true">☁</div>
+                <strong>Tambah gambar (opsional)</strong>
+                <p>Format: JPG, PNG. Maks 2MB</p>
+              </div>
+            </section>
+          </div>
+
+          <div className="admin-question-modal-footer">
+            <button type="button" className="admin-outline-action" onClick={() => onResetForm?.()} disabled={loading}>Reset</button>
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="admin-modal-button secondary admin-question-submit-alt" disabled={loading} value="save-add">Simpan & Tambah Lagi</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading} value="save">{loading ? 'Menyimpan...' : submitLabel}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, onRestore }) {
+  if (!open || !question) return null
+
+  const isTrashed = Boolean(question.deleted_at)
+  const detailCards = [
+    { label: 'Grup Soal', value: question.question_group_label, tone: 'orange', icon: '📁' },
+    { label: 'Tipe Soal', value: formatQuestionTypeLabel(question.question_type), tone: 'blue', icon: '🎯' },
+    { label: 'Jenis Soal', value: question.istext ? 'Teks' : 'Gambar', tone: 'green', icon: 'T' },
+    { label: 'Jumlah Opsi', value: String(question.options_count || 0), tone: 'purple', icon: '≣' },
+  ]
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div
+        className="admin-modal admin-question-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adminQuestionDetailTitle"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="admin-question-detail-header">
+          <div className="admin-question-detail-title-block">
+            <div className="admin-question-detail-title-icon" aria-hidden="true">▣</div>
+            <div>
+              <h3 id="adminQuestionDetailTitle">Detail Soal</h3>
+              <p>Lihat detail informasi soal secara lengkap.</p>
+            </div>
+          </div>
+          <div className="admin-question-detail-header-actions">
+            <button type="button" className="admin-outline-action admin-question-detail-edit" onClick={onEdit}>✎ Edit Soal</button>
+            {isTrashed ? (
+              <button type="button" className="admin-primary-action admin-question-detail-restore" onClick={onRestore}>↺ Pulihkan</button>
+            ) : (
+              <button type="button" className="admin-danger-action admin-question-detail-delete" onClick={onDelete}>🗑 Hapus Soal</button>
+            )}
+            <button type="button" className="admin-question-close" aria-label="Tutup detail soal" onClick={onCancel}>×</button>
+          </div>
+        </div>
+
+        <div className="admin-question-detail-body">
+          <div className="admin-question-detail-grid">
+            {detailCards.map((card) => (
+              <article className={`admin-question-detail-card ${card.tone}`} key={card.label}>
+                <div className="admin-question-detail-card-icon" aria-hidden="true">{card.icon}</div>
+                <span>{card.label}</span>
+                <strong>{card.value}</strong>
+              </article>
+            ))}
+          </div>
+
+          {question.information ? (
+            <section className="admin-question-detail-section info-card">
+              <div className="admin-question-detail-section-head">
+                <span className="admin-question-detail-section-icon" aria-hidden="true">i</span>
+                <h4>Informasi Tambahan</h4>
+              </div>
+              <p>{question.information}</p>
+            </section>
+          ) : null}
+
+          <section className="admin-question-detail-section question-card">
+            <div className="admin-question-detail-section-head">
+              <span className="admin-question-detail-section-icon question" aria-hidden="true">?</span>
+              <h4>Pertanyaan</h4>
+            </div>
+            <p className="admin-question-detail-question">{question.question}</p>
+          </section>
+
+          <section className="admin-question-detail-section options-card">
+            <div className="admin-question-detail-section-head">
+              <span className="admin-question-detail-section-icon options" aria-hidden="true">≣</span>
+              <h4>Opsi Jawaban</h4>
+            </div>
+            <div className="admin-question-detail-options wide">
+              {(question.options || []).map((option, index) => (
+                <div className={`admin-question-detail-option wide${option.answer ? ' correct' : ''}`} key={option.id ?? `${index}-${option.choise}`}>
+                  <span className="admin-question-detail-option-badge">{String.fromCharCode(65 + index)}</span>
+                  <div className="admin-question-detail-option-copy wide">
+                    <strong>{option.choise}</strong>
+                  </div>
+                  <span className="admin-question-detail-option-kind">{option.istext ? 'Teks' : 'Gambar'}</span>
+                  {option.answer ? (
+                    <span className="admin-question-detail-correct success">✓ Jawaban benar</span>
+                  ) : (
+                    <span className="admin-question-detail-correct neutral">○ Bukan jawaban benar</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {question.pembahasan ? (
+            <section className="admin-question-detail-section explanation-card">
+              <div className="admin-question-detail-section-head">
+                <span className="admin-question-detail-section-icon explanation" aria-hidden="true">📖</span>
+                <h4>Pembahasan</h4>
+              </div>
+              <p>{question.pembahasan}</p>
+            </section>
+          ) : null}
+        </div>
+
+        <div className="admin-question-detail-footer">
+          <button type="button" className="admin-modal-button secondary" onClick={onCancel}>Tutup</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AdminQuestionManagementPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [questionRows, setQuestionRows] = useState([])
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true)
+  const [questionError, setQuestionError] = useState(null)
+  const [questionSearch, setQuestionSearch] = useState('')
+  const [selectedQuestionGroup, setSelectedQuestionGroup] = useState('Semua Grup')
+  const [selectedQuestionType, setSelectedQuestionType] = useState('Semua Tipe')
+  const [selectedQuestionStatus, setSelectedQuestionStatus] = useState('Aktif')
+  const [questionCurrentPage, setQuestionCurrentPage] = useState(1)
+  const [questionPageSize, setQuestionPageSize] = useState(10)
+  const [showQuestionModal, setShowQuestionModal] = useState(false)
+  const [showQuestionDetailModal, setShowQuestionDetailModal] = useState(false)
+  const [questionDetail, setQuestionDetail] = useState(null)
+  const [questionModalMode, setQuestionModalMode] = useState('create')
+  const [editingQuestionId, setEditingQuestionId] = useState(null)
+  const [questionSubmitError, setQuestionSubmitError] = useState(null)
+  const [questionSubmitSuccess, setQuestionSubmitSuccess] = useState(null)
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false)
+  const [questionForm, setQuestionForm] = useState(() => createQuestionFormFromDetail())
+  const questionSuccessTimerRef = useRef(null)
+  const storedUser = readStoredUser()
+  const user = location.state?.user ?? storedUser
+
+  if (!user || Number(user?.is_admin ?? 0) !== 1) {
+    return <Navigate to="/login" replace state={{ from: '/dashboard-admin/questions' }} />
+  }
+
+  const currentPath = location.pathname
+  const displayName = user?.email?.split('@')?.[0] || 'Admin'
+  const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+    .format(new Date())
+    .replace(/^./, (char) => char.toUpperCase())
+
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
+
+  const questionSummaryCards = [
+    { label: 'Total Soal', value: String(questionRows.filter((row) => !row.deleted_at).length), delta: 'Soal aktif', accent: 'blue', icon: '📝' },
+    { label: 'TWK', value: String(questionRows.filter((row) => !row.deleted_at && Number(row.question_group) === 1).length), delta: 'Grup 1', accent: 'green', icon: '🏛️' },
+    { label: 'TIU', value: String(questionRows.filter((row) => !row.deleted_at && Number(row.question_group) === 2).length), delta: 'Grup 2', accent: 'purple', icon: '🧠' },
+    { label: 'TKP', value: String(questionRows.filter((row) => !row.deleted_at && Number(row.question_group) === 3).length), delta: 'Grup 3', accent: 'orange', icon: '🤝' },
+  ]
+
+  const loadQuestions = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingQuestions(true)
+    }
+
+    setQuestionError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (questionSearch.trim()) params.set('search', questionSearch.trim())
+      if (selectedQuestionGroup !== 'Semua Grup') params.set('group', selectedQuestionGroup)
+      if (selectedQuestionType !== 'Semua Tipe') params.set('type', selectedQuestionType)
+      if (selectedQuestionStatus !== 'Aktif') params.set('include_trashed', 'true')
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/questions${params.toString() ? `?${params.toString()}` : ''}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data soal gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setQuestionRows(Array.isArray(payload?.data) ? payload.data : [])
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data soal gagal dimuat.')
+        setQuestionError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingQuestions(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadQuestions({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [questionSearch, selectedQuestionGroup, selectedQuestionType, selectedQuestionStatus])
+
+  const openAddQuestionModal = () => {
+    if (questionSuccessTimerRef.current) {
+      window.clearTimeout(questionSuccessTimerRef.current)
+      questionSuccessTimerRef.current = null
+    }
+
+    setQuestionModalMode('create')
+    setEditingQuestionId(null)
+    setQuestionSubmitError(null)
+    setQuestionSubmitSuccess(null)
+    setQuestionForm(createQuestionFormFromDetail({
+      question_group: selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1,
+      question_type: 'single',
+      istext: true,
+    }))
+    setShowQuestionModal(true)
+  }
+
+  const resetQuestionForm = () => {
+    setQuestionForm(createQuestionFormFromDetail({
+      question_group: Number(questionForm.question_group) || (selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1),
+      question_type: 'single',
+      istext: true,
+    }))
+    setQuestionSubmitError(null)
+  }
+
+  useEffect(() => {
+    if (!location.state?.openQuestionModal) return
+
+    openAddQuestionModal()
+    navigate(location.pathname, { replace: true, state: { user } })
+  }, [location.pathname, location.state, navigate, user])
+
+  const openEditQuestionModal = async (row) => {
+    if (questionSuccessTimerRef.current) {
+      window.clearTimeout(questionSuccessTimerRef.current)
+      questionSuccessTimerRef.current = null
+    }
+
+    setQuestionModalMode('edit')
+    setEditingQuestionId(row?.id ?? null)
+    setQuestionSubmitError(null)
+    setQuestionSubmitSuccess(null)
+    setQuestionForm(createQuestionFormFromDetail(row ?? {}))
+    setShowQuestionModal(true)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/questions/${row?.id}`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Detail soal gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setQuestionForm(createQuestionFormFromDetail(payload?.data ?? {}))
+    } catch {
+      // Keep modal usable even if detail fetch fails.
+    }
+  }
+
+  const openQuestionDetailModal = (row) => {
+    setQuestionDetail(row)
+    setShowQuestionDetailModal(true)
+  }
+
+  const closeQuestionModal = () => {
+    if (isSavingQuestion) return
+
+    if (questionSuccessTimerRef.current) {
+      window.clearTimeout(questionSuccessTimerRef.current)
+      questionSuccessTimerRef.current = null
+    }
+
+    setShowQuestionModal(false)
+    setQuestionSubmitError(null)
+    setQuestionSubmitSuccess(null)
+  }
+
+  const handleQuestionFieldChange = (field, value) => {
+    setQuestionForm((current) => ({
+      ...current,
+      [field]: field === 'question_group' ? Number(value) : value,
+    }))
+  }
+
+  const handleQuestionOptionChange = (index, field, value) => {
+    setQuestionForm((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => (
+        optionIndex === index ? { ...option, [field]: value } : option
+      )),
+    }))
+  }
+
+  const handleQuestionAddOption = () => {
+    setQuestionForm((current) => ({
+      ...current,
+      options: [...current.options, createQuestionOptionForm(current.options.length)],
+    }))
+  }
+
+  const handleQuestionRemoveOption = (index) => {
+    setQuestionForm((current) => {
+      const nextOptions = current.options.filter((_, optionIndex) => optionIndex !== index)
+      if (nextOptions.length < 2) return current
+      if (!nextOptions.some((option) => option.answer) && nextOptions.length) {
+        nextOptions[0] = { ...nextOptions[0], answer: true }
+      }
+      return { ...current, options: nextOptions }
+    })
+  }
+
+  const handleQuestionSetCorrectOption = (index) => {
+    setQuestionForm((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => ({
+        ...option,
+        answer: optionIndex === index,
+      })),
+    }))
+  }
+
+  const handleQuestionSubmit = async (event) => {
+    event.preventDefault()
+    const submitMode = String(event.nativeEvent?.submitter?.value || 'save')
+
+    const normalizedOptions = normalizeQuestionOptions(questionForm.options)
+    const isEditMode = questionModalMode === 'edit' && editingQuestionId !== null
+    const shouldKeepOpenForAddMore = submitMode === 'save-add' && !isEditMode
+
+    if (!questionForm.question.trim()) {
+      setQuestionSubmitError('Isi soal wajib diisi.')
+      return
+    }
+
+    if (normalizedOptions.length < 2) {
+      setQuestionSubmitError('Minimal 2 opsi wajib diisi.')
+      return
+    }
+
+    if (normalizedOptions.filter((option) => option.answer).length !== 1) {
+      setQuestionSubmitError('Harus ada tepat 1 jawaban benar.')
+      return
+    }
+
+    setIsSavingQuestion(true)
+    setQuestionSubmitError(null)
+    setQuestionSubmitSuccess(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/questions${isEditMode ? `/${editingQuestionId}` : ''}`, {
+        method: isEditMode ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          question: questionForm.question.trim(),
+          question_type: questionForm.question_type,
+          question_group: Number(questionForm.question_group),
+          istext: Boolean(questionForm.istext),
+          information: questionForm.information.trim(),
+          pembahasan: questionForm.pembahasan.trim(),
+          options: normalizedOptions,
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Soal gagal disimpan (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setQuestionSubmitSuccess(isEditMode ? 'Soal berhasil diperbarui.' : 'Soal berhasil disimpan.')
+      await loadQuestions({ cancelled: () => false, showLoading: false })
+
+      if (questionSuccessTimerRef.current) {
+        window.clearTimeout(questionSuccessTimerRef.current)
+      }
+
+      questionSuccessTimerRef.current = window.setTimeout(() => {
+        setQuestionSubmitSuccess(null)
+        questionSuccessTimerRef.current = null
+      }, 2800)
+
+      if (shouldKeepOpenForAddMore) {
+        setQuestionForm(createQuestionFormFromDetail({
+          question_group: Number(questionForm.question_group) || 1,
+          question_type: 'single',
+          istext: true,
+        }))
+        setShowQuestionModal(true)
+        return
+      }
+
+      setShowQuestionModal(false)
+      setEditingQuestionId(null)
+      setQuestionForm(createQuestionFormFromDetail())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Soal gagal disimpan.'
+      setQuestionSubmitError(message)
+    } finally {
+      setIsSavingQuestion(false)
+    }
+  }
+
+  const handleDeleteQuestion = async (row) => {
+    if (!row?.id) return
+
+    const confirmed = window.confirm(`Hapus soal ini? Soal akan disembunyikan dari daftar.`)
+    if (!confirmed) return
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/questions/${row.id}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      })
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Soal gagal dihapus (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setShowQuestionDetailModal(false)
+      setQuestionDetail(null)
+      await loadQuestions({ cancelled: () => false, showLoading: false })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Soal gagal dihapus.'
+      setQuestionError(message)
+    }
+  }
+
+  const handleRestoreQuestion = async (row) => {
+    if (!row?.id) return
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/questions/${row.id}/restore`, {
+        method: 'PATCH',
+        headers: { Accept: 'application/json' },
+      })
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Soal gagal dipulihkan (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      setShowQuestionDetailModal(false)
+      setQuestionDetail(null)
+      await loadQuestions({ cancelled: () => false, showLoading: false })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Soal gagal dipulihkan.'
+      setQuestionError(message)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (questionSuccessTimerRef.current) {
+        window.clearTimeout(questionSuccessTimerRef.current)
+      }
+    }
+  }, [])
+
+  const visibleQuestionRows = questionRows.filter((row) => {
+    const search = questionSearch.trim().toLowerCase()
+    const status = row.deleted_at ? 'terhapus' : 'aktif'
+
+    if (selectedQuestionStatus === 'Aktif' && status !== 'aktif') return false
+    if (selectedQuestionStatus === 'Terhapus' && status !== 'terhapus') return false
+
+    if (selectedQuestionGroup !== 'Semua Grup' && Number(row.question_group) !== Number(selectedQuestionGroup)) {
+      return false
+    }
+
+    if (selectedQuestionType !== 'Semua Tipe' && String(row.question_type || '').toLowerCase() !== selectedQuestionType.toLowerCase()) {
+      return false
+    }
+
+    if (!search) return true
+
+    return [row.question, row.information, row.pembahasan, row.question_group_label]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(search))
+  })
+
+  const totalQuestionPages = Math.max(1, Math.ceil(visibleQuestionRows.length / questionPageSize))
+  const safeQuestionCurrentPage = Math.min(questionCurrentPage, totalQuestionPages)
+  const questionStartIndex = (safeQuestionCurrentPage - 1) * questionPageSize
+  const questionPaginatedRows = visibleQuestionRows.slice(questionStartIndex, questionStartIndex + questionPageSize)
+
+  useEffect(() => {
+    setQuestionCurrentPage(1)
+  }, [questionSearch, selectedQuestionGroup, selectedQuestionType, selectedQuestionStatus, questionPageSize])
+
+  useEffect(() => {
+    if (questionCurrentPage > totalQuestionPages) {
+      setQuestionCurrentPage(totalQuestionPages)
+    }
+  }, [questionCurrentPage, totalQuestionPages])
+
+  const renderQuestionPaginationPages = () => {
+    if (totalQuestionPages <= 1) return [1]
+
+    const pages = new Set([1, totalQuestionPages, safeQuestionCurrentPage])
+    if (safeQuestionCurrentPage > 1) pages.add(safeQuestionCurrentPage - 1)
+    if (safeQuestionCurrentPage < totalQuestionPages) pages.add(safeQuestionCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
+
+  const openQuestionDetailFromRow = (row) => {
+    setQuestionDetail(row)
+    setShowQuestionDetailModal(true)
+  }
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
+    clearAuthUser()
+
+    navigate('/login', { replace: true })
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  return (
+    <div className="admin-dashboard-page admin-question-page">
+      <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
+
+          <div className="admin-sidebar-group-label">Main</div>
+          <nav className="admin-sidebar-nav" aria-label="Navigasi admin">
+            {adminMainMenu.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+                onClick={() => item.href !== '#' && navigate(item.href)}
+              >
+                <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
+
+          <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
+
+          <div className="admin-sidebar-footer-card">
+            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
+              <span aria-hidden="true">⎋</span>
+              <span>Keluar</span>
+            </button>
+          </div>
+        </aside>
+
+        <main className="admin-main admin-question-main">
+          <AdminTopbar
+            title="Bank Soal"
+            searchPlaceholder="Cari soal..."
+            currentDateLabel={currentDateLabel}
+            displayName={displayName}
+            profileUser={user}
+            profileRoleLabel="Super Admin"
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
+            showSearch={false}
+            onHomeClick={() => navigate('/')}
+            onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+            onLogout={handleLogout}
+          />
+
+          <section className="admin-question-hero">
+            <div>
+              <h2>Manajemen Soal</h2>
+              <div className="admin-breadcrumb">
+                Dashboard <span>›</span> Bank Soal
+              </div>
+            </div>
+
+            <div className="admin-package-actions admin-question-actions">
+              <button type="button" className="admin-outline-action" title="Import menyusul pada langkah berikutnya">⬇ Import Soal</button>
+              <button type="button" className="admin-outline-action">⬆ Export Soal</button>
+              <button type="button" className="admin-outline-action" aria-label="Muat ulang data soal" onClick={() => { void loadQuestions({ cancelled: () => false, showLoading: true }) }}>↻</button>
+              <button type="button" className="admin-primary-action" onClick={openAddQuestionModal}>＋ Tambah Soal</button>
+            </div>
+          </section>
+
+          <section className="admin-summary-grid admin-question-summary-grid">
+            {questionSummaryCards.map((card) => (
+              <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                <div className="admin-summary-copy">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <p>{card.delta}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="admin-card admin-question-filter-card">
+            {questionError ? <div className="admin-user-message error">{questionError}</div> : null}
+            {isLoadingQuestions ? <div className="admin-user-message">Memuat data soal...</div> : null}
+
+            <div className="admin-package-filters admin-question-filters">
+              <label className="admin-package-search">
+                <span aria-hidden="true">⌕</span>
+                <input type="search" placeholder="Cari soal..." value={questionSearch} onChange={(event) => setQuestionSearch(event.target.value)} />
+              </label>
+
+              <div className="admin-package-filter-group admin-question-filter-group">
+                <select className="admin-package-select" value={selectedQuestionGroup} onChange={(event) => setSelectedQuestionGroup(event.target.value)}>
+                  {['Semua Grup', '1', '2', '3'].map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'Semua Grup' ? option : formatQuestionGroupLabel(option)}
+                    </option>
+                  ))}
+                </select>
+
+                <select className="admin-package-select" value={selectedQuestionType} onChange={(event) => setSelectedQuestionType(event.target.value)}>
+                  {['Semua Tipe', 'single'].map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'Semua Tipe' ? option : formatQuestionTypeLabel(option)}
+                    </option>
+                  ))}
+                </select>
+
+                <select className="admin-package-select" value={selectedQuestionStatus} onChange={(event) => setSelectedQuestionStatus(event.target.value)}>
+                  {['Aktif', 'Terhapus', 'Semua Status'].map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+
+                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={questionPageSize}
+                    onChange={(event) => setQuestionPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="admin-package-reset"
+                  onClick={() => {
+                    setQuestionSearch('')
+                    setSelectedQuestionGroup('Semua Grup')
+                    setSelectedQuestionType('Semua Tipe')
+                    setSelectedQuestionStatus('Aktif')
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="admin-card admin-question-table-card">
+            {questionSubmitSuccess ? <div className="admin-package-banner success">{questionSubmitSuccess}</div> : null}
+            <div className="admin-user-table-wrap">
+              <table className="admin-user-table admin-question-table">
+                <thead>
+                  <tr>
+                    <th>Soal</th>
+                    <th>Grup</th>
+                    <th>Tipe</th>
+                    <th>Jenis</th>
+                    <th>Opsi</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {questionPaginatedRows.map((row, index) => (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="admin-user-cell admin-question-cell">
+                          <div className={`admin-user-avatar admin-question-avatar ${row.deleted_at ? 'inactive' : 'active'}`}>{String(index + 1).padStart(2, '0')}</div>
+                          <div>
+                            <strong>{row.question}</strong>
+                            <span>{row.information || row.pembahasan || '-'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span className="admin-question-group-pill">{row.question_group_label}</span></td>
+                      <td>{formatQuestionTypeLabel(row.question_type)}</td>
+                      <td><span className="admin-question-kind-pill">{row.istext ? 'Teks' : 'Gambar'}</span></td>
+                      <td>{row.options_count || 0}</td>
+                      <td><span className={`admin-status-pill ${row.deleted_at ? 'cancelled' : 'success'}`}>{row.deleted_at ? 'Terhapus' : 'Aktif'}</span></td>
+                      <td>
+                        <div className="admin-row-actions admin-question-row-actions">
+                          <button type="button" className="admin-row-action" title="Lihat soal" aria-label={`Lihat soal ${row.question}`} onClick={() => openQuestionDetailFromRow(row)}>👁</button>
+                          <button
+                            type="button"
+                            className="admin-row-action admin-row-action-edit"
+                            title="Edit soal"
+                            aria-label={`Edit soal ${row.question}`}
+                            onClick={() => {
+                              void openEditQuestionModal(row)
+                            }}
+                          >
+                            ✎
+                          </button>
+                          {row.deleted_at ? (
+                            <button type="button" className="admin-row-action danger" title="Pulihkan soal" aria-label={`Pulihkan soal ${row.question}`} onClick={() => { void handleRestoreQuestion(row) }}>↺</button>
+                          ) : (
+                            <button type="button" className="admin-row-action danger" title="Hapus soal" aria-label={`Hapus soal ${row.question}`} onClick={() => { void handleDeleteQuestion(row) }}>🗑</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-package-footer admin-user-footer">
+              <p>Menampilkan {questionPaginatedRows.length} data dari {visibleQuestionRows.length} soal</p>
+              <div className="admin-pagination">
+                <button type="button" className="admin-pagination-arrow" disabled={safeQuestionCurrentPage === 1} onClick={() => setQuestionCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                {renderQuestionPaginationPages().map((page, index, array) => {
+                  const previousPage = array[index - 1]
+                  const shouldShowDots = previousPage && page - previousPage > 1
+
+                  return (
+                    <span key={page}>
+                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                      <button type="button" className={`admin-pagination-page${page === safeQuestionCurrentPage ? ' active' : ''}`} onClick={() => setQuestionCurrentPage(page)}>{page}</button>
+                    </span>
+                  )
+                })}
+                <button type="button" className="admin-pagination-arrow" disabled={safeQuestionCurrentPage === totalQuestionPages} onClick={() => setQuestionCurrentPage((current) => Math.min(totalQuestionPages, current + 1))}>›</button>
+              </div>
+            </div>
+          </section>
+
+          <AdminQuestionFormModal
+            open={showQuestionModal}
+            onCancel={closeQuestionModal}
+            onSubmit={handleQuestionSubmit}
+            form={questionForm}
+            onFieldChange={handleQuestionFieldChange}
+            onOptionChange={handleQuestionOptionChange}
+            onAddOption={handleQuestionAddOption}
+            onRemoveOption={handleQuestionRemoveOption}
+            onSetCorrectOption={handleQuestionSetCorrectOption}
+            onResetForm={resetQuestionForm}
+            loading={isSavingQuestion}
+            error={questionSubmitError}
+            title={questionModalMode === 'edit' ? 'Edit Soal' : 'Tambah Soal'}
+            submitLabel={questionModalMode === 'edit' ? 'Perbarui Soal' : 'Simpan Soal'}
+            helpText={questionModalMode === 'edit' ? 'Ubah soal, opsi, dan jawaban benar lalu simpan perubahan.' : 'Isi soal, opsi jawaban, lalu pilih 1 jawaban benar.'}
+          />
+
+          <AdminQuestionDetailModal
+            open={showQuestionDetailModal}
+            question={questionDetail}
+            onCancel={() => {
+              setShowQuestionDetailModal(false)
+              setQuestionDetail(null)
+            }}
+            onEdit={() => {
+              const current = questionDetail
+              setShowQuestionDetailModal(false)
+              setQuestionDetail(null)
+              if (current) {
+                void openEditQuestionModal(current)
+              }
+            }}
+            onDelete={() => {
+              const current = questionDetail
+              if (current) {
+                void handleDeleteQuestion(current)
+              }
+            }}
+            onRestore={() => {
+              const current = questionDetail
+              if (current) {
+                void handleRestoreQuestion(current)
+              }
+            }}
+          />
+
+          <AdminLogoutModal
+            open={showLogoutConfirm}
+            onCancel={() => setShowLogoutConfirm(false)}
+            onConfirm={confirmLogout}
+          />
+        </main>
+      </div>
+    </div>
+  )
+}
+
 function AdminTransactionManagementPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -849,6 +2046,7 @@ function AdminTransactionManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -1000,6 +2198,8 @@ function AdminTransactionManagementPage() {
               </button>
             ))}
           </nav>
+
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
@@ -1388,6 +2588,7 @@ function HomePage() {
       description: 'Infografis, reminder jadwal, dan update seleksi terbaru.',
       tone: 'instagram',
       action: 'Follow',
+      href: 'https://www.instagram.com/niceon_id/',
     },
     {
       key: 'tiktok',
@@ -1773,7 +2974,13 @@ function HomePage() {
                   <h4>{card.platform}</h4>
                   <p>{card.description}</p>
                 </div>
-                <a href="#" className={`hero-social-button ${card.tone}`} aria-label={`Buka ${card.platform}`}>
+                <a
+                  href={card.href || '#'}
+                  className={`hero-social-button ${card.tone}`}
+                  aria-label={`Buka ${card.platform}`}
+                  target={card.href ? '_blank' : undefined}
+                  rel={card.href ? 'noreferrer' : undefined}
+                >
                   {card.action} <span aria-hidden="true">→</span>
                 </a>
               </article>
@@ -3570,6 +4777,7 @@ function AdminDashboardPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -3640,6 +4848,8 @@ function AdminDashboardPage() {
               </button>
             ))}
           </nav>
+
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
@@ -3841,6 +5051,7 @@ function AdminUserManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -3959,6 +5170,8 @@ function AdminUserManagementPage() {
               </button>
             ))}
           </nav>
+
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
@@ -4174,6 +5387,7 @@ function AdminPackageManagementPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -4499,6 +5713,8 @@ function AdminPackageManagementPage() {
             ))}
           </nav>
 
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
+
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <div className="admin-sidebar-footer-card">
@@ -4777,6 +5993,7 @@ function AdminSettingsParameterPage() {
     { label: 'Dashboard', href: '/dashboard-admin' },
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -5060,6 +6277,8 @@ function AdminSettingsParameterPage() {
               </button>
             ))}
           </nav>
+
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
 
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
@@ -5899,6 +7118,10 @@ function App() {
       <Route
         path="/dashboard-admin/packages"
         element={<AdminPackageManagementPage />}
+      />
+      <Route
+        path="/dashboard-admin/questions"
+        element={<AdminQuestionManagementPage />}
       />
       <Route
         path="/dashboard-admin/transactions"

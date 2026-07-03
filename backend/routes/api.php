@@ -96,6 +96,48 @@ function faqTableMissingResponse()
     ], 503);
 }
 
+function questionGroupLabel(int $group): string
+{
+    return match ($group) {
+        1 => 'TWK',
+        2 => 'TIU',
+        3 => 'TKP',
+        default => 'Unknown',
+    };
+}
+
+function mapQuestionOptionRow(object $item): array
+{
+    return [
+        'id' => (int) $item->id,
+        'question_id' => (int) $item->question_id,
+        'choise' => (string) $item->choise,
+        'answer' => (int) ($item->answer ?? 0) === 1,
+        'istext' => (int) ($item->istext ?? 1) === 1,
+        'deleted_at' => $item->deleted_at ?? null,
+    ];
+}
+
+function mapQuestionRow(object $item, ?array $options = null): array
+{
+    $group = (int) ($item->question_group ?? 1);
+
+    return [
+        'id' => (int) $item->id,
+        'question' => (string) $item->question,
+        'question_type' => (string) ($item->question_type ?? 'single'),
+        'question_group' => $group,
+        'question_group_label' => questionGroupLabel($group),
+        'istext' => (int) ($item->istext ?? 1) === 1,
+        'information' => $item->information,
+        'pembahasan' => $item->pembahasan,
+        'created_at' => $item->created_at ?? null,
+        'updated_at' => $item->updated_at ?? null,
+        'deleted_at' => $item->deleted_at ?? null,
+        'options' => $options ?? [],
+    ];
+}
+
 Route::get('/health', function () {
     return response()->json([
         'status' => 'ok',
@@ -760,6 +802,378 @@ Route::get('/faqs', function () {
     return response()->json([
         'message' => 'Data FAQ berhasil dimuat.',
         'data' => $faqs,
+    ]);
+});
+
+Route::get('/admin/questions', function (Request $request) {
+    $group = trim((string) $request->query('group', ''));
+    $type = trim((string) $request->query('type', ''));
+    $search = trim((string) $request->query('search', ''));
+    $includeTrashed = filter_var($request->query('include_trashed', false), FILTER_VALIDATE_BOOL);
+
+    $query = DB::table('tbl_questions')
+        ->select([
+            'id',
+            'question',
+            'question_type',
+            'question_group',
+            'istext',
+            'information',
+            'pembahasan',
+            'created_at',
+            'updated_at',
+            'deleted_at',
+        ])
+        ->orderByDesc('created_at')
+        ->orderByDesc('id');
+
+    if (!$includeTrashed) {
+        $query->whereNull('deleted_at');
+    }
+
+    if ($group !== '' && in_array((int) $group, [1, 2, 3], true)) {
+        $query->where('question_group', (int) $group);
+    }
+
+    if ($type !== '') {
+        $query->where('question_type', $type);
+    }
+
+    if ($search !== '') {
+        $query->where('question', 'like', "%{$search}%");
+    }
+
+    $questions = $query->get();
+    $questionIds = $questions->pluck('id')->all();
+    $optionsByQuestion = [];
+
+    if (!empty($questionIds)) {
+        $options = DB::table('tbl_question_options')
+            ->select([
+                'id',
+                'question_id',
+                'choise',
+                'answer',
+                'istext',
+                'deleted_at',
+            ])
+            ->whereIn('question_id', $questionIds)
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($options as $option) {
+            $optionsByQuestion[(int) $option->question_id] ??= [];
+            $optionsByQuestion[(int) $option->question_id][] = mapQuestionOptionRow($option);
+        }
+    }
+
+    $data = $questions->map(function ($item) use ($optionsByQuestion) {
+        $group = (int) $item->question_group;
+        $options = $optionsByQuestion[(int) $item->id] ?? [];
+        $correctCount = count(array_filter($options, fn ($option) => (bool) ($option['answer'] ?? false)));
+
+        return array_merge(mapQuestionRow($item, $options), [
+            'options_count' => count($options),
+            'correct_options_count' => $correctCount,
+        ]);
+    })->values();
+
+    return response()->json([
+        'message' => 'Data soal berhasil dimuat.',
+        'summary' => [
+            'total_questions' => DB::table('tbl_questions')->whereNull('deleted_at')->count(),
+            'total_twk' => DB::table('tbl_questions')->whereNull('deleted_at')->where('question_group', 1)->count(),
+            'total_tiu' => DB::table('tbl_questions')->whereNull('deleted_at')->where('question_group', 2)->count(),
+            'total_tkp' => DB::table('tbl_questions')->whereNull('deleted_at')->where('question_group', 3)->count(),
+        ],
+        'data' => $data,
+    ]);
+});
+
+Route::get('/admin/questions/{id}', function ($id) {
+    $question = DB::table('tbl_questions')
+        ->select([
+            'id',
+            'question',
+            'question_type',
+            'question_group',
+            'istext',
+            'information',
+            'pembahasan',
+            'created_at',
+            'updated_at',
+            'deleted_at',
+        ])
+        ->where('id', $id)
+        ->first();
+
+    if (!$question) {
+        return response()->json(['message' => 'Soal tidak ditemukan.'], 404);
+    }
+
+    $options = DB::table('tbl_question_options')
+        ->select([
+            'id',
+            'question_id',
+            'choise',
+            'answer',
+            'istext',
+            'deleted_at',
+        ])
+        ->where('question_id', $id)
+        ->whereNull('deleted_at')
+        ->orderBy('id')
+        ->get()
+        ->map(fn ($item) => mapQuestionOptionRow($item))
+        ->values();
+
+    return response()->json([
+        'message' => 'Detail soal berhasil dimuat.',
+        'data' => array_merge(mapQuestionRow($question, $options->all()), [
+            'options_count' => $options->count(),
+            'correct_options_count' => count(array_filter($options->all(), fn ($option) => (bool) ($option['answer'] ?? false))),
+        ]),
+    ]);
+});
+
+Route::post('/admin/questions', function (Request $request) {
+    $validator = Validator::make($request->all(), [
+        'question' => ['required', 'string'],
+        'question_type' => ['required', 'string', 'in:single'],
+        'question_group' => ['required', 'integer', 'in:1,2,3'],
+        'istext' => ['required', 'boolean'],
+        'information' => ['nullable', 'string'],
+        'pembahasan' => ['nullable', 'string'],
+        'options' => ['required', 'array', 'min:2'],
+        'options.*.choise' => ['required', 'string'],
+        'options.*.answer' => ['nullable', 'boolean'],
+        'options.*.istext' => ['nullable', 'boolean'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi soal gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $validated = $validator->validated();
+    $normalizedOptions = collect($validated['options'])
+        ->map(function ($option) {
+            return [
+                'choise' => trim((string) ($option['choise'] ?? '')),
+                'answer' => (int) filter_var($option['answer'] ?? false, FILTER_VALIDATE_BOOL) === 1,
+                'istext' => (int) filter_var($option['istext'] ?? true, FILTER_VALIDATE_BOOL) === 1,
+            ];
+        })
+        ->filter(fn ($option) => $option['choise'] !== '')
+        ->values();
+
+    if ($normalizedOptions->count() < 2) {
+        return response()->json([
+            'message' => 'Minimal 2 opsi wajib diisi.',
+        ], 422);
+    }
+
+    if ($normalizedOptions->where('answer', true)->count() !== 1) {
+        return response()->json([
+            'message' => 'Harus ada tepat 1 jawaban benar.',
+        ], 422);
+    }
+
+    $now = now();
+    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $request, $now) {
+        $questionId = DB::table('tbl_questions')->insertGetId([
+            'question' => $validated['question'],
+            'question_type' => $validated['question_type'],
+            'question_group' => $validated['question_group'],
+            'istext' => (bool) $validated['istext'],
+            'information' => $validated['information'] ?? null,
+            'pembahasan' => $validated['pembahasan'] ?? null,
+            'created_at' => $now,
+            'updated_at' => null,
+            'deleted_at' => null,
+        ]);
+
+        foreach ($normalizedOptions as $option) {
+            DB::table('tbl_question_options')->insert([
+                'question_id' => $questionId,
+                'choise' => $option['choise'],
+                'answer' => $option['answer'] ? 1 : 0,
+                'istext' => $option['istext'] ? 1 : 0,
+                'created_at' => $now,
+                'updated_at' => null,
+                'deleted_at' => null,
+            ]);
+        }
+
+        return $questionId;
+    });
+
+    return response()->json([
+        'message' => 'Soal berhasil ditambahkan.',
+        'data' => DB::table('tbl_questions')->where('id', $questionId)->first(),
+    ], 201);
+});
+
+Route::put('/admin/questions/{id}', function (Request $request, $id) {
+    $validator = Validator::make($request->all(), [
+        'question' => ['required', 'string'],
+        'question_type' => ['required', 'string', 'in:single'],
+        'question_group' => ['required', 'integer', 'in:1,2,3'],
+        'istext' => ['required', 'boolean'],
+        'information' => ['nullable', 'string'],
+        'pembahasan' => ['nullable', 'string'],
+        'options' => ['required', 'array', 'min:2'],
+        'options.*.choise' => ['required', 'string'],
+        'options.*.answer' => ['nullable', 'boolean'],
+        'options.*.istext' => ['nullable', 'boolean'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi soal gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $existingQuestion = DB::table('tbl_questions')->where('id', $id)->first();
+    if (!$existingQuestion) {
+        return response()->json(['message' => 'Soal tidak ditemukan.'], 404);
+    }
+
+    $validated = $validator->validated();
+    $normalizedOptions = collect($validated['options'])
+        ->map(function ($option) {
+            return [
+                'choise' => trim((string) ($option['choise'] ?? '')),
+                'answer' => (int) filter_var($option['answer'] ?? false, FILTER_VALIDATE_BOOL) === 1,
+                'istext' => (int) filter_var($option['istext'] ?? true, FILTER_VALIDATE_BOOL) === 1,
+            ];
+        })
+        ->filter(fn ($option) => $option['choise'] !== '')
+        ->values();
+
+    if ($normalizedOptions->count() < 2) {
+        return response()->json([
+            'message' => 'Minimal 2 opsi wajib diisi.',
+        ], 422);
+    }
+
+    if ($normalizedOptions->where('answer', true)->count() !== 1) {
+        return response()->json([
+            'message' => 'Harus ada tepat 1 jawaban benar.',
+        ], 422);
+    }
+
+    DB::transaction(function () use ($id, $validated, $normalizedOptions) {
+        $now = now();
+
+        DB::table('tbl_questions')
+            ->where('id', $id)
+            ->update([
+                'question' => $validated['question'],
+                'question_type' => $validated['question_type'],
+                'question_group' => $validated['question_group'],
+                'istext' => (bool) $validated['istext'],
+                'information' => $validated['information'] ?? null,
+                'pembahasan' => $validated['pembahasan'] ?? null,
+                'updated_at' => $now,
+                'deleted_at' => null,
+            ]);
+
+        DB::table('tbl_question_options')
+            ->where('question_id', $id)
+            ->whereNull('deleted_at')
+            ->update([
+                'deleted_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        foreach ($normalizedOptions as $option) {
+            DB::table('tbl_question_options')->insert([
+                'question_id' => $id,
+                'choise' => $option['choise'],
+                'answer' => $option['answer'] ? 1 : 0,
+                'istext' => $option['istext'] ? 1 : 0,
+                'created_at' => $now,
+                'updated_at' => null,
+                'deleted_at' => null,
+            ]);
+        }
+    });
+
+    return response()->json([
+        'message' => 'Soal berhasil diperbarui.',
+        'data' => DB::table('tbl_questions')->where('id', $id)->first(),
+    ]);
+});
+
+Route::delete('/admin/questions/{id}', function ($id) {
+    $existingQuestion = DB::table('tbl_questions')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$existingQuestion) {
+        return response()->json(['message' => 'Soal tidak ditemukan.'], 404);
+    }
+
+    DB::transaction(function () use ($id) {
+        $now = now();
+
+        DB::table('tbl_questions')
+            ->where('id', $id)
+            ->update([
+                'deleted_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        DB::table('tbl_question_options')
+            ->where('question_id', $id)
+            ->whereNull('deleted_at')
+            ->update([
+                'deleted_at' => $now,
+                'updated_at' => $now,
+            ]);
+    });
+
+    return response()->json([
+        'message' => 'Soal berhasil dihapus.',
+    ]);
+});
+
+Route::patch('/admin/questions/{id}/restore', function ($id) {
+    $existingQuestion = DB::table('tbl_questions')
+        ->where('id', $id)
+        ->whereNotNull('deleted_at')
+        ->first();
+
+    if (!$existingQuestion) {
+        return response()->json(['message' => 'Soal tidak ditemukan atau belum dihapus.'], 404);
+    }
+
+    DB::transaction(function () use ($id) {
+        $now = now();
+
+        DB::table('tbl_questions')
+            ->where('id', $id)
+            ->update([
+                'deleted_at' => null,
+                'updated_at' => $now,
+            ]);
+
+        DB::table('tbl_question_options')
+            ->where('question_id', $id)
+            ->update([
+                'deleted_at' => null,
+                'updated_at' => $now,
+            ]);
+    });
+
+    return response()->json([
+        'message' => 'Soal berhasil dipulihkan.',
     ]);
 });
 
