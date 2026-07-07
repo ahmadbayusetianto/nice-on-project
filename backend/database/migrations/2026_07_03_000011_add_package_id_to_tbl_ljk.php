@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -12,8 +13,19 @@ return new class extends Migration
     public function up(): void
     {
         if (!Schema::hasColumn('tbl_ljk', 'package_id')) {
-            Schema::table('tbl_ljk', function (Blueprint $table) {
-                $table->unsignedBigInteger('package_id')->nullable()->after('user_id')->index();
+            $packagePidType = data_get(DB::selectOne(
+                'SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+                ['tbl_paket', 'pid']
+            ), 'COLUMN_TYPE');
+
+            $useBigInteger = is_string($packagePidType) && str_contains(strtolower($packagePidType), 'bigint');
+
+            Schema::table('tbl_ljk', function (Blueprint $table) use ($useBigInteger) {
+                if ($useBigInteger) {
+                    $table->unsignedBigInteger('package_id')->nullable()->after('user_id')->index();
+                } else {
+                    $table->unsignedInteger('package_id')->nullable()->after('user_id')->index();
+                }
                 $table->foreign('package_id')
                     ->references('pid')
                     ->on('tbl_paket')

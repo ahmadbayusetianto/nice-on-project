@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -12,9 +13,15 @@ return new class extends Migration
     public function up(): void
     {
         if (!Schema::hasTable('tbl_materi')) {
-            Schema::create('tbl_materi', function (Blueprint $table) {
+            $packagePidType = data_get(DB::selectOne(
+                'SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+                ['tbl_paket', 'pid']
+            ), 'COLUMN_TYPE');
+
+            $useBigInteger = is_string($packagePidType) && str_contains(strtolower($packagePidType), 'bigint');
+
+            Schema::create('tbl_materi', function (Blueprint $table) use ($useBigInteger) {
                 $table->id('pid');
-                $table->unsignedBigInteger('package_id');
                 $table->string('judul', 200);
                 $table->text('deskripsi')->nullable();
                 $table->string('file_path', 255);
@@ -29,6 +36,14 @@ return new class extends Migration
                 $table->unsignedBigInteger('updated_by')->nullable();
                 $table->dateTime('deleted_at')->nullable();
 
+                if ($useBigInteger) {
+                    $table->unsignedBigInteger('package_id');
+                } else {
+                    $table->unsignedInteger('package_id');
+                }
+            });
+
+            Schema::table('tbl_materi', function (Blueprint $table) {
                 $table->foreign('package_id', 'fk_materi_paket')
                     ->references('pid')
                     ->on('tbl_paket')
