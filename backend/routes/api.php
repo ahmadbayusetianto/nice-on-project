@@ -107,6 +107,21 @@ function questionGroupLabel(int $group): string
     };
 }
 
+function normalizeQuestionType(string $type): string
+{
+    $normalized = strtoupper(trim($type));
+
+    if ($normalized === 'SINGLE') {
+        return 'SKD';
+    }
+
+    if (in_array($normalized, ['SKD', 'SKB'], true)) {
+        return $normalized;
+    }
+
+    return 'SKD';
+}
+
 function mapQuestionOptionRow(object $item): array
 {
     return [
@@ -122,11 +137,12 @@ function mapQuestionOptionRow(object $item): array
 function mapQuestionRow(object $item, ?array $options = null): array
 {
     $group = (int) ($item->question_group ?? 1);
+    $type = normalizeQuestionType((string) ($item->question_type ?? 'SKD'));
 
     return [
         'id' => (int) $item->id,
         'question' => (string) $item->question,
-        'question_type' => (string) ($item->question_type ?? 'single'),
+        'question_type' => $type,
         'question_group' => $group,
         'question_group_label' => questionGroupLabel($group),
         'istext' => (int) ($item->istext ?? 1) === 1,
@@ -178,12 +194,13 @@ function mapTryoutOptionRow(object $item): array
 function mapTryoutQuestionRow(object $question, array $options, ?object $sheet = null, bool $includeResult = false): array
 {
     $group = (int) ($question->question_group ?? 1);
+    $type = normalizeQuestionType((string) ($question->question_type ?? 'SKD'));
     $selectedOptionId = $sheet ? (int) ($sheet->option_id ?? 0) : null;
 
     return [
         'id' => (int) $question->id,
         'question' => (string) $question->question,
-        'question_type' => (string) ($question->question_type ?? 'single'),
+        'question_type' => $type,
         'question_group' => $group,
         'question_group_label' => questionGroupLabel($group),
         'istext' => (int) ($question->istext ?? 1) === 1,
@@ -1002,6 +1019,69 @@ Route::get('/admin/users', function (Request $request) {
     ]);
 });
 
+Route::patch('/admin/users/{pid}/toggle-role', function ($pid) {
+    $user = DB::table('tbl_user')->where('pid', $pid)->first();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'User tidak ditemukan.',
+        ], 404);
+    }
+
+    $currentIsAdmin = (int) ($user->is_admin ?? 0) === 1;
+
+    if ($currentIsAdmin) {
+        $adminCount = (int) DB::table('tbl_user')->where('is_admin', 1)->count();
+
+        if ($adminCount <= 1) {
+            return response()->json([
+                'message' => 'Minimal harus ada satu admin aktif.',
+            ], 409);
+        }
+    }
+
+    $nextIsAdmin = $currentIsAdmin ? 0 : 1;
+
+    DB::table('tbl_user')
+        ->where('pid', $pid)
+        ->update([
+            'is_admin' => $nextIsAdmin,
+            'updated_at' => now(),
+            'updated_by' => null,
+        ]);
+
+    $updatedUser = DB::table('tbl_user')
+        ->leftJoin('tbl_detail_user', 'tbl_user.pid', '=', 'tbl_detail_user.pid_user')
+        ->where('tbl_user.pid', $pid)
+        ->select([
+            'tbl_user.pid as pid',
+            'tbl_user.email as email',
+            'tbl_user.status as status',
+            'tbl_user.is_admin as is_admin',
+            'tbl_user.created_at as created_at',
+            'tbl_detail_user.nama as nama',
+            'tbl_detail_user.nohp as nohp',
+        ])
+        ->first();
+
+    $displayName = $updatedUser->nama ?: Str::before($updatedUser->email, '@');
+
+    return response()->json([
+        'message' => 'Peran user berhasil diperbarui.',
+        'data' => [
+            'pid' => (int) $updatedUser->pid,
+            'code' => '#USR-'.str_pad((string) $updatedUser->pid, 4, '0', STR_PAD_LEFT),
+            'name' => $displayName,
+            'email' => $updatedUser->email,
+            'phone' => $updatedUser->nohp ?: '-',
+            'role' => (int) $updatedUser->is_admin === 1 ? 'Admin' : 'User',
+            'status' => (string) $updatedUser->status === 'active' ? 'Aktif' : 'Nonaktif',
+            'joined' => $updatedUser->created_at ? date('j M Y', strtotime($updatedUser->created_at)) : '-',
+            'is_admin' => (int) $updatedUser->is_admin,
+        ],
+    ]);
+});
+
 Route::get('/packages', function (Request $request) {
     $kategori = trim((string) $request->query('kategori', ''));
 
@@ -1452,7 +1532,13 @@ Route::get('/admin/questions', function (Request $request) {
     }
 
     if ($type !== '') {
-        $query->where('question_type', $type);
+        $normalizedType = normalizeQuestionType($type);
+
+        if ($normalizedType === 'SKD') {
+          $query->whereIn('question_type', ['SKD', 'single']);
+        } else {
+          $query->where('question_type', $normalizedType);
+        }
     }
 
     if ($search !== '') {
@@ -1556,7 +1642,7 @@ Route::get('/admin/questions/{id}', function ($id) {
 Route::post('/admin/questions', function (Request $request) {
     $validator = Validator::make($request->all(), [
         'question' => ['required', 'string'],
-        'question_type' => ['required', 'string', 'in:single'],
+        'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
         'question_group' => ['required', 'integer', 'in:1,2,3'],
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
@@ -1575,6 +1661,7 @@ Route::post('/admin/questions', function (Request $request) {
     }
 
     $validated = $validator->validated();
+    $questionType = normalizeQuestionType((string) $validated['question_type']);
     $normalizedOptions = collect($validated['options'])
         ->map(function ($option) {
             return [
@@ -1602,7 +1689,7 @@ Route::post('/admin/questions', function (Request $request) {
     $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $request, $now) {
         $questionId = DB::table('tbl_questions')->insertGetId([
             'question' => $validated['question'],
-            'question_type' => $validated['question_type'],
+            'question_type' => $questionType,
             'question_group' => $validated['question_group'],
             'istext' => (bool) $validated['istext'],
             'information' => $validated['information'] ?? null,
@@ -1636,7 +1723,7 @@ Route::post('/admin/questions', function (Request $request) {
 Route::put('/admin/questions/{id}', function (Request $request, $id) {
     $validator = Validator::make($request->all(), [
         'question' => ['required', 'string'],
-        'question_type' => ['required', 'string', 'in:single'],
+        'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
         'question_group' => ['required', 'integer', 'in:1,2,3'],
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
@@ -1660,6 +1747,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
     }
 
     $validated = $validator->validated();
+    $questionType = normalizeQuestionType((string) $validated['question_type']);
     $normalizedOptions = collect($validated['options'])
         ->map(function ($option) {
             return [
@@ -1690,7 +1778,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
             ->where('id', $id)
             ->update([
                 'question' => $validated['question'],
-                'question_type' => $validated['question_type'],
+                'question_type' => $questionType,
                 'question_group' => $validated['question_group'],
                 'istext' => (bool) $validated['istext'],
                 'information' => $validated['information'] ?? null,

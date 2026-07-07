@@ -231,6 +231,12 @@ function createQuestionOptionForm(index = 0, option = {}) {
 }
 
 function createQuestionFormFromDetail(detail = {}) {
+  const normalizedType = String(detail.question_type ?? 'SKD').toUpperCase() === 'SINGLE'
+    ? 'SKD'
+    : String(detail.question_type ?? 'SKD').toUpperCase() === 'SKB'
+      ? 'SKB'
+      : 'SKD'
+
   const options = Array.isArray(detail.options) && detail.options.length
     ? detail.options.map((option, index) => createQuestionOptionForm(index, option))
     : [
@@ -251,7 +257,7 @@ function createQuestionFormFromDetail(detail = {}) {
 
   return {
     question: detail.question ?? '',
-    question_type: detail.question_type ?? 'single',
+    question_type: normalizedType,
     question_group: Number(detail.question_group ?? 1),
     istext: detail.istext !== undefined ? Boolean(detail.istext) : true,
     information: detail.information ?? '',
@@ -284,7 +290,10 @@ function formatQuestionGroupLabel(group) {
 }
 
 function formatQuestionTypeLabel(type) {
-  return String(type || 'single').toLowerCase() === 'single' ? 'Pilihan Ganda' : String(type || '-')
+  const normalized = String(type || 'SKD').toUpperCase()
+  if (normalized === 'SINGLE' || normalized === 'SKD') return 'SKD'
+  if (normalized === 'SKB') return 'SKB'
+  return normalized || '-'
 }
 
 function createParameterFormFromDetail(detail = {}) {
@@ -1179,7 +1188,8 @@ function AdminQuestionFormModal({
                   <label className="admin-question-field">
                     <span>Tipe Soal <sup>*</sup></span>
                     <select value={form.question_type} onChange={(event) => onFieldChange('question_type', event.target.value)} disabled={loading}>
-                      <option value="single">Single</option>
+                      <option value="SKD">SKD</option>
+                      <option value="SKB">SKB</option>
                     </select>
                   </label>
                 </div>
@@ -1568,7 +1578,7 @@ function AdminQuestionManagementPage() {
     setQuestionSubmitSuccess(null)
     setQuestionForm(createQuestionFormFromDetail({
       question_group: selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1,
-      question_type: 'single',
+      question_type: 'SKD',
       istext: true,
     }))
     setShowQuestionModal(true)
@@ -1577,7 +1587,7 @@ function AdminQuestionManagementPage() {
   const resetQuestionForm = () => {
     setQuestionForm(createQuestionFormFromDetail({
       question_group: Number(questionForm.question_group) || (selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1),
-      question_type: 'single',
+      question_type: 'SKD',
       istext: true,
     }))
     setQuestionSubmitError(null)
@@ -1751,7 +1761,7 @@ function AdminQuestionManagementPage() {
       if (shouldKeepOpenForAddMore) {
         setQuestionForm(createQuestionFormFromDetail({
           question_group: Number(questionForm.question_group) || 1,
-          question_type: 'single',
+          question_type: 'SKD',
           istext: true,
         }))
         setShowQuestionModal(true)
@@ -1952,7 +1962,6 @@ function AdminQuestionManagementPage() {
             </div>
 
             <div className="admin-package-actions admin-question-actions">
-              <button type="button" className="admin-outline-action" title="Import menyusul pada langkah berikutnya">⬇ Import Soal</button>
               <button type="button" className="admin-outline-action">⬆ Export Soal</button>
               <button type="button" className="admin-outline-action" aria-label="Muat ulang data soal" onClick={() => { void loadQuestions({ cancelled: () => false, showLoading: true }) }}>↻</button>
               <button type="button" className="admin-primary-action" onClick={openAddQuestionModal}>＋ Tambah Soal</button>
@@ -1992,7 +2001,7 @@ function AdminQuestionManagementPage() {
                 </select>
 
                 <select className="admin-package-select" value={selectedQuestionType} onChange={(event) => setSelectedQuestionType(event.target.value)}>
-                  {['Semua Tipe', 'single'].map((option) => (
+                  {['Semua Tipe', 'SKD', 'SKB'].map((option) => (
                     <option key={option} value={option}>
                       {option === 'Semua Tipe' ? option : formatQuestionTypeLabel(option)}
                     </option>
@@ -5861,6 +5870,10 @@ function AdminUserManagementPage() {
   const [userSummary, setUserSummary] = useState({ total_user: 0, user_aktif: 0, user_nonaktif: 0, admin: 0 })
   const [userCurrentPage, setUserCurrentPage] = useState(1)
   const [userPageSize, setUserPageSize] = useState(10)
+  const [showRoleToggleConfirm, setShowRoleToggleConfirm] = useState(false)
+  const [roleToggleTarget, setRoleToggleTarget] = useState(null)
+  const [isTogglingRole, setIsTogglingRole] = useState(false)
+  const [roleToggleError, setRoleToggleError] = useState(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
 
@@ -5976,6 +5989,51 @@ function AdminUserManagementPage() {
     clearAuthUser()
 
     navigate('/login', { replace: true })
+  }
+
+  const openRoleToggleConfirm = (row) => {
+    if (!row || Number(row.pid) === Number(user?.pid)) return
+
+    setRoleToggleError(null)
+    setRoleToggleTarget(row)
+    setShowRoleToggleConfirm(true)
+  }
+
+  const confirmRoleToggle = async () => {
+    if (!roleToggleTarget) return
+
+    setIsTogglingRole(true)
+    setRoleToggleError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${roleToggleTarget.pid}/toggle-role`, {
+        method: 'PATCH',
+      })
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'Peran user gagal diperbarui.')
+      }
+
+      const updatedRow = payload.data ?? null
+
+      if (updatedRow) {
+        setUserRows((currentRows) => currentRows.map((row) => (row.pid === updatedRow.pid ? { ...row, ...updatedRow } : row)))
+        setUserSummary((currentSummary) => ({
+          ...currentSummary,
+          admin: updatedRow.role === 'Admin'
+            ? Number(currentSummary.admin ?? 0) + 1
+            : Math.max(0, Number(currentSummary.admin ?? 0) - 1),
+        }))
+      }
+
+      setShowRoleToggleConfirm(false)
+      setRoleToggleTarget(null)
+    } catch (error) {
+      setRoleToggleError(error instanceof Error ? error.message : 'Peran user gagal diperbarui.')
+    } finally {
+      setIsTogglingRole(false)
+    }
   }
 
   useEffect(() => {
@@ -6108,22 +6166,16 @@ function AdminUserManagementPage() {
                       <td>
                         <div className="admin-row-actions">
                           <button type="button" className="admin-row-action">👁</button>
-                           <button
-                             type="button"
-                             className="admin-row-action admin-row-action-edit"
-                             title="Edit paket"
-                             aria-label={`Edit paket ${row.name}`}
-                             onMouseDown={(event) => {
-                               event.preventDefault()
-                               void openEditPackageModal(row)
-                             }}
-                             onClick={(event) => {
-                               event.preventDefault()
-                               void openEditPackageModal(row)
-                             }}
-                           >
-                             ✎<span>Edit</span>
-                           </button>
+                          <button
+                            type="button"
+                            className="admin-row-action admin-row-action-role"
+                            title={Number(row.pid) === Number(user?.pid) ? 'Akun Anda' : row.role === 'Admin' ? 'Jadikan User' : 'Jadikan Admin'}
+                            aria-label={Number(row.pid) === Number(user?.pid) ? `Akun Anda ${row.name}` : row.role === 'Admin' ? `Jadikan user ${row.name}` : `Jadikan admin ${row.name}`}
+                            disabled={Number(row.pid) === Number(user?.pid)}
+                            onClick={() => openRoleToggleConfirm(row)}
+                          >
+                            ↺<span>{row.role === 'Admin' ? 'User' : 'Admin'}</span>
+                          </button>
                           <button type="button" className="admin-row-action danger">🗑</button>
                         </div>
                       </td>
@@ -6157,6 +6209,21 @@ function AdminUserManagementPage() {
             open={showLogoutConfirm}
             onCancel={() => setShowLogoutConfirm(false)}
             onConfirm={confirmLogout}
+          />
+
+          <AdminLogoutModal
+            open={showRoleToggleConfirm}
+            onCancel={() => {
+              setShowRoleToggleConfirm(false)
+              setRoleToggleTarget(null)
+              setRoleToggleError(null)
+            }}
+            onConfirm={confirmRoleToggle}
+            title={roleToggleTarget ? `Ubah peran ${roleToggleTarget.name}?` : 'Ubah peran user?'}
+            message={roleToggleError || (roleToggleTarget
+              ? `Peran ${roleToggleTarget.name} akan diubah dari ${roleToggleTarget.role} menjadi ${roleToggleTarget.role === 'Admin' ? 'User' : 'Admin'}.`
+              : 'Konfirmasi perubahan peran user.')}
+            confirmLabel={isTogglingRole ? 'Memproses...' : 'Ya, ubah'}
           />
         </main>
       </div>

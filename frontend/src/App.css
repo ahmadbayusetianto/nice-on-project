@@ -8350,6 +8350,11 @@ html {
   cursor: pointer;
 }
 
+.admin-row-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .admin-row-action-edit {
   width: auto;
   min-width: 72px;
@@ -8362,6 +8367,23 @@ html {
 }
 
 .admin-row-action-edit span {
+  line-height: 1;
+}
+
+.admin-row-action-role {
+  width: auto;
+  min-width: 84px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f62ff;
+  background: #eef3ff;
+}
+
+.admin-row-action-role span {
   line-height: 1;
 }
 
