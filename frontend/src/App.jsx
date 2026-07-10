@@ -1115,6 +1115,7 @@ function AdminQuestionFormModal({
   title = 'Tambah Soal',
   submitLabel = 'Simpan Soal',
   helpText = 'Kelola soal CAT dengan opsi jawaban yang dapat ditambah atau dihapus secara dinamis.',
+  mode = 'create',
 }) {
   if (!open) return null
 
@@ -1128,8 +1129,8 @@ function AdminQuestionFormModal({
       <div className="admin-modal admin-question-modal" role="dialog" aria-modal="true" aria-labelledby="adminQuestionTitle" onClick={(event) => event.stopPropagation()}>
         <div className="admin-question-modal-header">
           <div className="admin-question-title-block">
-            <div className="admin-question-title-icon" aria-hidden="true">＋</div>
-            <div>
+            <div className="admin-question-title-icon" aria-hidden="true">✎</div>
+            <div className="admin-question-title-copy">
               <h3 id="adminQuestionTitle">{title}</h3>
               <p>{helpText}</p>
             </div>
@@ -1140,7 +1141,7 @@ function AdminQuestionFormModal({
         {loading ? <div className="admin-package-form-loading">Memuat data soal...</div> : null}
         {error ? <div className="admin-package-form-error">{error}</div> : null}
 
-        <form className="admin-question-form" onSubmit={onSubmit}>
+        <form className="admin-question-form" id="adminQuestionForm" onSubmit={onSubmit}>
           <div className="admin-question-form-layout">
             <section className="admin-question-panel admin-question-panel-left">
               <div className="admin-question-panel-head">
@@ -1356,7 +1357,7 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
     { label: 'Grup Soal', value: question.question_group_label, tone: 'orange', icon: '📁' },
     { label: 'Tipe Soal', value: formatQuestionTypeLabel(question.question_type), tone: 'blue', icon: '🎯' },
     { label: 'Jenis Soal', value: question.istext ? 'Teks' : 'Gambar', tone: 'green', icon: 'T' },
-    { label: 'Jumlah Opsi', value: String(question.options_count || 0), tone: 'purple', icon: '≣' },
+    { label: 'Jumlah Opsi', value: String(question.options_count || (question.options || []).length || 0), tone: 'purple', icon: '≣' },
   ]
 
   return (
@@ -1367,10 +1368,9 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
         aria-modal="true"
         aria-labelledby="adminQuestionDetailTitle"
         onClick={(event) => event.stopPropagation()}
-      >
+        >
         <div className="admin-question-detail-header">
           <div className="admin-question-detail-title-block">
-            <div className="admin-question-detail-title-icon" aria-hidden="true">▣</div>
             <div>
               <h3 id="adminQuestionDetailTitle">Detail Soal</h3>
               <p>Lihat detail informasi soal secara lengkap.</p>
@@ -1386,71 +1386,91 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
             <button type="button" className="admin-question-close" aria-label="Tutup detail soal" onClick={onCancel}>×</button>
           </div>
         </div>
+        <hr className="admin-question-detail-divider" />
+
+        <div className="admin-question-detail-grid">
+          {detailCards.map((card) => (
+            <article className={`admin-question-detail-card ${card.tone}`} key={card.label}>
+              <div className="admin-question-detail-card-icon" aria-hidden="true">{card.icon}</div>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </article>
+          ))}
+        </div>
 
         <div className="admin-question-detail-body">
-          <div className="admin-question-detail-grid">
-            {detailCards.map((card) => (
-              <article className={`admin-question-detail-card ${card.tone}`} key={card.label}>
-                <div className="admin-question-detail-card-icon" aria-hidden="true">{card.icon}</div>
-                <span>{card.label}</span>
-                <strong>{card.value}</strong>
-              </article>
-            ))}
-          </div>
-
-          {question.information ? (
+          <div className="admin-question-detail-column left">
             <section className="admin-question-detail-section info-card">
               <div className="admin-question-detail-section-head">
                 <span className="admin-question-detail-section-icon" aria-hidden="true">i</span>
                 <h4>Informasi Tambahan</h4>
               </div>
-              <p>{question.information}</p>
+              <p>{question.information || 'Tidak ada informasi tambahan.'}</p>
             </section>
-          ) : null}
 
-          <section className="admin-question-detail-section question-card">
-            <div className="admin-question-detail-section-head">
-              <span className="admin-question-detail-section-icon question" aria-hidden="true">?</span>
-              <h4>Pertanyaan</h4>
-            </div>
-            <p className="admin-question-detail-question">{question.question}</p>
-          </section>
+            <section className="admin-question-detail-section question-card">
+              <div className="admin-question-detail-section-head">
+                <span className="admin-question-detail-section-icon question" aria-hidden="true">?</span>
+                <h4>Pertanyaan</h4>
+              </div>
+              <p className="admin-question-detail-question">{question.question}</p>
+            </section>
 
-          <section className="admin-question-detail-section options-card">
-            <div className="admin-question-detail-section-head">
-              <span className="admin-question-detail-section-icon options" aria-hidden="true">≣</span>
-              <h4>Opsi Jawaban</h4>
-            </div>
-            <div className="admin-question-detail-options wide">
-              {(question.options || []).map((option, index) => (
-                <div className={`admin-question-detail-option wide${option.answer ? ' correct' : ''}`} key={option.id ?? `${index}-${option.choise}`}>
-                  <span className="admin-question-detail-option-badge">{String.fromCharCode(65 + index)}</span>
-                  <div className="admin-question-detail-option-copy wide">
-                    <strong>{option.choise}</strong>
-                  </div>
-                  <span className="admin-question-detail-option-kind">{option.istext ? 'Teks' : 'Gambar'}</span>
-                  {option.answer ? (
-                    <span className="admin-question-detail-correct success">✓ Jawaban benar</span>
-                  ) : (
-                    <span className="admin-question-detail-correct neutral">○ Bukan jawaban benar</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {question.pembahasan ? (
             <section className="admin-question-detail-section explanation-card">
               <div className="admin-question-detail-section-head">
                 <span className="admin-question-detail-section-icon explanation" aria-hidden="true">📖</span>
                 <h4>Pembahasan</h4>
               </div>
-              <p>{question.pembahasan}</p>
+              <p>{question.pembahasan || 'Tidak ada pembahasan.'}</p>
             </section>
-          ) : null}
+          </div>
+
+          <div className="admin-question-detail-column right">
+            <section className="admin-question-detail-section options-card admin-question-detail-section-options">
+              <div className="admin-question-detail-section-head">
+                <span className="admin-question-detail-section-icon options" aria-hidden="true">≣</span>
+                <h4>Opsi Jawaban</h4>
+              </div>
+              <div className="admin-question-detail-options wide">
+                {Array.from({ length: 5 }, (_, index) => {
+                  const option = (question.options || [])[index] ?? null
+                  const letter = String.fromCharCode(65 + index)
+
+                  return (
+                    <div
+                      className={`admin-question-detail-option wide${option?.answer ? ' correct' : ''}${option ? '' : ' placeholder'}`}
+                      key={option?.id ?? `empty-${index}`}
+                    >
+                      <span className="admin-question-detail-option-badge">{letter}</span>
+                      <div className="admin-question-detail-option-copy wide">
+                        <strong>{option?.choise || 'Belum ada opsi.'}</strong>
+                      </div>
+                      {option?.answer ? (
+                        <span className="admin-question-detail-correct success" title="Jawaban benar" aria-label="Jawaban benar">✓</span>
+                      ) : (
+                        <span className="admin-question-detail-correct neutral" title="Bukan jawaban benar" aria-label="Bukan jawaban benar">○</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          </div>
         </div>
 
+        <hr className="admin-question-detail-footer-divider" />
+
         <div className="admin-question-detail-footer">
+          <div className="admin-question-detail-footer-meta">
+            <article className="admin-question-detail-footer-card">
+              <span>Dibuat oleh</span>
+              <strong>{question.created_by_label || question.created_by_name || 'Admin'}</strong>
+            </article>
+            <article className="admin-question-detail-footer-card">
+              <span>Dibuat pada</span>
+              <strong>{formatAdminDate(question.created_at, { hour: false })}</strong>
+            </article>
+          </div>
           <button type="button" className="admin-modal-button secondary" onClick={onCancel}>Tutup</button>
         </div>
       </div>
@@ -2137,6 +2157,7 @@ function AdminQuestionManagementPage() {
             title={questionModalMode === 'edit' ? 'Edit Soal' : 'Tambah Soal'}
             submitLabel={questionModalMode === 'edit' ? 'Perbarui Soal' : 'Simpan Soal'}
             helpText={questionModalMode === 'edit' ? 'Ubah soal, opsi, dan jawaban benar lalu simpan perubahan.' : 'Isi soal, opsi jawaban, lalu pilih 1 jawaban benar.'}
+            mode={questionModalMode}
           />
 
           <AdminQuestionDetailModal
@@ -4913,7 +4934,6 @@ function UserTryoutPage() {
   const profileMenuRef = useRef(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
-  const autoFinishTriggeredRef = useRef(false)
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -4922,6 +4942,7 @@ function UserTryoutPage() {
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('ALL')
+  const [selectedTryoutType, setSelectedTryoutType] = useState('SKD')
   const [tryoutData, setTryoutData] = useState(null)
   const [tryoutLoading, setTryoutLoading] = useState(true)
   const [tryoutError, setTryoutError] = useState(null)
@@ -5051,7 +5072,6 @@ function UserTryoutPage() {
     const firstUnansweredIndex = tryoutData.questions.findIndex((question) => !question.selected_option_id)
     setCurrentQuestionIndex(firstUnansweredIndex >= 0 ? firstUnansweredIndex : 0)
     setResultData(tryoutData.session?.is_finished ? tryoutData : null)
-    autoFinishTriggeredRef.current = false
   }, [tryoutData])
 
   useEffect(() => {
@@ -5060,19 +5080,14 @@ function UserTryoutPage() {
       return undefined
     }
 
-    const durationMinutes = Number(tryoutData.settings?.duration_minutes || 90)
+    const durationMinutes = Number(tryoutData.settings?.duration_minutes || 100)
+    const expiresAtRaw = tryoutData.settings?.expires_at || null
     const startedAt = new Date(tryoutData.session.created_at).getTime()
-    const durationSeconds = durationMinutes * 60
+    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw).getTime() : startedAt + (durationMinutes * 60 * 1000)
 
     const updateTimer = () => {
-      const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
-      const nextRemaining = Math.max(0, durationSeconds - elapsed)
+      const nextRemaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
       setRemainingSeconds(nextRemaining)
-
-      if (nextRemaining <= 0 && tryoutData.settings?.auto_submit && !autoFinishTriggeredRef.current) {
-        autoFinishTriggeredRef.current = true
-        void finishTryout()
-      }
     }
 
     updateTimer()
@@ -5142,6 +5157,7 @@ function UserTryoutPage() {
         body: JSON.stringify({
           user_id: user.pid,
           package_id: packageRow.pid,
+          jenis_tryout: selectedTryoutType,
         }),
       })
 
@@ -5153,10 +5169,12 @@ function UserTryoutPage() {
         throw new Error(payload?.message || 'Tryout gagal dimulai.')
       }
 
+      setTryoutLoading(false)
       setTryoutData(payload?.data ?? null)
-      setResultData(null)
+      setResultData(payload?.data?.session?.is_finished ? payload.data : null)
     } catch (error) {
       setTryoutError(error instanceof Error ? error.message : 'Tryout gagal dimulai.')
+      setTryoutLoading(false)
     } finally {
       setIsStarting(false)
     }
@@ -5329,6 +5347,10 @@ function UserTryoutPage() {
 
                 <div className="user-tryout-meta-cards">
                   <article>
+                    <span>Jenis Tryout</span>
+                    <strong>{tryoutData.session.jenis_tryout || 'SKD'}</strong>
+                  </article>
+                  <article>
                     <span>Sisa Waktu</span>
                     <strong>{formatTryoutCountdown(remainingSeconds)}</strong>
                   </article>
@@ -5417,7 +5439,7 @@ function UserTryoutPage() {
                           <button
                             key={question.id}
                             type="button"
-                            className={`user-tryout-question-chip${active ? ' active' : ''}${answered ? ' answered' : ''}`}
+                            className={`user-tryout-question-chip${active ? ' active' : ''}${answered ? ' answered' : ' unanswered'}`}
                             onClick={() => setCurrentQuestionIndex(index)}
                           >
                             {index + 1}
@@ -5527,6 +5549,19 @@ function UserTryoutPage() {
                 ))}
               </section>
 
+              <section className="user-tryout-type-row" aria-label="Pilih jenis tryout">
+                {['SKD', 'SKB'].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className={`user-tryout-type-pill${selectedTryoutType === type ? ' active' : ''}`}
+                    onClick={() => setSelectedTryoutType(type)}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </section>
+
               <section className="user-tryout-package-grid">
                 {packageLoading ? <div className="dashboard-alert">Memuat paket tryout...</div> : null}
                 {filteredPackages.map((item) => (
@@ -5539,7 +5574,7 @@ function UserTryoutPage() {
                       <strong>{formatCurrency(item.harga)}</strong>
                     </div>
                     <button type="button" className="dashboard-primary-action" onClick={() => void startTryout(item)} disabled={isStarting}>
-                      {isStarting ? 'Memulai...' : 'Mulai Simulasi'}
+                      {isStarting ? 'Memulai...' : `Mulai ${selectedTryoutType}`}
                     </button>
                   </article>
                 ))}

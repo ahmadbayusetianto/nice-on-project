@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 function formatReferenceDisplay(?string $reference, ?string $referenceOther = null): string
@@ -122,6 +123,17 @@ function normalizeQuestionType(string $type): string
     return 'SKD';
 }
 
+function normalizeTryoutType(string $type): string
+{
+    $normalized = strtoupper(trim($type));
+
+    if (in_array($normalized, ['SKD', 'SKB'], true)) {
+        return $normalized;
+    }
+
+    return 'SKD';
+}
+
 function mapQuestionOptionRow(object $item): array
 {
     return [
@@ -216,13 +228,14 @@ function mapTryoutQuestionRow(object $question, array $options, ?object $sheet =
 
 function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?array
 {
-    $session = DB::table('tbl_ljk as l')
+    $session = DB::table('tbl_tryout_session as l')
         ->leftJoin('tbl_paket as p', 'l.package_id', '=', 'p.pid')
         ->where('l.id', $ljkId)
         ->select([
             'l.id',
             'l.user_id',
             'l.package_id',
+            'l.jenis_tryout',
             'l.skor_twk',
             'l.skor_tiu',
             'l.skor_tkp',
@@ -240,6 +253,19 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
 
     if (!$session) {
         return null;
+    }
+
+    $tryoutType = normalizeTryoutType((string) ($session->jenis_tryout ?? 'SKD'));
+
+    $durationMinutes = parameterIntValue('exam.default_duration', 100);
+    $expiresAt = null;
+
+    if (!empty($session->created_at)) {
+        try {
+            $expiresAt = Carbon::parse($session->created_at)->addMinutes($durationMinutes)->toDateTimeString();
+        } catch (Throwable $error) {
+            $expiresAt = null;
+        }
     }
 
     $sheetRows = DB::table('tbl_answer_sheet')
@@ -298,6 +324,7 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
             'id' => (int) $session->id,
             'user_id' => (int) $session->user_id,
             'package_id' => $session->package_id ? (int) $session->package_id : null,
+            'jenis_tryout' => $tryoutType,
             'package_name' => $session->nama_paket ?? $session->keterangan ?? 'Tryout',
             'package_category' => $session->kategori ?? null,
             'package_formasi' => $session->formasi ?? null,
@@ -313,7 +340,8 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
         ],
         'questions' => $questions,
         'settings' => [
-            'duration_minutes' => parameterIntValue('exam.default_duration', 90),
+            'duration_minutes' => $durationMinutes,
+            'expires_at' => $expiresAt,
             'auto_submit' => parameterBoolValue('exam.auto_submit', true),
             'shuffle_question' => parameterBoolValue('exam.shuffle_question', true),
             'shuffle_option' => parameterBoolValue('exam.shuffle_option', true),
@@ -1165,7 +1193,7 @@ Route::get('/tryout/current', function (Request $request) {
         ], 422);
     }
 
-    $session = DB::table('tbl_ljk')
+    $session = DB::table('tbl_tryout_session')
         ->where('user_id', $userId)
         ->where('status', 0)
         ->orderByDesc('created_at')
@@ -1195,16 +1223,20 @@ Route::post('/tryout/start', function (Request $request) {
     $input = [
         'user_id' => $request->input('user_id', $request->input('pid_user')),
         'package_id' => $request->input('package_id', $request->input('pid_paket')),
+        'jenis_tryout' => $request->input('jenis_tryout', $request->input('type', 'SKD')),
     ];
 
     $validator = Validator::make($input, [
         'user_id' => ['required', 'integer', 'exists:tbl_user,pid'],
         'package_id' => ['required', 'integer', 'exists:tbl_paket,pid'],
+        'jenis_tryout' => ['required', 'string', 'in:SKD,SKB,skd,skb'],
     ], [
         'user_id.required' => 'User wajib dipilih.',
         'user_id.exists' => 'User tidak ditemukan.',
         'package_id.required' => 'Paket tryout wajib dipilih.',
         'package_id.exists' => 'Paket tidak ditemukan.',
+        'jenis_tryout.required' => 'Jenis tryout wajib dipilih.',
+        'jenis_tryout.in' => 'Jenis tryout tidak valid.',
     ]);
 
     if ($validator->fails()) {
@@ -1215,22 +1247,7 @@ Route::post('/tryout/start', function (Request $request) {
     }
 
     $validated = $validator->validated();
-    $existingSession = DB::table('tbl_ljk')
-        ->where('user_id', $validated['user_id'])
-        ->where('status', 0)
-        ->orderByDesc('created_at')
-        ->first();
-
-    if ($existingSession) {
-        $payload = buildTryoutSessionPayload((int) $existingSession->id, false);
-
-        if ($payload) {
-            return response()->json([
-                'message' => 'Sesi tryout aktif ditemukan.',
-                'data' => $payload,
-            ]);
-        }
-    }
+    $tryoutType = normalizeTryoutType((string) $validated['jenis_tryout']);
 
     $package = DB::table('tbl_paket')
         ->where('pid', $validated['package_id'])
@@ -1243,9 +1260,17 @@ Route::post('/tryout/start', function (Request $request) {
 
     $shuffleQuestion = parameterBoolValue('exam.shuffle_question', true);
     $selectedQuestions = collect();
-    $questionsByGroup = DB::table('tbl_questions')
+    $questionsQuery = DB::table('tbl_questions')
         ->select(['id', 'question_group'])
-        ->whereNull('deleted_at')
+        ->whereNull('deleted_at');
+
+    if ($tryoutType === 'SKD') {
+        $questionsQuery->whereIn('question_type', ['SKD', 'single']);
+    } else {
+        $questionsQuery->where('question_type', 'SKB');
+    }
+
+    $questionsByGroup = $questionsQuery
         ->orderBy('question_group')
         ->orderBy('id')
         ->get()
@@ -1267,15 +1292,6 @@ Route::post('/tryout/start', function (Request $request) {
         $selectedQuestions = $selectedQuestions->merge($groupQuestions->take($limit)->values());
     }
 
-    if ($selectedQuestions->isEmpty()) {
-        $selectedQuestions = DB::table('tbl_questions')
-            ->select(['id', 'question_group'])
-            ->whereNull('deleted_at')
-            ->orderBy('question_group')
-            ->orderBy('id')
-            ->get();
-    }
-
     if ($shuffleQuestion) {
         $selectedQuestions = $selectedQuestions->shuffle()->values();
     }
@@ -1285,10 +1301,11 @@ Route::post('/tryout/start', function (Request $request) {
     }
 
     $now = now();
-    $ljkId = DB::transaction(function () use ($validated, $package, $selectedQuestions, $now) {
-        $ljkId = DB::table('tbl_ljk')->insertGetId([
+    $ljkId = DB::transaction(function () use ($validated, $package, $selectedQuestions, $now, $tryoutType) {
+        $ljkId = DB::table('tbl_tryout_session')->insertGetId([
             'user_id' => $validated['user_id'],
             'package_id' => $validated['package_id'],
+            'jenis_tryout' => $tryoutType,
             'skor_twk' => 0,
             'skor_tiu' => 0,
             'skor_tkp' => 0,
@@ -1331,7 +1348,7 @@ Route::post('/tryout/start', function (Request $request) {
 
 Route::get('/tryout/{ljkId}', function (Request $request, $ljkId) {
     $userId = (int) $request->query('user_id', 0);
-    $session = DB::table('tbl_ljk')
+    $session = DB::table('tbl_tryout_session')
         ->where('id', $ljkId)
         ->first();
 
@@ -1371,7 +1388,7 @@ Route::put('/tryout/{ljkId}/answer', function (Request $request, $ljkId) {
         ], 422);
     }
 
-    $session = DB::table('tbl_ljk')
+    $session = DB::table('tbl_tryout_session')
         ->where('id', $ljkId)
         ->where('user_id', $input['user_id'])
         ->first();
@@ -1427,7 +1444,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
         return response()->json(['message' => 'User tidak valid.'], 422);
     }
 
-    $session = DB::table('tbl_ljk')
+    $session = DB::table('tbl_tryout_session')
         ->where('id', $ljkId)
         ->where('user_id', $userId)
         ->first();
@@ -1480,7 +1497,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
             }
         }
 
-        DB::table('tbl_ljk')
+        DB::table('tbl_tryout_session')
             ->where('id', $ljkId)
             ->update([
                 'skor_twk' => $scoreTwk,

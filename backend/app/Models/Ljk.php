@@ -11,7 +11,7 @@ class Ljk extends Model
 {
     use HasFactory;
 
-    protected $table = 'tbl_ljk';
+    protected $table = 'tbl_tryout_session';
 
     protected function casts(): array
     {

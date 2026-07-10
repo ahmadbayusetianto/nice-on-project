@@ -17,6 +17,14 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    protected $table = 'tbl_user';
+
+    protected $primaryKey = 'pid';
+
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     /**
      * Get the attributes that should be cast.
      *

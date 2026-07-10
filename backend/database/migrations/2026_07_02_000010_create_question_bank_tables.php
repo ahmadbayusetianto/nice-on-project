@@ -42,8 +42,8 @@ return new class extends Migration
             });
         }
 
-        if (!Schema::hasTable('tbl_ljk')) {
-            Schema::create('tbl_ljk', function (Blueprint $table) {
+        if (!Schema::hasTable('tbl_tryout_session')) {
+            Schema::create('tbl_tryout_session', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('user_id')->index();
                 $table->unsignedInteger('skor_twk')->default(0);
@@ -57,8 +57,8 @@ return new class extends Migration
                 $table->dateTime('updated_at')->nullable();
 
                 $table->foreign('user_id')
-                    ->references('id')
-                    ->on('users')
+                    ->references('pid')
+                    ->on('tbl_user')
                     ->cascadeOnDelete()
                     ->cascadeOnUpdate();
             });
@@ -68,7 +68,7 @@ return new class extends Migration
             Schema::create('tbl_answer_sheet', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('ljk_id')
-                    ->constrained('tbl_ljk')
+                    ->constrained('tbl_tryout_session')
                     ->cascadeOnDelete()
                     ->cascadeOnUpdate();
                 $table->foreignId('question_id')
@@ -97,7 +97,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('tbl_answer_sheet');
-        Schema::dropIfExists('tbl_ljk');
+        Schema::dropIfExists('tbl_tryout_session');
         Schema::dropIfExists('tbl_question_options');
         Schema::dropIfExists('tbl_questions');
     }

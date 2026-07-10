@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (!Schema::hasColumn('tbl_ljk', 'package_id')) {
+        if (!Schema::hasColumn('tbl_tryout_session', 'package_id')) {
             $packagePidType = data_get(DB::selectOne(
                 'SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
                 ['tbl_paket', 'pid']
@@ -20,7 +20,7 @@ return new class extends Migration
 
             $useBigInteger = is_string($packagePidType) && str_contains(strtolower($packagePidType), 'bigint');
 
-            Schema::table('tbl_ljk', function (Blueprint $table) use ($useBigInteger) {
+            Schema::table('tbl_tryout_session', function (Blueprint $table) use ($useBigInteger) {
                 if ($useBigInteger) {
                     $table->unsignedBigInteger('package_id')->nullable()->after('user_id')->index();
                 } else {
@@ -40,8 +40,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (Schema::hasColumn('tbl_ljk', 'package_id')) {
-            Schema::table('tbl_ljk', function (Blueprint $table) {
+        if (Schema::hasColumn('tbl_tryout_session', 'package_id')) {
+            Schema::table('tbl_tryout_session', function (Blueprint $table) {
                 $table->dropForeign(['package_id']);
                 $table->dropColumn('package_id');
             });

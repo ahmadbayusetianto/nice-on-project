@@ -34,7 +34,7 @@ class ParameterSeeder extends Seeder
             ['kode' => 'system.allowed_image_extension', 'nama' => 'Allowed Image Extension', 'kategori' => 'Sistem', 'nilai' => 'jpg,jpeg,png,webp', 'tipe' => 'select', 'deskripsi' => 'Ekstensi gambar yang diizinkan.'],
             ['kode' => 'system.allowed_document_extension', 'nama' => 'Allowed Document Extension', 'kategori' => 'Sistem', 'nilai' => 'pdf,doc,docx,xls,xlsx', 'tipe' => 'select', 'deskripsi' => 'Ekstensi dokumen yang diizinkan.'],
 
-            ['kode' => 'exam.default_duration', 'nama' => 'Durasi Default Ujian', 'kategori' => 'CAT / Ujian', 'nilai' => '90', 'tipe' => 'number', 'deskripsi' => 'Durasi ujian default dalam menit.'],
+            ['kode' => 'exam.default_duration', 'nama' => 'Durasi Default Ujian', 'kategori' => 'CAT / Ujian', 'nilai' => '100', 'tipe' => 'number', 'deskripsi' => 'Durasi ujian default dalam menit.'],
             ['kode' => 'exam.auto_submit', 'nama' => 'Auto Submit', 'kategori' => 'CAT / Ujian', 'nilai' => '1', 'tipe' => 'boolean', 'deskripsi' => 'Ujian dikumpulkan otomatis saat waktu habis.'],
             ['kode' => 'exam.shuffle_question', 'nama' => 'Acak Soal', 'kategori' => 'CAT / Ujian', 'nilai' => '1', 'tipe' => 'boolean', 'deskripsi' => 'Acak urutan soal saat ujian dimulai.'],
             ['kode' => 'exam.shuffle_option', 'nama' => 'Acak Jawaban', 'kategori' => 'CAT / Ujian', 'nilai' => '1', 'tipe' => 'boolean', 'deskripsi' => 'Acak urutan opsi jawaban.'],
