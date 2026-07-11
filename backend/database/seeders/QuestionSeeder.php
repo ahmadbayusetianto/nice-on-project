@@ -25,6 +25,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => '17 Agustus 1945', 'answer' => false],
                     ['choise' => '22 Juni 1945', 'answer' => false],
                     ['choise' => '18 Agustus 1945', 'answer' => false],
+                    ['choise' => 'Tidak ada yang tepat', 'answer' => false],
                 ],
             ],
             [
@@ -37,6 +38,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => 'Bhinneka Tunggal Ika', 'answer' => true],
                     ['choise' => 'Tut Wuri Handayani', 'answer' => false],
                     ['choise' => 'Ing Ngarso Sung Tulodo', 'answer' => false],
+                    ['choise' => 'Tidak ada yang tepat', 'answer' => false],
                 ],
             ],
             [
@@ -49,6 +51,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => 'Mahkamah Konstitusi', 'answer' => true],
                     ['choise' => 'Komisi Yudisial', 'answer' => false],
                     ['choise' => 'Dewan Perwakilan Rakyat', 'answer' => false],
+                    ['choise' => 'Tidak ada yang tepat', 'answer' => false],
                 ],
             ],
             [
@@ -61,6 +64,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => '100', 'answer' => false],
                     ['choise' => '102', 'answer' => true],
                     ['choise' => '108', 'answer' => false],
+                    ['choise' => '110', 'answer' => false],
                 ],
             ],
             [
@@ -73,6 +77,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => '6', 'answer' => true],
                     ['choise' => '8', 'answer' => false],
                     ['choise' => '10', 'answer' => false],
+                    ['choise' => '12', 'answer' => false],
                 ],
             ],
             [
@@ -85,6 +90,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => '30', 'answer' => false],
                     ['choise' => '32', 'answer' => true],
                     ['choise' => '34', 'answer' => false],
+                    ['choise' => '36', 'answer' => false],
                 ],
             ],
             [
@@ -97,6 +103,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => 'Pengendalian diri', 'answer' => true],
                     ['choise' => 'Ketidakpedulian', 'answer' => false],
                     ['choise' => 'Keengganan bekerja', 'answer' => false],
+                    ['choise' => 'Tidak ada yang tepat', 'answer' => false],
                 ],
             ],
             [
@@ -109,6 +116,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => 'Membantu sesuai prioritas pekerjaan', 'answer' => true],
                     ['choise' => 'Menyalahkan rekan kerja', 'answer' => false],
                     ['choise' => 'Mengabaikan permintaan', 'answer' => false],
+                    ['choise' => 'Menunda sampai besok', 'answer' => false],
                 ],
             ],
             [
@@ -121,6 +129,7 @@ class QuestionSeeder extends Seeder
                     ['choise' => 'Mempelajari dan menyesuaikan diri', 'answer' => true],
                     ['choise' => 'Membiarkan pekerjaan menumpuk', 'answer' => false],
                     ['choise' => 'Mengabaikan instruksi', 'answer' => false],
+                    ['choise' => 'Meminta aturan lama dipakai terus', 'answer' => false],
                 ],
             ],
         ];

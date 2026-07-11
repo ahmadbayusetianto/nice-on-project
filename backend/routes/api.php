@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -10,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use App\Models\User;
+use App\Notifications\AdminActivityNotification;
 
 function formatReferenceDisplay(?string $reference, ?string $referenceOther = null): string
 {
@@ -186,6 +189,81 @@ function parameterIntValue(string $code, int $default): int
     return (int) parameterValueByCode($code, $default);
 }
 
+function resolveAdminUsers(): \Illuminate\Support\Collection
+{
+    if (!Schema::hasTable('tbl_user')) {
+        return collect();
+    }
+
+    return User::query()
+        ->where('is_admin', 1)
+        ->where('status', 'active')
+        ->get();
+}
+
+function notifyAdminUsers(string $type, string $title, string $message, ?string $url = null, array $meta = [], ?array $actor = null): void
+{
+    $adminUsers = resolveAdminUsers();
+
+    if ($adminUsers->isEmpty()) {
+        return;
+    }
+
+    $payload = [
+        'type' => $type,
+        'title' => $title,
+        'message' => $message,
+        'url' => $url,
+        'icon' => $meta['icon'] ?? '🔔',
+        'meta' => $meta,
+        'actor' => $actor,
+    ];
+
+    Notification::send($adminUsers, new AdminActivityNotification($payload));
+}
+
+function mapAdminNotification(object $notification): array
+{
+    $rawData = $notification->data ?? [];
+
+    if (is_string($rawData)) {
+        $data = json_decode($rawData, true) ?: [];
+    } elseif (is_array($rawData)) {
+        $data = $rawData;
+    } elseif ($rawData instanceof \JsonSerializable) {
+        $data = (array) $rawData->jsonSerialize();
+    } else {
+        $data = (array) $rawData;
+    }
+
+    return [
+        'id' => (string) $notification->id,
+        'type' => (string) ($data['type'] ?? $notification->type ?? 'activity'),
+        'title' => (string) ($data['title'] ?? 'Notifikasi'),
+        'message' => (string) ($data['message'] ?? ''),
+        'icon' => (string) ($data['icon'] ?? '🔔'),
+        'url' => $data['url'] ?? null,
+        'meta' => $data['meta'] ?? [],
+        'actor' => $data['actor'] ?? null,
+        'read_at' => $notification->read_at ?? null,
+        'is_read' => $notification->read_at !== null,
+        'created_at' => $notification->created_at ?? null,
+        'created_at_human' => !empty($notification->created_at) ? Carbon::parse($notification->created_at)->diffForHumans() : null,
+    ];
+}
+
+function adminNotificationTableMissingResponse()
+{
+    return response()->json([
+        'message' => 'Tabel notifications belum tersedia. Jalankan migrasi database terlebih dahulu.',
+        'summary' => [
+            'total_notifications' => 0,
+            'unread_notifications' => 0,
+        ],
+        'data' => [],
+    ], 503);
+}
+
 function parameterBoolValue(string $code, bool $default): bool
 {
     $value = parameterValueByCode($code, $default ? '1' : '0');
@@ -259,10 +337,15 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
 
     $durationMinutes = parameterIntValue('exam.default_duration', 100);
     $expiresAt = null;
+    $startedAtTimestamp = null;
+    $expiresAtTimestamp = null;
 
     if (!empty($session->created_at)) {
         try {
-            $expiresAt = Carbon::parse($session->created_at)->addMinutes($durationMinutes)->toDateTimeString();
+            $startedAt = Carbon::parse($session->created_at);
+            $expiresAt = $startedAt->copy()->addMinutes($durationMinutes)->toDateTimeString();
+            $startedAtTimestamp = $startedAt->timestamp;
+            $expiresAtTimestamp = $startedAt->copy()->addMinutes($durationMinutes)->timestamp;
         } catch (Throwable $error) {
             $expiresAt = null;
         }
@@ -337,6 +420,8 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
             'is_finished' => (int) ($session->status ?? 0) === 1,
             'finish_at' => $session->finish_at ?? null,
             'created_at' => $session->created_at ?? null,
+            'started_at_timestamp' => $startedAtTimestamp,
+            'expires_at_timestamp' => $expiresAtTimestamp,
         ],
         'questions' => $questions,
         'settings' => [
@@ -1338,6 +1423,16 @@ Route::post('/tryout/start', function (Request $request) {
         return $ljkId;
     });
 
+    $user = DB::table('tbl_user')->where('pid', $validated['user_id'])->first();
+    notifyAdminUsers(
+        'tryout.started',
+        'Tryout dimulai',
+        'User ' . ($user->email ?? ('#' . $validated['user_id'])) . ' memulai tryout ' . $package->nama_paket . '.',
+        '/dashboard-admin/transactions',
+        ['icon' => '📝'],
+        ['pid' => (int) $validated['user_id'], 'package_id' => (int) $validated['package_id'], 'jenis_tryout' => $tryoutType]
+    );
+
     $payload = buildTryoutSessionPayload($ljkId, false);
 
     return response()->json([
@@ -1511,6 +1606,16 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
     });
 
     $payload = buildTryoutSessionPayload((int) $ljkId, true);
+
+    $user = DB::table('tbl_user')->where('pid', $userId)->first();
+    notifyAdminUsers(
+        'tryout.finished',
+        'Tryout selesai',
+        'User ' . ($user->email ?? ('#' . $userId)) . ' menyelesaikan tryout dengan skor ' . ($scoreTwk + $scoreTiu + $scoreTkp) . '.',
+        '/dashboard-admin/transactions',
+        ['icon' => '🏁'],
+        ['pid' => $userId, 'session_id' => (int) $ljkId, 'score_total' => $scoreTwk + $scoreTiu + $scoreTkp]
+    );
 
     return response()->json([
         'message' => 'Tryout selesai dan skor berhasil dihitung.',
@@ -2621,6 +2726,15 @@ Route::get('/materials/{pid}/view', function (Request $request, $pid) {
         'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
     ];
 
+    notifyAdminUsers(
+        'material.viewed',
+        'Materi dibuka user',
+        'User #' . $userId . ' membuka materi ' . $material->judul . '.',
+        '/dashboard-admin/materials',
+        ['icon' => '📄'],
+        ['pid' => $userId, 'material_id' => (int) $material->pid, 'package_id' => (int) $material->package_id]
+    );
+
     return response()->stream(function () use ($stream) {
         fpassthru($stream);
 
@@ -2728,6 +2842,148 @@ Route::get('/me', function (Request $request) {
     return response()->json([
         'authenticated' => $request->user() !== null,
         'user' => $request->user(),
+    ]);
+});
+
+Route::get('/admin/notifications', function (Request $request) {
+    if (!Schema::hasTable('notifications')) {
+        return adminNotificationTableMissingResponse();
+    }
+
+    $adminUserId = (int) $request->query('admin_user_id', $request->user()?->pid ?? 0);
+    $limit = max(1, min((int) $request->query('limit', 10), 50));
+
+    if ($adminUserId <= 0) {
+        return response()->json([
+            'message' => 'ID admin wajib diisi.',
+            'summary' => [
+                'total_notifications' => 0,
+                'unread_notifications' => 0,
+            ],
+            'data' => [],
+        ], 422);
+    }
+
+    $admin = User::query()
+        ->where('pid', $adminUserId)
+        ->where('is_admin', 1)
+        ->first();
+
+    if (!$admin) {
+        return response()->json([
+            'message' => 'Admin tidak ditemukan.',
+            'summary' => [
+                'total_notifications' => 0,
+                'unread_notifications' => 0,
+            ],
+            'data' => [],
+        ], 404);
+    }
+
+    $notifications = $admin->notifications()
+        ->orderByDesc('created_at')
+        ->limit($limit)
+        ->get()
+        ->map(fn ($notification) => mapAdminNotification($notification))
+        ->values();
+
+    return response()->json([
+        'message' => 'Notifikasi admin berhasil dimuat.',
+        'summary' => [
+            'total_notifications' => (int) $admin->notifications()->count(),
+            'unread_notifications' => (int) $admin->unreadNotifications()->count(),
+        ],
+        'data' => $notifications,
+    ]);
+});
+
+Route::get('/admin/notifications/unread-count', function (Request $request) {
+    if (!Schema::hasTable('notifications')) {
+        return adminNotificationTableMissingResponse();
+    }
+
+    $adminUserId = (int) $request->query('admin_user_id', $request->user()?->pid ?? 0);
+
+    if ($adminUserId <= 0) {
+        return response()->json(['message' => 'ID admin wajib diisi.', 'count' => 0], 422);
+    }
+
+    $admin = User::query()
+        ->where('pid', $adminUserId)
+        ->where('is_admin', 1)
+        ->first();
+
+    if (!$admin) {
+        return response()->json(['message' => 'Admin tidak ditemukan.', 'count' => 0], 404);
+    }
+
+    return response()->json([
+        'message' => 'Jumlah notifikasi belum dibaca berhasil dimuat.',
+        'count' => (int) $admin->unreadNotifications()->count(),
+    ]);
+});
+
+Route::patch('/admin/notifications/{notificationId}/read', function (Request $request, string $notificationId) {
+    if (!Schema::hasTable('notifications')) {
+        return adminNotificationTableMissingResponse();
+    }
+
+    $adminUserId = (int) $request->input('admin_user_id', $request->query('admin_user_id', $request->user()?->pid ?? 0));
+
+    if ($adminUserId <= 0) {
+        return response()->json(['message' => 'ID admin wajib diisi.'], 422);
+    }
+
+    $admin = User::query()
+        ->where('pid', $adminUserId)
+        ->where('is_admin', 1)
+        ->first();
+
+    if (!$admin) {
+        return response()->json(['message' => 'Admin tidak ditemukan.'], 404);
+    }
+
+    $notification = $admin->notifications()->where('id', $notificationId)->first();
+
+    if (!$notification) {
+        return response()->json(['message' => 'Notifikasi tidak ditemukan.'], 404);
+    }
+
+    if ($notification->read_at === null) {
+        $notification->markAsRead();
+    }
+
+    return response()->json([
+        'message' => 'Notifikasi berhasil ditandai sebagai dibaca.',
+        'data' => mapAdminNotification($notification->fresh()),
+    ]);
+});
+
+Route::patch('/admin/notifications/read-all', function (Request $request) {
+    if (!Schema::hasTable('notifications')) {
+        return adminNotificationTableMissingResponse();
+    }
+
+    $adminUserId = (int) $request->input('admin_user_id', $request->query('admin_user_id', $request->user()?->pid ?? 0));
+
+    if ($adminUserId <= 0) {
+        return response()->json(['message' => 'ID admin wajib diisi.'], 422);
+    }
+
+    $admin = User::query()
+        ->where('pid', $adminUserId)
+        ->where('is_admin', 1)
+        ->first();
+
+    if (!$admin) {
+        return response()->json(['message' => 'Admin tidak ditemukan.'], 404);
+    }
+
+    $updated = $admin->unreadNotifications()->update(['read_at' => now()]);
+
+    return response()->json([
+        'message' => 'Semua notifikasi berhasil ditandai sebagai dibaca.',
+        'updated' => (int) $updated,
     ]);
 });
 
@@ -2880,6 +3136,15 @@ Route::post('/register', function (Request $request) {
 
     Cache::forget($cacheKey);
 
+    notifyAdminUsers(
+        'user.registered',
+        'User baru terdaftar',
+        'Akun baru dibuat dengan email ' . $input['email'] . '.',
+        '/dashboard-admin/users',
+        ['icon' => '🆕'],
+        ['pid' => $userId, 'email' => $input['email']]
+    );
+
     return response()->json([
         'message' => 'Akun berhasil dibuat.',
         'data' => [
@@ -2935,6 +3200,15 @@ Route::post('/login', function (Request $request) {
     $detailUser = DB::table('tbl_detail_user')
         ->where('pid_user', $user->pid)
         ->first();
+
+    notifyAdminUsers(
+        'user.login',
+        'User login',
+        'User ' . ($user->email ?? 'unknown') . ' berhasil login.',
+        '/dashboard-admin/users',
+        ['icon' => '🔐'],
+        ['pid' => (int) $user->pid, 'email' => (string) $user->email]
+    );
 
     return response()->json([
         'message' => 'Login berhasil.',
@@ -3023,6 +3297,19 @@ Route::post('/complete-profile', function (Request $request) {
             'updated_by' => null,
         ]);
     }
+
+    $profileUser = DB::table('tbl_user')
+        ->where('pid', $input['pid_user'])
+        ->first();
+
+    notifyAdminUsers(
+        'user.profile_completed',
+        'Profil user diperbarui',
+        'Profil ' . ($input['nama'] ?: ($profileUser->email ?? 'user')) . ' sudah dilengkapi.',
+        '/dashboard-admin/users',
+        ['icon' => '👤'],
+        ['pid' => (int) $input['pid_user'], 'email' => $profileUser->email ?? null]
+    );
 
     return response()->json([
         'message' => 'Profil berhasil disimpan.',

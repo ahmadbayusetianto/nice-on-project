@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import faviconImage from '../../favicon.png'
 import niceonImage from '../../niceon.png'
-import './App.css'
+import './AppStyles.css'
 
 const DEFAULT_BACKEND_URL = import.meta.env.PROD ? 'https://api.niceon.id' : 'http://127.0.0.1:8000'
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BACKEND_URL
@@ -397,6 +397,9 @@ function formatParameterValue(detail = {}) {
 
 function AdminTopbar({
   title,
+  subtitle,
+  showTitle = true,
+  showSubtitle = true,
   searchPlaceholder,
   currentDateLabel,
   displayName,
@@ -408,9 +411,12 @@ function AdminTopbar({
   onHomeClick,
   onResumeProfile,
   onLogout,
+  notificationItems = [],
+  onNotificationItemClick,
 }) {
   const profileMenuRef = useRef(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [notificationItemsState, setNotificationItemsState] = useState(null)
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -434,6 +440,58 @@ function AdminTopbar({
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const adminUserId = Number(profileUser?.pid || 0)
+    if (!adminUserId) {
+      setNotificationItemsState([])
+      return undefined
+    }
+
+    let cancelled = false
+
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/admin/notifications?admin_user_id=${adminUserId}&limit=8`)
+        const contentType = response.headers.get('content-type') || ''
+        const rawBody = await response.text()
+        const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+        if (!response.ok) {
+          throw new Error(payload?.message || 'Notifikasi admin gagal dimuat.')
+        }
+
+        if (!cancelled) {
+          const normalizedItems = Array.isArray(payload?.data)
+            ? payload.data.map((item) => ({
+                id: item.id,
+                title: item.title || 'Notifikasi',
+                description: item.message || '',
+                time: item.created_at_human || '',
+                icon: item.icon || '🔔',
+                accent: item.type?.includes('tryout') ? 'green' : item.type?.includes('material') ? 'orange' : item.type?.includes('user') ? 'purple' : 'blue',
+                href: item.url || '/dashboard-admin',
+                read: Boolean(item.is_read),
+              }))
+            : []
+
+          setNotificationItemsState(normalizedItems)
+        }
+      } catch {
+        if (!cancelled) setNotificationItemsState([])
+      }
+    }
+
+    void loadNotifications()
+    const timer = window.setInterval(() => { void loadNotifications() }, 60000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [profileUser?.pid])
+
   const profileInitials = (displayName || 'AB')
     .split(/\s+/)
     .filter(Boolean)
@@ -441,6 +499,74 @@ function AdminTopbar({
     .map((part) => part[0])
     .join('')
     .toUpperCase() || 'AB'
+
+  const fallbackNotifications = [
+    {
+      id: 'admin-dashboard',
+      title: 'Ringkasan admin',
+      description: 'Lihat status platform dan aktivitas terbaru.',
+      time: 'Baru',
+      icon: '📊',
+      accent: 'blue',
+      href: '/dashboard-admin',
+    },
+    {
+      id: 'admin-questions',
+      title: 'Bank soal',
+      description: 'Ada pembaruan pada data soal atau opsi.',
+      time: '10 mnt',
+      icon: '✎',
+      accent: 'green',
+      href: '/dashboard-admin/questions',
+    },
+    {
+      id: 'admin-settings',
+      title: 'Pengaturan sistem',
+      description: 'Cek parameter dan FAQ yang baru diperbarui.',
+      time: 'Hari ini',
+      icon: '⚙️',
+      accent: 'purple',
+      href: '/dashboard-admin/settings/parameters',
+    },
+  ]
+
+  const resolvedNotifications = notificationItemsState === null ? notificationItems : notificationItemsState
+
+  const markNotificationRead = async (item) => {
+    const adminUserId = Number(profileUser?.pid || 0)
+    if (!adminUserId || !item?.id) return
+
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/notifications/${item.id}/read`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ admin_user_id: adminUserId }),
+      })
+    } catch {
+      // Keep local state; backend will retry on next refresh.
+    }
+  }
+
+  const markAllNotificationsRead = async () => {
+    const adminUserId = Number(profileUser?.pid || 0)
+    if (!adminUserId) return
+
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/notifications/read-all`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ admin_user_id: adminUserId }),
+      })
+    } catch {
+      // Keep local state; backend will retry on next refresh.
+    }
+  }
 
   return (
     <header className="admin-topbar">
@@ -453,7 +579,12 @@ function AdminTopbar({
         >
           ☰
         </button>
-        <h1>{title}</h1>
+        {showTitle ? (
+          <div className="admin-topbar-title-copy">
+            <h1>{title}</h1>
+            {showSubtitle && subtitle ? <p className="admin-topbar-subtitle">{subtitle}</p> : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="admin-topbar-right">
@@ -468,10 +599,16 @@ function AdminTopbar({
           </label>
         ) : null}
 
-        <button type="button" className="admin-notification-button" aria-label="Notifikasi">
-          🔔
-          <span className="admin-notification-badge">3</span>
-        </button>
+        <DashboardNotificationMenu
+          items={resolvedNotifications}
+          onItemClick={onNotificationItemClick}
+          onMarkItemRead={markNotificationRead}
+          onMarkAllRead={markAllNotificationsRead}
+          ariaLabel="Notifikasi admin"
+          className="admin-notification-menu-wrap"
+          buttonClassName="admin-notification-button"
+          badgeClassName="admin-notification-badge"
+        />
 
         <button type="button" className="admin-date-chip">
           <span aria-hidden="true">📅</span>
@@ -524,6 +661,132 @@ function AdminTopbar({
         </div>
       </div>
     </header>
+  )
+}
+
+function DashboardNotificationMenu({
+  items,
+  onItemClick,
+  onMarkItemRead,
+  onMarkAllRead,
+  className = '',
+  ariaLabel = 'Notifikasi',
+  buttonClassName = 'dashboard-notification-button',
+  badgeClassName = 'dashboard-notification-badge',
+}) {
+  const menuRef = useRef(null)
+  const [isOpen, setIsOpen] = useState(false)
+  const [seenIds, setSeenIds] = useState(() => new Set(items.filter((item) => item.read).map((item) => item.id)))
+
+  useEffect(() => {
+    setSeenIds((current) => {
+      const next = new Set()
+      items.forEach((item) => {
+        if (current.has(item.id) || item.read) {
+          next.add(item.id)
+        }
+      })
+      return next
+    })
+  }, [items])
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  const unreadCount = items.reduce((count, item) => count + ((seenIds.has(item.id) || item.read) ? 0 : 1), 0)
+
+  const handleItemClick = (item) => {
+    setSeenIds((current) => {
+      const next = new Set(current)
+      next.add(item.id)
+      return next
+    })
+    setIsOpen(false)
+    onMarkItemRead?.(item)
+    onItemClick?.(item)
+  }
+
+  const handleMarkAllRead = () => {
+    setSeenIds(new Set(items.map((item) => item.id)))
+    onMarkAllRead?.()
+  }
+
+  return (
+    <div className={`dashboard-notification-menu-wrap ${className}`.trim()} ref={menuRef}>
+      <button
+        type="button"
+        className={buttonClassName}
+        aria-label={ariaLabel}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        🔔
+        {unreadCount > 0 ? <span className={badgeClassName}>{unreadCount}</span> : null}
+      </button>
+
+      {isOpen ? (
+        <div className="dashboard-notification-dropdown" role="menu" aria-label="Daftar notifikasi">
+          <div className="dashboard-notification-header">
+            <div>
+              <strong>Notifikasi</strong>
+              <span>{unreadCount > 0 ? `${unreadCount} belum dibaca` : 'Semua notifikasi sudah dibaca'}</span>
+            </div>
+            {unreadCount > 0 ? (
+              <button type="button" className="dashboard-notification-mark-read" onClick={handleMarkAllRead}>
+                Tandai semua
+              </button>
+            ) : null}
+          </div>
+
+          <div className="dashboard-notification-list">
+            {items.length ? items.map((item) => {
+              const isRead = seenIds.has(item.id) || item.read
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`dashboard-notification-item${isRead ? ' read' : ''}`}
+                  role="menuitem"
+                  onClick={() => handleItemClick(item)}
+                >
+                  <span className={`dashboard-notification-item-icon ${item.accent || 'blue'}`} aria-hidden="true">
+                    {item.icon || '🔔'}
+                  </span>
+                  <div className="dashboard-notification-item-copy">
+                    <strong>{item.title}</strong>
+                    <p>{item.description}</p>
+                  </div>
+                  <span className="dashboard-notification-item-time">{item.time || ''}</span>
+                </button>
+              )
+            }) : (
+              <div className="dashboard-notification-empty">Tidak ada notifikasi.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -1145,9 +1408,12 @@ function AdminQuestionFormModal({
           <div className="admin-question-form-layout">
             <section className="admin-question-panel admin-question-panel-left">
               <div className="admin-question-panel-head">
-                <div>
+                <div className="admin-question-panel-head-title">
+                  <span className="admin-question-panel-head-icon" aria-hidden="true">i</span>
+                  <div>
                   <h4>Informasi Soal</h4>
                   <p>Isi data utama soal sebelum menambahkan opsi jawaban.</p>
+                  </div>
                 </div>
               </div>
 
@@ -1274,12 +1540,19 @@ function AdminQuestionFormModal({
             </section>
 
             <section className="admin-question-panel admin-question-panel-right">
-              <div className="admin-question-panel-head admin-question-panel-head-space">
-                <div>
-                  <h4>Opsi Jawaban</h4>
-                  <p>Minimal 2 opsi, pilih 1 jawaban benar.</p>
+                <div className="admin-question-panel-head admin-question-panel-head-space">
+                  <div>
+                    <h4>Opsi Jawaban</h4>
+                    <p>Minimal 2 opsi, maksimal 5 opsi (A-E), pilih 1 jawaban benar.</p>
+                  </div>
                 </div>
-                <button type="button" className="admin-outline-action admin-question-add-option" onClick={onAddOption} disabled={loading}>＋ Tambah Opsi</button>
+
+              <div className="admin-question-option-info" role="note" aria-label="Informasi opsi jawaban">
+                <span className="admin-question-option-info-icon" aria-hidden="true">💡</span>
+                <div>
+                  <strong>Pilih jawaban yang benar</strong>
+                  <p>Pilih satu opsi yang paling tepat sebagai jawaban benar.</p>
+                </div>
               </div>
 
               <div className="admin-question-options-list">
@@ -1312,7 +1585,7 @@ function AdminQuestionFormModal({
                         onChange={() => onSetCorrectOption(index)}
                         disabled={loading}
                       />
-                      <span>Jawaban benar</span>
+                      <span className="sr-only">Jawaban benar</span>
                     </label>
 
                     <button
@@ -1971,6 +2244,7 @@ function AdminQuestionManagementPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-question-hero">
@@ -2417,6 +2691,7 @@ function AdminTransactionManagementPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-transaction-hero">
@@ -4285,6 +4560,27 @@ function AccountProfilePage() {
     navigate('/login', { replace: true })
   }
 
+  const profileNotifications = [
+    {
+      id: 'profile-complete',
+      title: 'Profil akun',
+      description: isAdminProfile ? 'Pastikan data admin tetap terbarui.' : 'Lengkapi profil agar fitur belajar aktif penuh.',
+      time: 'Baru',
+      icon: '👤',
+      accent: 'purple',
+      href: '/dashboard-user',
+    },
+    {
+      id: 'profile-security',
+      title: 'Keamanan akun',
+      description: 'Ganti sandi secara berkala untuk menjaga akses.',
+      time: '15 mnt',
+      icon: '🔒',
+      accent: 'orange',
+      href: '/account-profile',
+    },
+  ]
+
   return (
     <div className={`${isAdminProfile ? 'admin-dashboard-page' : 'dashboard-page dashboard-page-v2'} account-profile-page`}>
       <div className={`${isAdminProfile ? 'admin-dashboard-shell' : 'dashboard-shell dashboard-shell-v2'}${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -4358,9 +4654,7 @@ function AccountProfilePage() {
                   <input type="search" placeholder="Cari sesuatu..." />
                   <kbd>⌘K</kbd>
                 </label>
-                <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">
-                  🔔<span className="dashboard-notification-dot" />
-                </button>
+                <DashboardNotificationMenu items={profileNotifications} onItemClick={(item) => navigate(item.href, { state: { user: activeProfile } })} />
                 <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
                   <button
                     type="button"
@@ -4756,6 +5050,36 @@ function DashboardUserPageV2() {
     'Pantau progres dari riwayat sesi berikutnya.',
   ]
 
+  const dashboardNotifications = [
+    {
+      id: 'dashboard-materials',
+      title: 'Materi siap dibuka',
+      description: 'Ada materi terbaru yang bisa kamu pelajari sekarang.',
+      time: 'Baru',
+      icon: '📚',
+      accent: 'blue',
+      href: '/dashboard-user/materials',
+    },
+    {
+      id: 'dashboard-tryout',
+      title: 'Tryout menunggu',
+      description: 'Coba sesi tryout berikutnya untuk melihat progres.',
+      time: '10 mnt',
+      icon: '📝',
+      accent: 'green',
+      href: '/dashboard-user/tryout',
+    },
+    {
+      id: 'dashboard-profile',
+      title: 'Profil akun',
+      description: isProfileComplete ? 'Profil kamu sudah rapi.' : 'Lengkapi profil agar dashboard makin maksimal.',
+      time: 'Hari ini',
+      icon: '👤',
+      accent: 'purple',
+      href: '/account-profile',
+    },
+  ]
+
   const handleLogout = () => {
     setShowLogoutConfirm(true)
   }
@@ -4795,12 +5119,10 @@ function DashboardUserPageV2() {
             </div>
 
             <div className="dashboard-topbar-right">
-              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/')}>
+              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/')}> 
                 🏠
               </button>
-              <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">
-                🔔<span className="dashboard-notification-dot" />
-              </button>
+              <DashboardNotificationMenu items={dashboardNotifications} onItemClick={(item) => navigate(item.href, { state: { user } })} />
               <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
                 <button
                   type="button"
@@ -4932,6 +5254,8 @@ function UserTryoutPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const profileMenuRef = useRef(null)
+  const autoFinishTriggeredRef = useRef(false)
+  const timerTimeoutRef = useRef(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
 
@@ -4941,15 +5265,18 @@ function UserTryoutPage() {
   const [packageRows, setPackageRows] = useState([])
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
+  const [packageSearch, setPackageSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('ALL')
   const [selectedTryoutType, setSelectedTryoutType] = useState('SKD')
+  const [packageLayout, setPackageLayout] = useState('grid')
   const [tryoutData, setTryoutData] = useState(null)
   const [tryoutLoading, setTryoutLoading] = useState(true)
   const [tryoutError, setTryoutError] = useState(null)
   const [answerMap, setAnswerMap] = useState({})
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [remainingSeconds, setRemainingSeconds] = useState(0)
-  const [isStarting, setIsStarting] = useState(false)
+  const [timerReady, setTimerReady] = useState(false)
+  const [startingPackageId, setStartingPackageId] = useState(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const [resultData, setResultData] = useState(null)
 
@@ -5072,31 +5399,68 @@ function UserTryoutPage() {
     const firstUnansweredIndex = tryoutData.questions.findIndex((question) => !question.selected_option_id)
     setCurrentQuestionIndex(firstUnansweredIndex >= 0 ? firstUnansweredIndex : 0)
     setResultData(tryoutData.session?.is_finished ? tryoutData : null)
+    autoFinishTriggeredRef.current = Boolean(tryoutData.session?.is_finished)
+    setTimerReady(false)
   }, [tryoutData])
 
   useEffect(() => {
     if (!tryoutData || tryoutData.session?.is_finished) {
       setRemainingSeconds(0)
+      setTimerReady(false)
       return undefined
     }
 
+    if (timerTimeoutRef.current) {
+      window.clearTimeout(timerTimeoutRef.current)
+      timerTimeoutRef.current = null
+    }
+
     const durationMinutes = Number(tryoutData.settings?.duration_minutes || 100)
-    const expiresAtRaw = tryoutData.settings?.expires_at || null
-    const startedAt = new Date(tryoutData.session.created_at).getTime()
-    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw).getTime() : startedAt + (durationMinutes * 60 * 1000)
+    const expiresAtTimestamp = Number(tryoutData.session?.expires_at_timestamp || 0)
+    const startedAtTimestamp = Number(tryoutData.session?.started_at_timestamp || 0)
+    const createdAtTimestamp = Number(new Date(tryoutData.session.created_at).getTime())
+    const expiresAt = Number.isFinite(expiresAtTimestamp) && expiresAtTimestamp > 0
+      ? expiresAtTimestamp * 1000
+      : (Number.isFinite(startedAtTimestamp) && startedAtTimestamp > 0
+        ? startedAtTimestamp * 1000 + (durationMinutes * 60 * 1000)
+        : (Number.isFinite(createdAtTimestamp) ? createdAtTimestamp + (durationMinutes * 60 * 1000) : NaN))
 
     const updateTimer = () => {
-      const nextRemaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
-      setRemainingSeconds(nextRemaining)
+      if (!Number.isFinite(expiresAt)) {
+        setRemainingSeconds(0)
+        return
+      }
+
+      const remainingMs = Math.max(0, expiresAt - Date.now())
+      setRemainingSeconds(Math.ceil(remainingMs / 1000))
+
+      if (remainingMs <= 0) {
+        return
+      }
+
+      const nextDelay = Math.max(50, 1000 - (Date.now() % 1000))
+      timerTimeoutRef.current = window.setTimeout(updateTimer, nextDelay)
     }
 
     updateTimer()
-    const timer = window.setInterval(updateTimer, 1000)
+    setTimerReady(true)
 
     return () => {
-      window.clearInterval(timer)
+      if (timerTimeoutRef.current) {
+        window.clearTimeout(timerTimeoutRef.current)
+        timerTimeoutRef.current = null
+      }
     }
   }, [tryoutData, isFinishing])
+
+  useEffect(() => {
+    if (!tryoutData || tryoutData.session?.is_finished || !timerReady) return
+    if (remainingSeconds > 0) return
+    if (isFinishing || autoFinishTriggeredRef.current) return
+
+    autoFinishTriggeredRef.current = true
+    void finishTryout()
+  }, [remainingSeconds, tryoutData, isFinishing, timerReady])
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: '/dashboard-user/tryout' }} />
@@ -5122,14 +5486,28 @@ function UserTryoutPage() {
   ]
 
   const filteredPackages = packageRows.filter((item) => {
-    if (selectedCategory === 'ALL') return true
-    return String(item.kategori || '').trim().toUpperCase() === selectedCategory
+    const search = packageSearch.trim().toLowerCase()
+    const matchesCategory = String(item.kategori || '').trim().toUpperCase() === selectedCategory
+    if (selectedCategory !== 'ALL' && !matchesCategory) return false
+
+    if (!search) return true
+
+    return [item.nama_paket, item.kategori, item.formasi, item.jadwal, item.ket]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(search))
   })
+
+  const packageStats = [
+    { label: 'Paket Aktif', value: String(filteredPackages.length), description: 'Paket tersedia', icon: '📦', tone: 'blue' },
+    { label: 'Sesi Berjalan', value: tryoutData ? '1' : '0', description: 'Sesi aktif', icon: '⏱️', tone: 'orange' },
+    { label: 'Jawaban Tersimpan', value: tryoutData ? String(Object.keys(answerMap).length) : '0', description: 'Belum disubmit', icon: '✅', tone: 'green' },
+  ]
 
   const currentQuestions = tryoutData?.questions || []
   const currentQuestion = currentQuestions[currentQuestionIndex] || currentQuestions[0] || null
   const answeredCount = currentQuestions.filter((question) => answerMap[String(question.id)]).length
   const progressPercent = currentQuestions.length ? Math.round((answeredCount / currentQuestions.length) * 100) : 0
+  const isTryoutExpired = Boolean(tryoutData && !tryoutData.session?.is_finished && remainingSeconds <= 0)
 
   const handleLogout = () => {
     setShowLogoutConfirm(true)
@@ -5144,7 +5522,7 @@ function UserTryoutPage() {
   const startTryout = async (packageRow) => {
     if (!packageRow?.pid || !user?.pid) return
 
-    setIsStarting(true)
+    setStartingPackageId(packageRow.pid)
     setTryoutError(null)
 
     try {
@@ -5176,12 +5554,13 @@ function UserTryoutPage() {
       setTryoutError(error instanceof Error ? error.message : 'Tryout gagal dimulai.')
       setTryoutLoading(false)
     } finally {
-      setIsStarting(false)
+      setStartingPackageId(null)
     }
   }
 
   const saveAnswer = async (questionId, optionId) => {
     if (!tryoutData?.session?.id || !user?.pid) return
+    if (tryoutData?.session?.is_finished || remainingSeconds <= 0 || isFinishing) return
 
     setAnswerMap((current) => ({
       ...current,
@@ -5254,6 +5633,27 @@ function UserTryoutPage() {
     return 'belum'
   }
 
+  const tryoutNotifications = [
+    {
+      id: 'tryout-session',
+      title: 'Sesi tryout aktif',
+      description: 'Jawaban tersimpan otomatis selama sesi berlangsung.',
+      time: 'Baru',
+      icon: '⏱️',
+      accent: 'blue',
+      href: '/dashboard-user/tryout',
+    },
+    {
+      id: 'tryout-result',
+      title: 'Hasil evaluasi',
+      description: 'Lihat hasil tryout setelah sesi selesai.',
+      time: 'Segera',
+      icon: '📈',
+      accent: 'green',
+      href: '/dashboard-user',
+    },
+  ]
+
   return (
     <div className="dashboard-page dashboard-page-v2 user-tryout-page">
       <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -5286,9 +5686,7 @@ function UserTryoutPage() {
               <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/dashboard-user', { state: { user } })}>
                 🏠
               </button>
-              <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">
-                🔔<span className="dashboard-notification-dot" />
-              </button>
+              <DashboardNotificationMenu items={tryoutNotifications} onItemClick={(item) => navigate(item.href, { state: { user } })} />
               <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
                 <button
                   type="button"
@@ -5351,16 +5749,16 @@ function UserTryoutPage() {
                     <strong>{tryoutData.session.jenis_tryout || 'SKD'}</strong>
                   </article>
                   <article>
+                    <span>Progress</span>
+                    <strong>{progressPercent}%</strong>
+                  </article>
+                  <article>
                     <span>Sisa Waktu</span>
                     <strong>{formatTryoutCountdown(remainingSeconds)}</strong>
                   </article>
                   <article>
-                    <span>Terjawab</span>
+                    <span>Soal</span>
                     <strong>{answeredCount}/{currentQuestions.length}</strong>
-                  </article>
-                  <article>
-                    <span>Progress</span>
-                    <strong>{progressPercent}%</strong>
                   </article>
                 </div>
               </div>
@@ -5390,6 +5788,7 @@ function UserTryoutPage() {
                               key={option.id ?? `${currentQuestion.id}-${index}`}
                               type="button"
                               className={`user-tryout-option${selected ? ' selected' : ''}`}
+                              disabled={isFinishing || isTryoutExpired}
                               onClick={() => {
                                 void saveAnswer(currentQuestion.id, option.id)
                               }}
@@ -5410,7 +5809,7 @@ function UserTryoutPage() {
                       type="button"
                       className="dashboard-secondary-action"
                       onClick={() => setCurrentQuestionIndex((current) => Math.max(0, current - 1))}
-                      disabled={currentQuestionIndex <= 0}
+                      disabled={currentQuestionIndex <= 0 || isTryoutExpired || isFinishing}
                     >
                       Soal Sebelumnya
                     </button>
@@ -5418,7 +5817,7 @@ function UserTryoutPage() {
                       type="button"
                       className="dashboard-primary-action"
                       onClick={() => setCurrentQuestionIndex((current) => Math.min(currentQuestions.length - 1, current + 1))}
-                      disabled={currentQuestionIndex >= currentQuestions.length - 1}
+                      disabled={currentQuestionIndex >= currentQuestions.length - 1 || isTryoutExpired || isFinishing}
                     >
                       Soal Berikutnya
                     </button>
@@ -5458,7 +5857,6 @@ function UserTryoutPage() {
                       <div><span>Paket</span><strong>{tryoutData.session.package_name}</strong></div>
                       <div><span>Durasi</span><strong>{tryoutData.settings.duration_minutes} menit</strong></div>
                       <div><span>Jawaban</span><strong>{answeredCount}</strong></div>
-                      <div><span>Sisa</span><strong>{formatTryoutCountdown(remainingSeconds)}</strong></div>
                     </div>
                     <button type="button" className="dashboard-primary-action user-tryout-finish-button" onClick={() => void finishTryout()} disabled={isFinishing}>
                       {isFinishing ? 'Menutup...' : 'Kumpulkan Jawaban'}
@@ -5520,64 +5918,152 @@ function UserTryoutPage() {
 
           {!tryoutData && !tryoutLoading ? (
             <>
-              <section className="user-tryout-hero-card">
-                <div>
-                  <div className="dashboard-status-pill success">Simulasi Tryout</div>
+              <section className="user-tryout-hero-card user-tryout-hero-card-ref">
+                <div className="user-tryout-hero-copy">
+                  <div className="dashboard-status-pill success user-tryout-hero-pill">Simulasi Tryout</div>
                   <h2>Latihan CAT dengan alur yang mendekati ujian asli.</h2>
                   <p>Pilih paket tryout, mulai sesi, dan kerjakan soal dengan timer yang berjalan otomatis.</p>
+
+                  <div className="user-tryout-hero-stats user-tryout-hero-stats-ref">
+                    {packageStats.map((item) => (
+                      <article className={`user-tryout-stat-card ${item.tone}`} key={item.label}>
+                        <span className={`user-tryout-stat-icon ${item.tone}`} aria-hidden="true">{item.icon}</span>
+                        <div>
+                          <strong>{item.label}</strong>
+                          <b>{item.value}</b>
+                          <small>{item.description}</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </div>
-                <div className="user-tryout-hero-stats">
-                  {quickStats.map(([label, value]) => (
-                    <article key={label}>
-                      <span>{label}</span>
-                      <strong>{value}</strong>
-                    </article>
-                  ))}
+
+                <div className="user-tryout-hero-art" aria-hidden="true">
+                  <div className="user-tryout-art-cloud one" />
+                  <div className="user-tryout-art-cloud two" />
+                  <div className="user-tryout-art-monitor">
+                    <span className="line" />
+                    <span className="line short" />
+                    <span className="line tiny" />
+                    <i className="dot" />
+                  </div>
+                  <div className="user-tryout-art-base" />
+                  <div className="user-tryout-art-clock">
+                    <span className="hand hour" />
+                    <span className="hand minute" />
+                  </div>
                 </div>
               </section>
 
-              <section className="user-tryout-filter-row">
-                {['ALL', 'CPNS', 'PPPK'].map((category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    className={`user-tryout-filter-pill${selectedCategory === category ? ' active' : ''}`}
-                    onClick={() => setSelectedCategory(category)}
-                  >
-                    {category === 'ALL' ? 'Semua Paket' : category}
-                  </button>
-                ))}
+              <section className="user-tryout-toolbar">
+                <div className="user-tryout-toolbar-left">
+                  <section className="user-tryout-filter-row">
+                    {['ALL', 'CPNS', 'PPPK'].map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className={`user-tryout-filter-pill${selectedCategory === category ? ' active' : ''}`}
+                        onClick={() => setSelectedCategory(category)}
+                      >
+                        {category === 'ALL' ? 'Semua Paket' : category}
+                      </button>
+                    ))}
+                  </section>
+
+                  <section className="user-tryout-type-row" aria-label="Pilih jenis tryout">
+                    {['SKD', 'SKB'].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`user-tryout-type-pill${selectedTryoutType === type ? ' active' : ''}`}
+                        onClick={() => setSelectedTryoutType(type)}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </section>
+                </div>
+
+                <div className="user-tryout-toolbar-right">
+                  <label className="user-tryout-search">
+                    <span aria-hidden="true">⌕</span>
+                    <input
+                      type="search"
+                      placeholder="Cari paket tryout..."
+                      value={packageSearch}
+                      onChange={(event) => setPackageSearch(event.target.value)}
+                    />
+                  </label>
+
+                  <div className="user-tryout-layout-toggle" role="group" aria-label="Ubah tampilan paket">
+                    <button
+                      type="button"
+                      className={packageLayout === 'grid' ? 'active' : ''}
+                      onClick={() => setPackageLayout('grid')}
+                      aria-pressed={packageLayout === 'grid'}
+                    >
+                      ⊞
+                    </button>
+                    <button
+                      type="button"
+                      className={packageLayout === 'list' ? 'active' : ''}
+                      onClick={() => setPackageLayout('list')}
+                      aria-pressed={packageLayout === 'list'}
+                    >
+                      ☰
+                    </button>
+                  </div>
+                </div>
               </section>
 
-              <section className="user-tryout-type-row" aria-label="Pilih jenis tryout">
-                {['SKD', 'SKB'].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`user-tryout-type-pill${selectedTryoutType === type ? ' active' : ''}`}
-                    onClick={() => setSelectedTryoutType(type)}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </section>
-
-              <section className="user-tryout-package-grid">
+              <section className={`user-tryout-package-grid${packageLayout === 'list' ? ' list-view' : ''}`}>
                 {packageLoading ? <div className="dashboard-alert">Memuat paket tryout...</div> : null}
                 {filteredPackages.map((item) => (
                   <article className="user-tryout-package-card" key={item.pid}>
-                    <div className="user-tryout-package-badge">{String(item.kategori || 'PROGRAM').toUpperCase()}</div>
+                    <div className="user-tryout-package-card-head">
+                      <div className="user-tryout-package-badge">{String(item.kategori || 'PROGRAM').toUpperCase()}</div>
+                      <button type="button" className="user-tryout-bookmark" aria-label="Simpan paket">🔖</button>
+                    </div>
                     <h3>{item.nama_paket}</h3>
                     <p>{item.formasi || item.jadwal || item.ket || 'Paket tryout siap dikerjakan.'}</p>
-                    <div className="user-tryout-package-meta">
-                      <span>{item.jadwal || 'Jadwal fleksibel'}</span>
-                      <strong>{formatCurrency(item.harga)}</strong>
+                    <div className="user-tryout-package-meta-grid">
+                      <div>
+                        <span>Jenis</span>
+                        <strong>{item.kategori || '-'}</strong>
+                      </div>
+                      <div>
+                        <span>Jadwal</span>
+                        <strong>{item.jadwal || 'Fleksibel'}</strong>
+                      </div>
+                      <div>
+                        <span>Level</span>
+                        <strong>{item.formasi || 'Dasar'}</strong>
+                      </div>
                     </div>
-                    <button type="button" className="dashboard-primary-action" onClick={() => void startTryout(item)} disabled={isStarting}>
-                      {isStarting ? 'Memulai...' : `Mulai ${selectedTryoutType}`}
-                    </button>
+                    <div className="user-tryout-package-action-row">
+                      <strong>{formatCurrency(item.harga)}</strong>
+                      <button
+                        type="button"
+                        className="dashboard-primary-action user-tryout-start-button"
+                        onClick={() => void startTryout(item)}
+                        disabled={startingPackageId !== null && startingPackageId !== item.pid}
+                      >
+                        {startingPackageId === item.pid ? 'Memulai...' : `Mulai ${selectedTryoutType}`}
+                      </button>
+                    </div>
                   </article>
                 ))}
+              </section>
+
+              <section className="user-tryout-info-banner">
+                <div className="user-tryout-info-banner-copy">
+                  <div className="user-tryout-info-icon" aria-hidden="true">i</div>
+                  <div>
+                    <strong>Informasi</strong>
+                    <p>Tryout akan berjalan dengan timer otomatis dan tidak dapat dijeda. Pastikan koneksi internet stabil sebelum memulai.</p>
+                  </div>
+                </div>
+                <div className="user-tryout-info-banner-art" aria-hidden="true" />
               </section>
             </>
           ) : null}
@@ -5750,6 +6236,7 @@ function AdminDashboardPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-hero-row">
@@ -6107,6 +6594,8 @@ function AdminUserManagementPage() {
         <main className="admin-main admin-user-main">
           <AdminTopbar
             title="Manajemen User"
+            subtitle="Kelola data pengguna yang terdaftar dalam sistem."
+            showTitle={false}
             searchPlaceholder="Cari user..."
             currentDateLabel={currentDateLabel}
             displayName={displayName}
@@ -6117,13 +6606,20 @@ function AdminUserManagementPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
-          <section className="admin-user-toolbar">
-            <div />
-            <div className="admin-user-actions">
-              <button type="button" className="admin-outline-action">Export</button>
-              <button type="button" className="admin-primary-action">+ Tambah User</button>
+          <section className="admin-package-hero admin-user-hero">
+            <div>
+              <h2>Manajemen User</h2>
+              <div className="admin-breadcrumb">
+                Dashboard <span>›</span> User
+              </div>
+            </div>
+
+            <div className="admin-package-actions admin-user-actions">
+              <button type="button" className="admin-outline-action">⬇ Export</button>
+              <button type="button" className="admin-primary-action">＋ Tambah User</button>
             </div>
           </section>
 
@@ -6169,56 +6665,68 @@ function AdminUserManagementPage() {
             </div>
 
             <div className="admin-user-table-wrap">
-              <table className="admin-user-table">
-                <thead>
-                  <tr>
-                    <th>User</th>
+                <table className="admin-user-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
                     <th>Email</th>
                     <th>No HP</th>
                     <th>Peran</th>
                     <th>Status</th>
                     <th>Bergabung</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userPaginatedRows.map((row) => (
-                    <tr key={row.pid}>
-                      <td>
-                        <div className="admin-user-cell">
-                          <div className="admin-user-avatar">{row.name.slice(0, 1)}</div>
-                          <div>
-                            <strong>{row.name}</strong>
-                            <span>{row.code}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>{row.email}</td>
-                      <td>{row.phone}</td>
-                      <td><span className={`admin-role-badge ${row.role.toLowerCase()}`}>{row.role}</span></td>
-                      <td><span className={`admin-status-pill ${row.status.toLowerCase()}`}>{row.status}</span></td>
-                      <td>{row.joined}</td>
-                      <td>
-                        <div className="admin-row-actions">
-                          <button type="button" className="admin-row-action">👁</button>
-                          <button
-                            type="button"
-                            className="admin-row-action admin-row-action-role"
-                            title={Number(row.pid) === Number(user?.pid) ? 'Akun Anda' : row.role === 'Admin' ? 'Jadikan User' : 'Jadikan Admin'}
-                            aria-label={Number(row.pid) === Number(user?.pid) ? `Akun Anda ${row.name}` : row.role === 'Admin' ? `Jadikan user ${row.name}` : `Jadikan admin ${row.name}`}
-                            disabled={Number(row.pid) === Number(user?.pid)}
-                            onClick={() => openRoleToggleConfirm(row)}
-                          >
-                            ↺<span>{row.role === 'Admin' ? 'User' : 'Admin'}</span>
-                          </button>
-                          <button type="button" className="admin-row-action danger">🗑</button>
-                        </div>
-                      </td>
+                      <th>Aksi</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {userPaginatedRows.length ? userPaginatedRows.map((row) => (
+                      <tr key={row.pid}>
+                        <td>
+                          <div className="admin-user-cell">
+                            <div className="admin-user-avatar">{row.name.slice(0, 1)}</div>
+                            <div>
+                              <strong>{row.name}</strong>
+                              <span>{row.code}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{row.email}</td>
+                        <td>{row.phone}</td>
+                        <td><span className={`admin-role-badge ${row.role.toLowerCase()}`}>{row.role}</span></td>
+                        <td><span className={`admin-status-pill ${row.status.toLowerCase()}`}>{row.status}</span></td>
+                        <td>{row.joined}</td>
+                        <td>
+                          <div className="admin-row-actions">
+                            <button type="button" className="admin-row-action">👁</button>
+                            <button
+                              type="button"
+                              className="admin-row-action admin-row-action-role"
+                              title={Number(row.pid) === Number(user?.pid) ? 'Akun Anda' : row.role === 'Admin' ? 'Jadikan User' : 'Jadikan Admin'}
+                              aria-label={Number(row.pid) === Number(user?.pid) ? `Akun Anda ${row.name}` : row.role === 'Admin' ? `Jadikan user ${row.name}` : `Jadikan admin ${row.name}`}
+                              disabled={Number(row.pid) === Number(user?.pid)}
+                              onClick={() => openRoleToggleConfirm(row)}
+                            >
+                              ↺<span>{row.role === 'Admin' ? 'User' : 'Admin'}</span>
+                            </button>
+                            <button type="button" className="admin-row-action danger">🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr className="admin-user-empty-row">
+                        <td colSpan={7}>
+                          <div className="admin-user-empty-state">
+                            <div className="admin-user-empty-icon" aria-hidden="true">👤</div>
+                            <div className="admin-user-empty-copy">
+                              <strong>Belum ada data user</strong>
+                              <p>Data user akan tampil di sini setelah ditambahkan atau dimuat dari server.</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
             <div className="admin-user-footer">
               <p>Menampilkan {userPaginatedRows.length} data dari {visibleUserRows.length} user</p>
@@ -6665,6 +7173,7 @@ function AdminPackageManagementPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-package-hero">
@@ -7225,6 +7734,7 @@ function AdminSettingsParameterPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-hero-row admin-parameter-hero">
@@ -7797,6 +8307,7 @@ function AdminSettingsFaqPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-hero-row admin-faq-hero">
@@ -8383,6 +8894,7 @@ function AdminMaterialManagementPage() {
             onHomeClick={() => navigate('/')}
             onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
             onLogout={handleLogout}
+            onNotificationItemClick={(item) => navigate(item.href, { state: { user } })}
           />
 
           <section className="admin-package-hero">
@@ -8623,6 +9135,27 @@ function UserMaterialsPage() {
   const filteredRows = materialRows
   const previewSrc = previewMaterial ? `${BACKEND_URL}/api/materials/${previewMaterial.pid}/view?user_id=${user.pid}` : ''
 
+  const materialNotifications = [
+    {
+      id: 'material-new',
+      title: 'Materi PDF tersedia',
+      description: 'Buka materi terbaru untuk paket belajar kamu.',
+      time: 'Baru',
+      icon: '📄',
+      accent: 'blue',
+      href: '/dashboard-user/materials',
+    },
+    {
+      id: 'material-view-only',
+      title: 'Mode lihat saja',
+      description: 'Dokumen dibuka langsung tanpa unduhan.',
+      time: 'Hari ini',
+      icon: '👁️',
+      accent: 'orange',
+      href: '/dashboard-user/materials',
+    },
+  ]
+
   return (
     <div className="dashboard-page dashboard-page-v2 user-material-page">
       <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -8646,7 +9179,7 @@ function UserMaterialsPage() {
 
             <div className="dashboard-topbar-right">
               <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/dashboard-user', { state: { user } })}>🏠</button>
-              <button type="button" className="dashboard-notification-button" aria-label="Notifikasi">🔔<span className="dashboard-notification-dot" /></button>
+              <DashboardNotificationMenu items={materialNotifications} onItemClick={(item) => navigate(item.href, { state: { user } })} />
               <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
                 <button type="button" className="dashboard-profile-chip" aria-haspopup="menu" aria-expanded={isProfileMenuOpen} onClick={() => setIsProfileMenuOpen((current) => !current)}>
                   <span className="dashboard-profile-avatar">{initials}</span>
