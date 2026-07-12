@@ -7,9 +7,9 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    private function getUserIdColumnType(): ?string
+    private function getColumnType(string $table, string $column): ?string
     {
-        if (!Schema::hasTable('tbl_tryout_session') || !Schema::hasColumn('tbl_tryout_session', 'user_id')) {
+        if (!Schema::hasTable($table) || !Schema::hasColumn($table, $column)) {
             return null;
         }
 
@@ -21,10 +21,31 @@ return new class extends Migration
                AND TABLE_NAME = ?
                AND COLUMN_NAME = ?
              LIMIT 1',
-            [$database, 'tbl_tryout_session', 'user_id']
+            [$database, $table, $column]
         );
 
         return $row?->COLUMN_TYPE ? strtolower((string) $row->COLUMN_TYPE) : null;
+    }
+
+    private function normalizeUserIdColumn(): void
+    {
+        $parentColumnType = $this->getColumnType('tbl_user', 'pid');
+
+        if ($parentColumnType === null) {
+            return;
+        }
+
+        if (str_contains($parentColumnType, 'bigint')) {
+            DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
+            return;
+        }
+
+        if (str_contains($parentColumnType, 'int')) {
+            DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` INT UNSIGNED NULL');
+            return;
+        }
+
+        DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
     }
 
     private function getUserIdForeignKeys(): array
@@ -68,17 +89,6 @@ return new class extends Migration
         });
     }
 
-    private function normalizeUserIdColumn(): void
-    {
-        $columnType = $this->getUserIdColumnType();
-
-        if ($columnType === 'bigint(20) unsigned') {
-            return;
-        }
-
-        DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
-    }
-
     private function cleanupOrphanSessions(): void
     {
         $orphanSessionIds = DB::table('tbl_tryout_session as s')
@@ -109,8 +119,6 @@ return new class extends Migration
             return;
         }
 
-        $this->normalizeUserIdColumn();
-
         $foreignKeys = $this->getUserIdForeignKeys();
         $hasCorrectForeignKey = false;
 
@@ -126,6 +134,7 @@ return new class extends Migration
             $this->dropForeignKey((string) $foreignKey->CONSTRAINT_NAME);
         }
 
+        $this->normalizeUserIdColumn();
         $this->cleanupOrphanSessions();
 
         if (!$hasCorrectForeignKey) {
@@ -142,8 +151,6 @@ return new class extends Migration
             return;
         }
 
-        $this->normalizeUserIdColumn();
-
         $foreignKeys = $this->getUserIdForeignKeys();
         $hasLegacyForeignKey = false;
 
@@ -158,6 +165,8 @@ return new class extends Migration
 
             $this->dropForeignKey((string) $foreignKey->CONSTRAINT_NAME);
         }
+
+        $this->normalizeUserIdColumn();
 
         if (!$hasLegacyForeignKey && Schema::hasTable('users')) {
             Schema::table('tbl_tryout_session', function (Blueprint $table) {
