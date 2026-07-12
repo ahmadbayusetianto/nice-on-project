@@ -5282,6 +5282,7 @@ function DashboardUserPageV2() {
   }
 
   const currentPath = location.pathname
+  const isAdminSandbox = false
   const displayName = user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
   const isProfileComplete = user?.profile_completed !== false
   const initials = displayName.slice(0, 2).toUpperCase()
@@ -10071,6 +10072,7 @@ function App() {
         path="/dashboard-admin/settings/faqs"
         element={<AdminSettingsFaqPage />}
       />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
