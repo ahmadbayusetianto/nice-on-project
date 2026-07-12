@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['user_id', 'package_id', 'skor_twk', 'skor_tiu', 'skor_tkp', 'skor_total', 'status', 'keterangan', 'finish_at'])]
+#[Fillable(['user_id', 'package_id', 'skor_twk', 'skor_tiu', 'skor_tkp', 'skor_total', 'status', 'is_draft', 'keterangan', 'finish_at'])]
 class Ljk extends Model
 {
     use HasFactory;
@@ -23,6 +23,7 @@ class Ljk extends Model
             'skor_tkp' => 'integer',
             'skor_total' => 'integer',
             'status' => 'integer',
+            'is_draft' => 'boolean',
             'finish_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

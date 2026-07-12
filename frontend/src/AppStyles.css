@@ -7617,6 +7617,49 @@ html {
   flex-wrap: wrap;
 }
 
+.admin-question-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 18px;
+  border: 1px solid rgba(22, 47, 91, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 14px 30px rgba(19, 32, 58, 0.04);
+  margin-bottom: 18px;
+}
+
+.admin-question-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #6f7e9f;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-question-tab span[aria-hidden='true'] {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #eef3ff;
+  color: #3958ff;
+}
+
+.admin-question-tab.active {
+  background: linear-gradient(135deg, #eef3ff, #f8fbff);
+  color: #17305b;
+  box-shadow: 0 10px 20px rgba(57, 88, 255, 0.08);
+}
+
 .admin-question-filter-card,
 .admin-question-table-card {
   padding: 18px;
@@ -7636,6 +7679,152 @@ html {
 
 .admin-question-filter-group .admin-package-select {
   min-width: 140px;
+}
+
+.admin-question-tryout-type-filter {
+  min-width: 160px;
+}
+
+.admin-question-tryout-card {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.admin-question-tryout-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.admin-question-tryout-intro h3 {
+  margin: 0;
+  color: #17305b;
+  font-size: 24px;
+}
+
+.admin-question-tryout-intro p {
+  margin: 6px 0 0;
+  color: #6f7e9f;
+}
+
+.admin-question-tryout-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eef3ff, #f8fbff);
+  color: #17305b;
+  font-weight: 800;
+}
+
+.admin-question-tryout-hint span[aria-hidden='true'] {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #3958ff;
+}
+
+.admin-question-tryout-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-question-tryout-search {
+  max-width: 420px;
+  width: 100%;
+}
+
+.admin-question-tryout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.admin-question-tryout-card-item {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(22, 47, 91, 0.08);
+  background: linear-gradient(180deg, #ffffff, #fbfcff);
+  box-shadow: 0 14px 30px rgba(19, 32, 58, 0.04);
+}
+
+.admin-question-tryout-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-question-tryout-card-head h4 {
+  margin: 8px 0 0;
+  color: #17305b;
+  font-size: 18px;
+}
+
+.admin-question-tryout-card-head strong {
+  color: #17305b;
+  font-size: 18px;
+}
+
+.admin-question-tryout-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(57, 88, 255, 0.1);
+  color: #3958ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-question-tryout-card-item p {
+  margin: 0;
+  color: #6f7e9f;
+  line-height: 1.5;
+}
+
+.admin-question-tryout-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-question-tryout-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f4f7ff;
+  color: #17305b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-question-tryout-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-question-tryout-empty {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px dashed rgba(22, 47, 91, 0.16);
+  color: #6f7e9f;
+  text-align: center;
 }
 
 .admin-question-summary-grid {
@@ -8546,6 +8735,82 @@ html {
   align-items: stretch;
 }
 
+.admin-modal.admin-user-detail-modal,
+.admin-modal.admin-user-form-modal {
+  width: min(1120px, calc(100vw - 24px));
+  max-height: 92vh;
+  overflow: auto;
+  padding: 0;
+  text-align: left;
+}
+
+.admin-modal.admin-user-detail-modal .admin-question-detail-header,
+.admin-modal.admin-user-form-modal .admin-question-detail-header {
+  padding: 18px 24px 12px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-modal.admin-user-detail-modal .admin-question-detail-header-actions,
+.admin-modal.admin-user-form-modal .admin-question-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-user-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 24px 0;
+}
+
+.admin-user-detail-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(22, 47, 91, 0.08);
+  background: linear-gradient(180deg, #f8fbff, #fff);
+}
+
+.admin-user-detail-card span {
+  color: #6f7e9f;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.admin-user-detail-card strong {
+  color: #17305b;
+  font-size: 16px;
+}
+
+.admin-user-detail-form {
+  margin-top: 18px;
+  padding: 0 24px 20px;
+}
+
+.admin-user-detail-form .admin-package-form-grid {
+  margin-top: 0;
+}
+
+.admin-user-detail-actions {
+  justify-content: flex-end;
+  padding: 0 24px 24px;
+}
+
+.admin-user-form {
+  margin-top: 18px;
+  padding: 0 24px 20px;
+}
+
+.admin-user-form .admin-package-form-grid {
+  margin-top: 0;
+}
+
 .admin-modal.admin-question-detail-modal .admin-question-detail-column {
   display: grid;
   gap: 14px;
@@ -9301,6 +9566,18 @@ html {
   border-radius: 999px;
   background: rgba(74, 92, 255, 0.1);
   color: #4a5cff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.user-tryout-sandbox-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 159, 67, 0.14);
+  color: #d97706;
   font-size: 12px;
   font-weight: 800;
 }

@@ -8,6 +8,7 @@ const DEFAULT_BACKEND_URL = import.meta.env.PROD ? 'https://api.niceon.id' : 'ht
 const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BACKEND_URL
 const AUTH_STORAGE_KEY = 'niceon.auth.user'
 const ADMIN_SIDEBAR_COLLAPSED_KEY = 'niceon.admin.sidebarCollapsed'
+const SANDBOX_ADMIN_STORAGE_KEY = 'niceon.sandbox.admin'
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 function readStoredUser() {
@@ -53,6 +54,32 @@ function clearAuthUser() {
 
   try {
     window.localStorage.removeItem(AUTH_STORAGE_KEY)
+  } catch {
+    // Ignore storage failures.
+  }
+
+  try {
+    window.sessionStorage.removeItem(SANDBOX_ADMIN_STORAGE_KEY)
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readStoredSandboxAdminMode() {
+  if (typeof window === 'undefined') return false
+
+  try {
+    return window.sessionStorage.getItem(SANDBOX_ADMIN_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function storeSandboxAdminMode() {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.sessionStorage.setItem(SANDBOX_ADMIN_STORAGE_KEY, '1')
   } catch {
     // Ignore storage failures.
   }
@@ -316,6 +343,24 @@ function createFaqFormFromDetail(detail = {}) {
     ikon: detail.ikon ?? '❓',
     urutan: detail.urutan !== undefined && detail.urutan !== null ? String(detail.urutan) : '0',
     is_active: Boolean(detail.status_key ? detail.status_key === 'active' : detail.status !== 'Nonaktif'),
+  }
+}
+
+function createUserFormFromDetail(detail = {}) {
+  const nestedDetail = detail.detail ?? {}
+
+  return {
+    pid: detail.pid ?? null,
+    email: detail.email ?? '',
+    nama: nestedDetail.nama ?? detail.name ?? '',
+    ttl: nestedDetail.ttl ?? '',
+    gender: nestedDetail.gender ?? '',
+    nohp: nestedDetail.nohp ?? detail.phone ?? '',
+    alamat: nestedDetail.alamat ?? '',
+    refference: nestedDetail.refference ?? '',
+    reference_other: nestedDetail.reference_other ?? '',
+    status: String(detail.status_key ?? (String(detail.status || '').toLowerCase() === 'aktif' ? 'active' : 'inactive')).toLowerCase() === 'inactive' ? 'inactive' : 'active',
+    is_admin: Boolean(Number(detail.is_admin ?? (String(detail.role || '').toLowerCase() === 'admin' ? 1 : 0))),
   }
 }
 
@@ -1774,6 +1819,13 @@ function AdminQuestionManagementPage() {
   const [questionSubmitSuccess, setQuestionSubmitSuccess] = useState(null)
   const [isSavingQuestion, setIsSavingQuestion] = useState(false)
   const [questionForm, setQuestionForm] = useState(() => createQuestionFormFromDetail())
+  const [packageRows, setPackageRows] = useState([])
+  const [isLoadingPackages, setIsLoadingPackages] = useState(false)
+  const [packageError, setPackageError] = useState(null)
+  const [packageSearch, setPackageSearch] = useState('')
+  const [sandboxTryoutType, setSandboxTryoutType] = useState('SKD')
+  const [startingSandboxPackageId, setStartingSandboxPackageId] = useState(null)
+  const [sandboxStartError, setSandboxStartError] = useState(null)
   const questionSuccessTimerRef = useRef(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
@@ -1783,6 +1835,8 @@ function AdminQuestionManagementPage() {
   }
 
   const currentPath = location.pathname
+  const currentSearchParams = new URLSearchParams(location.search)
+  const activeAdminTab = currentSearchParams.get('tab') === 'tryout' ? 'tryout' : 'questions'
   const displayName = user?.email?.split('@')?.[0] || 'Admin'
   const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
@@ -1792,6 +1846,15 @@ function AdminQuestionManagementPage() {
   })
     .format(new Date())
     .replace(/^./, (char) => char.toUpperCase())
+
+  const visibleSandboxPackages = packageRows.filter((row) => {
+    const search = packageSearch.trim().toLowerCase()
+    if (!search) return true
+
+    return [row.name, row.program, row.type, row.desc, row.status]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(search))
+  })
 
   const adminMainMenu = [
     { label: 'Dashboard', href: '/dashboard-admin' },
@@ -1808,6 +1871,13 @@ function AdminQuestionManagementPage() {
     { label: 'TWK', value: String(questionRows.filter((row) => !row.deleted_at && Number(row.question_group) === 1).length), delta: 'Grup 1', accent: 'green', icon: '🏛️' },
     { label: 'TIU', value: String(questionRows.filter((row) => !row.deleted_at && Number(row.question_group) === 2).length), delta: 'Grup 2', accent: 'purple', icon: '🧠' },
     { label: 'TKP', value: String(questionRows.filter((row) => !row.deleted_at && Number(row.question_group) === 3).length), delta: 'Grup 3', accent: 'orange', icon: '🤝' },
+  ]
+
+  const tryoutSummaryCards = [
+    { label: 'Total Paket', value: String(packageRows.length), delta: 'Siap sandbox', accent: 'blue', icon: '📦' },
+    { label: 'CPNS', value: String(packageRows.filter((row) => String(row.program || '').toUpperCase() === 'CPNS').length), delta: 'Program CPNS', accent: 'green', icon: '🇮🇩' },
+    { label: 'PPPK', value: String(packageRows.filter((row) => String(row.program || '').toUpperCase() === 'PPPK').length), delta: 'Program PPPK', accent: 'purple', icon: '🧾' },
+    { label: 'Draft Session', value: 'Sandbox', delta: 'Tidak masuk statistik', accent: 'orange', icon: '🧪' },
   ]
 
   const loadQuestions = async ({ cancelled = () => false, showLoading = true } = {}) => {
@@ -1849,6 +1919,39 @@ function AdminQuestionManagementPage() {
     }
   }
 
+  const loadSandboxPackages = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingPackages(true)
+    }
+
+    setPackageError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/packages`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data paket gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setPackageRows(Array.isArray(payload?.data) ? payload.data : [])
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data paket gagal dimuat.')
+        setPackageError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingPackages(false)
+      }
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
 
@@ -1858,6 +1961,16 @@ function AdminQuestionManagementPage() {
       cancelled = true
     }
   }, [questionSearch, selectedQuestionGroup, selectedQuestionType, selectedQuestionStatus])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadSandboxPackages({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const openAddQuestionModal = () => {
     if (questionSuccessTimerRef.current) {
@@ -2127,6 +2240,53 @@ function AdminQuestionManagementPage() {
     }
   }
 
+  const switchAdminQuestionTab = (tab) => {
+    const nextSearch = tab === 'tryout' ? '?tab=tryout' : ''
+    navigate(`${currentPath}${nextSearch}`, { replace: true, state: { user } })
+  }
+
+  const startSandboxTryout = async (packageRow) => {
+    if (!packageRow?.pid || !user?.pid) return
+
+    setStartingSandboxPackageId(packageRow.pid)
+    setSandboxStartError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/tryout-sandbox/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.pid,
+          package_id: packageRow.pid,
+          jenis_tryout: sandboxTryoutType,
+        }),
+      })
+
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || 'Sandbox tryout gagal dibuat.'
+        throw new Error(message)
+      }
+
+      storeSandboxAdminMode()
+
+      navigate('/dashboard-user/tryout?sandbox=1&sandbox_admin=1', {
+        state: { user, sandbox: true, sandboxAdmin: true, sandboxSession: payload?.data?.session ?? null },
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sandbox tryout gagal dibuat.'
+      setSandboxStartError(message)
+    } finally {
+      setStartingSandboxPackageId(null)
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (questionSuccessTimerRef.current) {
@@ -2256,212 +2416,316 @@ function AdminQuestionManagementPage() {
             </div>
 
             <div className="admin-package-actions admin-question-actions">
-              <button type="button" className="admin-outline-action">⬆ Export Soal</button>
-              <button type="button" className="admin-outline-action" aria-label="Muat ulang data soal" onClick={() => { void loadQuestions({ cancelled: () => false, showLoading: true }) }}>↻</button>
-              <button type="button" className="admin-primary-action" onClick={openAddQuestionModal}>＋ Tambah Soal</button>
+              {activeAdminTab === 'questions' ? (
+                <>
+                  <button type="button" className="admin-outline-action">⬆ Export Soal</button>
+                  <button type="button" className="admin-outline-action" aria-label="Muat ulang data soal" onClick={() => { void loadQuestions({ cancelled: () => false, showLoading: true }) }}>↻</button>
+                  <button type="button" className="admin-primary-action" onClick={openAddQuestionModal}>＋ Tambah Soal</button>
+                </>
+              ) : (
+                <>
+                  <label className="admin-package-filter-group admin-question-tryout-type-filter">
+                    <select className="admin-package-select" value={sandboxTryoutType} onChange={(event) => setSandboxTryoutType(event.target.value)}>
+                      <option value="SKD">SKD</option>
+                      <option value="SKB">SKB</option>
+                    </select>
+                  </label>
+                  <button type="button" className="admin-outline-action" aria-label="Muat ulang data paket" onClick={() => { void loadSandboxPackages({ cancelled: () => false, showLoading: true }) }}>↻</button>
+                </>
+              )}
             </div>
           </section>
 
-          <section className="admin-summary-grid admin-question-summary-grid">
-            {questionSummaryCards.map((card) => (
-              <article className={`admin-summary-card ${card.accent}`} key={card.label}>
-                <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
-                <div className="admin-summary-copy">
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
-                  <p>{card.delta}</p>
+          <section className="admin-question-tabs" aria-label="Tab manajemen soal">
+            <button
+              type="button"
+              className={`admin-question-tab${activeAdminTab === 'questions' ? ' active' : ''}`}
+              onClick={() => switchAdminQuestionTab('questions')}
+            >
+              <span aria-hidden="true">📝</span>
+              <span>Manajemen Soal</span>
+            </button>
+            <button
+              type="button"
+              className={`admin-question-tab${activeAdminTab === 'tryout' ? ' active' : ''}`}
+              onClick={() => switchAdminQuestionTab('tryout')}
+            >
+              <span aria-hidden="true">🧪</span>
+              <span>Tryout</span>
+            </button>
+          </section>
+
+          {activeAdminTab === 'questions' ? (
+            <>
+              <section className="admin-summary-grid admin-question-summary-grid">
+                {questionSummaryCards.map((card) => (
+                  <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                    <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                    <div className="admin-summary-copy">
+                      <span>{card.label}</span>
+                      <strong>{card.value}</strong>
+                      <p>{card.delta}</p>
+                    </div>
+                  </article>
+                ))}
+              </section>
+
+              <section className="admin-card admin-question-filter-card">
+                {questionError ? <div className="admin-user-message error">{questionError}</div> : null}
+                {isLoadingQuestions ? <div className="admin-user-message">Memuat data soal...</div> : null}
+
+                <div className="admin-package-filters admin-question-filters">
+                  <label className="admin-package-search">
+                    <span aria-hidden="true">⌕</span>
+                    <input type="search" placeholder="Cari soal..." value={questionSearch} onChange={(event) => setQuestionSearch(event.target.value)} />
+                  </label>
+
+                  <div className="admin-package-filter-group admin-question-filter-group">
+                    <select className="admin-package-select" value={selectedQuestionGroup} onChange={(event) => setSelectedQuestionGroup(event.target.value)}>
+                      {['Semua Grup', '1', '2', '3'].map((option) => (
+                        <option key={option} value={option}>
+                          {option === 'Semua Grup' ? option : formatQuestionGroupLabel(option)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select className="admin-package-select" value={selectedQuestionType} onChange={(event) => setSelectedQuestionType(event.target.value)}>
+                      {['Semua Tipe', 'SKD', 'SKB'].map((option) => (
+                        <option key={option} value={option}>
+                          {option === 'Semua Tipe' ? option : formatQuestionTypeLabel(option)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select className="admin-package-select" value={selectedQuestionStatus} onChange={(event) => setSelectedQuestionStatus(event.target.value)}>
+                      {['Aktif', 'Terhapus', 'Semua Status'].map((option) => (
+                        <option key={option}>{option}</option>
+                      ))}
+                    </select>
+
+                    <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                    <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                      <select
+                        className="admin-page-size-select"
+                        value={questionPageSize}
+                        onChange={(event) => setQuestionPageSize(Number(event.target.value))}
+                      >
+                        {PAGE_SIZE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option} / halaman</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="admin-package-reset"
+                      onClick={() => {
+                        setQuestionSearch('')
+                        setSelectedQuestionGroup('Semua Grup')
+                        setSelectedQuestionType('Semua Tipe')
+                        setSelectedQuestionStatus('Aktif')
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
-              </article>
-            ))}
-          </section>
+              </section>
 
-          <section className="admin-card admin-question-filter-card">
-            {questionError ? <div className="admin-user-message error">{questionError}</div> : null}
-            {isLoadingQuestions ? <div className="admin-user-message">Memuat data soal...</div> : null}
+              <section className="admin-card admin-question-table-card">
+                {questionSubmitSuccess ? <div className="admin-package-banner success">{questionSubmitSuccess}</div> : null}
+                <div className="admin-user-table-wrap">
+                  <table className="admin-user-table admin-question-table">
+                    <thead>
+                      <tr>
+                        <th>Soal</th>
+                        <th>Grup</th>
+                        <th>Tipe</th>
+                        <th>Jenis</th>
+                        <th>Opsi</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {questionPaginatedRows.map((row, index) => (
+                        <tr key={row.id}>
+                          <td>
+                            <div className="admin-user-cell admin-question-cell">
+                              <div className={`admin-user-avatar admin-question-avatar ${row.deleted_at ? 'inactive' : 'active'}`}>{String(index + 1).padStart(2, '0')}</div>
+                              <div>
+                                <strong>{row.question}</strong>
+                                <span>{row.information || row.pembahasan || '-'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td><span className="admin-question-group-pill">{row.question_group_label}</span></td>
+                          <td>{formatQuestionTypeLabel(row.question_type)}</td>
+                          <td><span className="admin-question-kind-pill">{row.istext ? 'Teks' : 'Gambar'}</span></td>
+                          <td>{row.options_count || 0}</td>
+                          <td><span className={`admin-status-pill ${row.deleted_at ? 'cancelled' : 'success'}`}>{row.deleted_at ? 'Terhapus' : 'Aktif'}</span></td>
+                          <td>
+                            <div className="admin-row-actions admin-question-row-actions">
+                              <button type="button" className="admin-row-action" title="Lihat soal" aria-label={`Lihat soal ${row.question}`} onClick={() => openQuestionDetailFromRow(row)}>👁</button>
+                              <button
+                                type="button"
+                                className="admin-row-action admin-row-action-edit"
+                                title="Edit soal"
+                                aria-label={`Edit soal ${row.question}`}
+                                onClick={() => {
+                                  void openEditQuestionModal(row)
+                                }}
+                              >
+                                ✎
+                              </button>
+                              {row.deleted_at ? (
+                                <button type="button" className="admin-row-action danger" title="Pulihkan soal" aria-label={`Pulihkan soal ${row.question}`} onClick={() => { void handleRestoreQuestion(row) }}>↺</button>
+                              ) : (
+                                <button type="button" className="admin-row-action danger" title="Hapus soal" aria-label={`Hapus soal ${row.question}`} onClick={() => { void handleDeleteQuestion(row) }}>🗑</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            <div className="admin-package-filters admin-question-filters">
-              <label className="admin-package-search">
-                <span aria-hidden="true">⌕</span>
-                <input type="search" placeholder="Cari soal..." value={questionSearch} onChange={(event) => setQuestionSearch(event.target.value)} />
-              </label>
+                <div className="admin-package-footer admin-user-footer">
+                  <p>Menampilkan {questionPaginatedRows.length} data dari {visibleQuestionRows.length} soal</p>
+                  <div className="admin-pagination">
+                    <button type="button" className="admin-pagination-arrow" disabled={safeQuestionCurrentPage === 1} onClick={() => setQuestionCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                    {renderQuestionPaginationPages().map((page, index, array) => {
+                      const previousPage = array[index - 1]
+                      const shouldShowDots = previousPage && page - previousPage > 1
 
-              <div className="admin-package-filter-group admin-question-filter-group">
-                <select className="admin-package-select" value={selectedQuestionGroup} onChange={(event) => setSelectedQuestionGroup(event.target.value)}>
-                  {['Semua Grup', '1', '2', '3'].map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'Semua Grup' ? option : formatQuestionGroupLabel(option)}
-                    </option>
-                  ))}
-                </select>
+                      return (
+                        <span key={page}>
+                          {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                          <button type="button" className={`admin-pagination-page${page === safeQuestionCurrentPage ? ' active' : ''}`} onClick={() => setQuestionCurrentPage(page)}>{page}</button>
+                        </span>
+                      )
+                    })}
+                    <button type="button" className="admin-pagination-arrow" disabled={safeQuestionCurrentPage === totalQuestionPages} onClick={() => setQuestionCurrentPage((current) => Math.min(totalQuestionPages, current + 1))}>›</button>
+                  </div>
+                </div>
+              </section>
 
-                <select className="admin-package-select" value={selectedQuestionType} onChange={(event) => setSelectedQuestionType(event.target.value)}>
-                  {['Semua Tipe', 'SKD', 'SKB'].map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'Semua Tipe' ? option : formatQuestionTypeLabel(option)}
-                    </option>
-                  ))}
-                </select>
+              <AdminQuestionFormModal
+                open={showQuestionModal}
+                onCancel={closeQuestionModal}
+                onSubmit={handleQuestionSubmit}
+                form={questionForm}
+                onFieldChange={handleQuestionFieldChange}
+                onOptionChange={handleQuestionOptionChange}
+                onAddOption={handleQuestionAddOption}
+                onRemoveOption={handleQuestionRemoveOption}
+                onSetCorrectOption={handleQuestionSetCorrectOption}
+                onResetForm={resetQuestionForm}
+                loading={isSavingQuestion}
+                error={questionSubmitError}
+                title={questionModalMode === 'edit' ? 'Edit Soal' : 'Tambah Soal'}
+                submitLabel={questionModalMode === 'edit' ? 'Perbarui Soal' : 'Simpan Soal'}
+                helpText={questionModalMode === 'edit' ? 'Ubah soal, opsi, dan jawaban benar lalu simpan perubahan.' : 'Isi soal, opsi jawaban, lalu pilih 1 jawaban benar.'}
+                mode={questionModalMode}
+              />
 
-                <select className="admin-package-select" value={selectedQuestionStatus} onChange={(event) => setSelectedQuestionStatus(event.target.value)}>
-                  {['Aktif', 'Terhapus', 'Semua Status'].map((option) => (
-                    <option key={option}>{option}</option>
-                  ))}
-                </select>
+              <AdminQuestionDetailModal
+                open={showQuestionDetailModal}
+                question={questionDetail}
+                onCancel={() => {
+                  setShowQuestionDetailModal(false)
+                  setQuestionDetail(null)
+                }}
+                onEdit={() => {
+                  const current = questionDetail
+                  setShowQuestionDetailModal(false)
+                  setQuestionDetail(null)
+                  if (current) {
+                    void openEditQuestionModal(current)
+                  }
+                }}
+                onDelete={() => {
+                  const current = questionDetail
+                  if (current) {
+                    void handleDeleteQuestion(current)
+                  }
+                }}
+                onRestore={() => {
+                  const current = questionDetail
+                  if (current) {
+                    void handleRestoreQuestion(current)
+                  }
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <section className="admin-summary-grid admin-question-summary-grid">
+                {tryoutSummaryCards.map((card) => (
+                  <article className={`admin-summary-card ${card.accent}`} key={card.label}>
+                    <div className={`admin-summary-icon ${card.accent}`}>{card.icon}</div>
+                    <div className="admin-summary-copy">
+                      <span>{card.label}</span>
+                      <strong>{card.value}</strong>
+                      <p>{card.delta}</p>
+                    </div>
+                  </article>
+                ))}
+              </section>
 
-                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
-                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
-                  <select
-                    className="admin-page-size-select"
-                    value={questionPageSize}
-                    onChange={(event) => setQuestionPageSize(Number(event.target.value))}
-                  >
-                    {PAGE_SIZE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>{option} / halaman</option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="admin-package-reset"
-                  onClick={() => {
-                    setQuestionSearch('')
-                    setSelectedQuestionGroup('Semua Grup')
-                    setSelectedQuestionType('Semua Tipe')
-                    setSelectedQuestionStatus('Aktif')
-                  }}
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          </section>
+              <section className="admin-card admin-question-tryout-card">
+                {sandboxStartError ? <div className="admin-user-message error">{sandboxStartError}</div> : null}
+                {packageError ? <div className="admin-user-message error">{packageError}</div> : null}
+                {isLoadingPackages ? <div className="admin-user-message">Memuat data paket tryout...</div> : null}
 
-          <section className="admin-card admin-question-table-card">
-            {questionSubmitSuccess ? <div className="admin-package-banner success">{questionSubmitSuccess}</div> : null}
-            <div className="admin-user-table-wrap">
-              <table className="admin-user-table admin-question-table">
-                <thead>
-                  <tr>
-                    <th>Soal</th>
-                    <th>Grup</th>
-                    <th>Tipe</th>
-                    <th>Jenis</th>
-                    <th>Opsi</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {questionPaginatedRows.map((row, index) => (
-                    <tr key={row.id}>
-                      <td>
-                        <div className="admin-user-cell admin-question-cell">
-                          <div className={`admin-user-avatar admin-question-avatar ${row.deleted_at ? 'inactive' : 'active'}`}>{String(index + 1).padStart(2, '0')}</div>
-                          <div>
-                            <strong>{row.question}</strong>
-                            <span>{row.information || row.pembahasan || '-'}</span>
-                          </div>
+                <div className="admin-question-tryout-intro">
+                  <div>
+                    <h3>Sandbox Tryout</h3>
+                    <p>Pilih paket lalu jalankan simulasi di session draft. Data ini tidak masuk statistik user.</p>
+                  </div>
+                  <div className="admin-question-tryout-hint">
+                    <span aria-hidden="true">ℹ</span>
+                    <strong>Mode draft</strong>
+                  </div>
+                </div>
+
+                <div className="admin-question-tryout-toolbar">
+                  <label className="admin-package-search admin-question-tryout-search">
+                    <span aria-hidden="true">⌕</span>
+                    <input type="search" placeholder="Cari paket sandbox..." value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} />
+                  </label>
+                </div>
+
+                <div className="admin-question-tryout-grid">
+                  {visibleSandboxPackages.map((row) => (
+                    <article className="admin-question-tryout-card-item" key={row.pid}>
+                      <div className="admin-question-tryout-card-head">
+                        <div>
+                          <span className="admin-question-tryout-badge">{row.program || 'Paket'}</span>
+                          <h4>{row.name}</h4>
                         </div>
-                      </td>
-                      <td><span className="admin-question-group-pill">{row.question_group_label}</span></td>
-                      <td>{formatQuestionTypeLabel(row.question_type)}</td>
-                      <td><span className="admin-question-kind-pill">{row.istext ? 'Teks' : 'Gambar'}</span></td>
-                      <td>{row.options_count || 0}</td>
-                      <td><span className={`admin-status-pill ${row.deleted_at ? 'cancelled' : 'success'}`}>{row.deleted_at ? 'Terhapus' : 'Aktif'}</span></td>
-                      <td>
-                        <div className="admin-row-actions admin-question-row-actions">
-                          <button type="button" className="admin-row-action" title="Lihat soal" aria-label={`Lihat soal ${row.question}`} onClick={() => openQuestionDetailFromRow(row)}>👁</button>
-                          <button
-                            type="button"
-                            className="admin-row-action admin-row-action-edit"
-                            title="Edit soal"
-                            aria-label={`Edit soal ${row.question}`}
-                            onClick={() => {
-                              void openEditQuestionModal(row)
-                            }}
-                          >
-                            ✎
-                          </button>
-                          {row.deleted_at ? (
-                            <button type="button" className="admin-row-action danger" title="Pulihkan soal" aria-label={`Pulihkan soal ${row.question}`} onClick={() => { void handleRestoreQuestion(row) }}>↺</button>
-                          ) : (
-                            <button type="button" className="admin-row-action danger" title="Hapus soal" aria-label={`Hapus soal ${row.question}`} onClick={() => { void handleDeleteQuestion(row) }}>🗑</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                        <strong>{row.price}</strong>
+                      </div>
+                      <p>{row.desc || '-'}</p>
+                      <div className="admin-question-tryout-meta">
+                        <span>{row.type || '-'}</span>
+                        <span>{row.status || 'Aktif'}</span>
+                      </div>
+                      <div className="admin-question-tryout-actions">
+                        <button type="button" className="admin-primary-action" onClick={() => { void startSandboxTryout(row) }} disabled={startingSandboxPackageId === row.pid}>
+                          {startingSandboxPackageId === row.pid ? 'Menyiapkan...' : 'Jalankan Sandbox'}
+                        </button>
+                      </div>
+                    </article>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            <div className="admin-package-footer admin-user-footer">
-              <p>Menampilkan {questionPaginatedRows.length} data dari {visibleQuestionRows.length} soal</p>
-              <div className="admin-pagination">
-                <button type="button" className="admin-pagination-arrow" disabled={safeQuestionCurrentPage === 1} onClick={() => setQuestionCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
-                {renderQuestionPaginationPages().map((page, index, array) => {
-                  const previousPage = array[index - 1]
-                  const shouldShowDots = previousPage && page - previousPage > 1
-
-                  return (
-                    <span key={page}>
-                      {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
-                      <button type="button" className={`admin-pagination-page${page === safeQuestionCurrentPage ? ' active' : ''}`} onClick={() => setQuestionCurrentPage(page)}>{page}</button>
-                    </span>
-                  )
-                })}
-                <button type="button" className="admin-pagination-arrow" disabled={safeQuestionCurrentPage === totalQuestionPages} onClick={() => setQuestionCurrentPage((current) => Math.min(totalQuestionPages, current + 1))}>›</button>
-              </div>
-            </div>
-          </section>
-
-          <AdminQuestionFormModal
-            open={showQuestionModal}
-            onCancel={closeQuestionModal}
-            onSubmit={handleQuestionSubmit}
-            form={questionForm}
-            onFieldChange={handleQuestionFieldChange}
-            onOptionChange={handleQuestionOptionChange}
-            onAddOption={handleQuestionAddOption}
-            onRemoveOption={handleQuestionRemoveOption}
-            onSetCorrectOption={handleQuestionSetCorrectOption}
-            onResetForm={resetQuestionForm}
-            loading={isSavingQuestion}
-            error={questionSubmitError}
-            title={questionModalMode === 'edit' ? 'Edit Soal' : 'Tambah Soal'}
-            submitLabel={questionModalMode === 'edit' ? 'Perbarui Soal' : 'Simpan Soal'}
-            helpText={questionModalMode === 'edit' ? 'Ubah soal, opsi, dan jawaban benar lalu simpan perubahan.' : 'Isi soal, opsi jawaban, lalu pilih 1 jawaban benar.'}
-            mode={questionModalMode}
-          />
-
-          <AdminQuestionDetailModal
-            open={showQuestionDetailModal}
-            question={questionDetail}
-            onCancel={() => {
-              setShowQuestionDetailModal(false)
-              setQuestionDetail(null)
-            }}
-            onEdit={() => {
-              const current = questionDetail
-              setShowQuestionDetailModal(false)
-              setQuestionDetail(null)
-              if (current) {
-                void openEditQuestionModal(current)
-              }
-            }}
-            onDelete={() => {
-              const current = questionDetail
-              if (current) {
-                void handleDeleteQuestion(current)
-              }
-            }}
-            onRestore={() => {
-              const current = questionDetail
-              if (current) {
-                void handleRestoreQuestion(current)
-              }
-            }}
-          />
+                {!isLoadingPackages && !visibleSandboxPackages.length ? (
+                  <div className="admin-question-tryout-empty">Tidak ada paket yang cocok dengan pencarian.</div>
+                ) : null}
+              </section>
+            </>
+          )}
 
           <AdminLogoutModal
             open={showLogoutConfirm}
@@ -5093,16 +5357,56 @@ function DashboardUserPageV2() {
   return (
     <div className="dashboard-page dashboard-page-v2">
       <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <UserSidebar
-          currentPath={currentPath}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
-          navigate={navigate}
-          user={user}
-          displayName={displayName}
-          isProfileComplete={isProfileComplete}
-          onLogout={handleLogout}
-        />
+        {isAdminSandbox ? (
+          <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+            <div className="dashboard-sidebar-brand-row">
+              <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
+              <button
+                type="button"
+                className="dashboard-sidebar-collapse"
+                aria-label={isSidebarCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
+                onClick={() => setIsSidebarCollapsed((current) => !current)}
+              >
+                {isSidebarCollapsed ? '»' : '«'}
+              </button>
+            </div>
+
+            <div className="admin-sidebar-group-label">Main</div>
+            <nav className="admin-sidebar-nav" aria-label="Navigasi admin sandbox">
+              {adminMainMenu.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={`admin-sidebar-item${adminSidebarPath === item.href ? ' active' : ''}`}
+                  onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}
+                >
+                  <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <AdminQuestionMenu currentPath={adminSidebarPath} navigate={navigate} />
+            <AdminSystemMenu currentPath={adminSidebarPath} navigate={navigate} />
+            <AdminUserMenu
+              profileUser={user}
+              displayName={displayName}
+              onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+              onLogout={handleLogout}
+            />
+          </aside>
+        ) : (
+          <UserSidebar
+            currentPath={currentPath}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+            navigate={navigate}
+            user={user}
+            displayName={displayName}
+            isProfileComplete={isProfileComplete}
+            onLogout={handleLogout}
+          />
+        )}
 
         <main className="dashboard-main dashboard-main-v2">
           <header className="dashboard-topbar">
@@ -5256,8 +5560,11 @@ function UserTryoutPage() {
   const profileMenuRef = useRef(null)
   const autoFinishTriggeredRef = useRef(false)
   const timerTimeoutRef = useRef(null)
+  const searchParams = new URLSearchParams(location.search)
+  const isSandboxMode = searchParams.get('sandbox') === '1'
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
+  const isSandboxAdminMode = isSandboxMode && (searchParams.get('sandbox_admin') === '1' || location.state?.sandboxAdmin === true || readStoredSandboxAdminMode() || Number(user?.is_admin ?? 0) === 1)
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -5351,7 +5658,7 @@ function UserTryoutPage() {
       setTryoutError(null)
 
       try {
-        const response = await fetch(`${BACKEND_URL}/api/tryout/current?user_id=${user.pid}`)
+        const response = await fetch(`${BACKEND_URL}/api/tryout/current?user_id=${user.pid}${isSandboxMode ? '&include_draft=1' : ''}`)
         const contentType = response.headers.get('content-type') || ''
         const rawBody = await response.text()
         const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
@@ -5383,7 +5690,7 @@ function UserTryoutPage() {
     return () => {
       cancelled = true
     }
-  }, [user?.pid])
+  }, [user?.pid, isSandboxMode])
 
   useEffect(() => {
     if (!tryoutData) return
@@ -5463,13 +5770,27 @@ function UserTryoutPage() {
   }, [remainingSeconds, tryoutData, isFinishing, timerReady])
 
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: '/dashboard-user/tryout' }} />
+    return <Navigate to="/login" replace state={{ from: `/dashboard-user/tryout${isSandboxMode ? '?sandbox=1' : ''}` }} />
   }
 
   const currentPath = location.pathname
+  const isAdminSandbox = isSandboxAdminMode
+  const adminSidebarPath = isAdminSandbox ? '/dashboard-admin/questions?tab=tryout' : currentPath
+  const tryoutDashboardPath = isAdminSandbox ? '/dashboard-admin' : '/dashboard-user'
+  const tryoutDashboardLabel = isAdminSandbox ? 'Ke Dashboard Admin' : 'Ke Dashboard'
   const displayName = user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
   const initials = displayName.slice(0, 2).toUpperCase()
   const isProfileComplete = user?.profile_completed !== false
+
+  const adminMainMenu = [
+    { label: 'Dashboard', href: '/dashboard-admin' },
+    { label: 'User', href: '/dashboard-admin/users' },
+    { label: 'Paket', href: '/dashboard-admin/packages' },
+    { label: 'Materi', href: '/dashboard-admin/materials' },
+    { label: 'Transaksi', href: '/dashboard-admin/transactions' },
+    { label: 'Konten', href: '#' },
+    { label: 'Laporan', href: '#' },
+  ]
 
   const sidebarItems = [
     { label: 'Dashboard', href: '/dashboard-user' },
@@ -5657,16 +5978,56 @@ function UserTryoutPage() {
   return (
     <div className="dashboard-page dashboard-page-v2 user-tryout-page">
       <div className={`dashboard-shell dashboard-shell-v2${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <UserSidebar
-          currentPath={currentPath}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
-          navigate={navigate}
-          user={user}
-          displayName={displayName}
-          isProfileComplete={isProfileComplete}
-          onLogout={handleLogout}
-        />
+        {isAdminSandbox ? (
+          <aside className={`admin-sidebar${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+            <div className="dashboard-sidebar-brand-row">
+              <AdminBrandBlock isCollapsed={isSidebarCollapsed} />
+              <button
+                type="button"
+                className="dashboard-sidebar-collapse"
+                aria-label={isSidebarCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
+                onClick={() => setIsSidebarCollapsed((current) => !current)}
+              >
+                {isSidebarCollapsed ? '»' : '«'}
+              </button>
+            </div>
+
+            <div className="admin-sidebar-group-label">Main</div>
+            <nav className="admin-sidebar-nav" aria-label="Navigasi admin sandbox">
+              {adminMainMenu.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={`admin-sidebar-item${adminSidebarPath === item.href ? ' active' : ''}`}
+                  onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}
+                >
+                  <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <AdminQuestionMenu currentPath={adminSidebarPath} navigate={navigate} />
+            <AdminSystemMenu currentPath={adminSidebarPath} navigate={navigate} />
+            <AdminUserMenu
+              profileUser={user}
+              displayName={displayName}
+              onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })}
+              onLogout={handleLogout}
+            />
+          </aside>
+        ) : (
+          <UserSidebar
+            currentPath={currentPath}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+            navigate={navigate}
+            user={user}
+            displayName={displayName}
+            isProfileComplete={isProfileComplete}
+            onLogout={handleLogout}
+          />
+        )}
 
         <main className="dashboard-main dashboard-main-v2 user-tryout-main">
           <header className="dashboard-topbar">
@@ -5679,11 +6040,11 @@ function UserTryoutPage() {
               >
                 ☰
               </button>
-              <p>Simulasi Tryout <strong>{displayName}</strong></p>
+              <p>Simulasi Tryout <strong>{displayName}</strong>{isSandboxMode ? <span className="user-tryout-sandbox-pill">Sandbox</span> : null}</p>
             </div>
 
             <div className="dashboard-topbar-right">
-              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate('/dashboard-user', { state: { user } })}>
+              <button type="button" className="dashboard-home-button" aria-label="Beranda" onClick={() => navigate(tryoutDashboardPath, { state: { user } })}>
                 🏠
               </button>
               <DashboardNotificationMenu items={tryoutNotifications} onItemClick={(item) => navigate(item.href, { state: { user } })} />
@@ -5905,11 +6266,13 @@ function UserTryoutPage() {
                   ))}
                 </div>
                 <div className="user-tryout-result-actions">
-                  <button type="button" className="dashboard-secondary-action" onClick={() => { setTryoutData(null); setResultData(null); setAnswerMap({}); setCurrentQuestionIndex(0); }}>
-                    Kembali ke Paket
-                  </button>
-                  <button type="button" className="dashboard-primary-action" onClick={() => navigate('/dashboard-user', { state: { user } })}>
-                    Ke Dashboard
+                  {isAdminSandbox ? null : (
+                    <button type="button" className="dashboard-secondary-action" onClick={() => { setTryoutData(null); setResultData(null); setAnswerMap({}); setCurrentQuestionIndex(0); }}>
+                      Kembali ke Paket
+                    </button>
+                  )}
+                  <button type="button" className="dashboard-primary-action" onClick={() => navigate(tryoutDashboardPath, { state: { user } })}>
+                    {tryoutDashboardLabel}
                   </button>
                 </div>
               </article>
@@ -6380,6 +6743,176 @@ function AdminDashboardPage() {
   )
 }
 
+function AdminUserDetailModal({ open, user, loading = false, error = null, onCancel, onEdit }) {
+  if (!open) return null
+
+  const detail = user?.detail ?? {}
+  const joinedLabel = user?.joined || formatAdminDate(user?.created_at, { hour: false })
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-user-detail-modal" role="dialog" aria-modal="true" aria-labelledby="adminUserDetailTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-question-detail-header">
+          <div className="admin-question-detail-title-block">
+            <div>
+              <h3 id="adminUserDetailTitle">Detail User</h3>
+              <p>Lihat informasi akun dan profil user secara lengkap.</p>
+            </div>
+          </div>
+          <div className="admin-question-detail-header-actions">
+            <button type="button" className="admin-outline-action admin-question-detail-edit" onClick={onEdit}>✎ Edit User</button>
+            <button type="button" className="admin-question-close" aria-label="Tutup detail user" onClick={onCancel}>×</button>
+          </div>
+        </div>
+
+        {loading ? <div className="admin-package-form-loading">Memuat detail user...</div> : null}
+        {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+        <div className="admin-user-detail-grid">
+          {[
+            { label: 'Nama', value: detail.nama || user?.name || '-' },
+            { label: 'Email', value: user?.email || '-' },
+            { label: 'No HP', value: detail.nohp || user?.phone || '-' },
+            { label: 'Peran', value: user?.role || (Number(user?.is_admin ?? 0) === 1 ? 'Admin' : 'User') },
+            { label: 'Status', value: user?.status || '-' },
+            { label: 'Bergabung', value: joinedLabel || '-' },
+          ].map((item) => (
+            <article className="admin-user-detail-card" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
+        </div>
+
+        <form className="admin-package-form admin-user-detail-form" onSubmit={(event) => event.preventDefault()}>
+          <div className="admin-package-form-grid">
+            <label className="admin-package-field">
+              <span>Kode User</span>
+              <input type="text" value={user?.code || '-'} readOnly />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Jenis Kelamin</span>
+              <input type="text" value={detail.gender || '-'} readOnly />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Alamat</span>
+              <textarea value={detail.alamat || '-'} readOnly rows={3} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Referensi</span>
+              <input type="text" value={detail.refference || '-'} readOnly />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Referensi Lain</span>
+              <input type="text" value={detail.reference_other || '-'} readOnly />
+            </label>
+          </div>
+        </form>
+
+        <div className="admin-modal-actions admin-user-detail-actions">
+          <button type="button" className="admin-modal-button secondary" onClick={onCancel}>Tutup</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AdminUserFormModal({ open, title = 'Edit User', submitLabel = 'Simpan', helpText = 'Perbarui data akun dan profil user.', form, loading = false, error = null, onCancel, onSubmit, onFieldChange }) {
+  if (!open) return null
+
+  return (
+    <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
+      <div className="admin-modal admin-user-form-modal" role="dialog" aria-modal="true" aria-labelledby="adminUserFormTitle" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-question-detail-header">
+          <div className="admin-question-detail-title-block">
+            <div>
+              <h3 id="adminUserFormTitle">{title}</h3>
+              <p>{helpText}</p>
+            </div>
+          </div>
+          <button type="button" className="admin-question-close" aria-label="Tutup form user" onClick={onCancel} disabled={loading}>×</button>
+        </div>
+
+        {loading ? <div className="admin-package-form-loading">Menyimpan data user...</div> : null}
+        {error ? <div className="admin-package-form-error">{error}</div> : null}
+
+        <form className="admin-package-form admin-user-form" onSubmit={onSubmit}>
+          <div className="admin-package-form-grid">
+            <label className="admin-package-field">
+              <span>Nama</span>
+              <input type="text" value={form.nama} onChange={(event) => onFieldChange('nama', event.target.value)} disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Email</span>
+              <input type="email" value={form.email} onChange={(event) => onFieldChange('email', event.target.value)} disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>No HP</span>
+              <input type="text" value={form.nohp} onChange={(event) => onFieldChange('nohp', event.target.value)} disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Status</span>
+              <select value={form.status} onChange={(event) => onFieldChange('status', event.target.value)} disabled={loading}>
+                <option value="active">Aktif</option>
+                <option value="inactive">Nonaktif</option>
+              </select>
+            </label>
+
+            <label className="admin-package-field">
+              <span>Peran</span>
+              <select value={form.is_admin ? '1' : '0'} onChange={(event) => onFieldChange('is_admin', event.target.value === '1')} disabled={loading}>
+                <option value="0">User</option>
+                <option value="1">Admin</option>
+              </select>
+            </label>
+
+            <label className="admin-package-field">
+              <span>TTL</span>
+              <input type="text" value={form.ttl} onChange={(event) => onFieldChange('ttl', event.target.value)} disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Jenis Kelamin</span>
+              <select value={form.gender} onChange={(event) => onFieldChange('gender', event.target.value)} disabled={loading}>
+                <option value="">-</option>
+                <option value="L">L</option>
+                <option value="P">P</option>
+              </select>
+            </label>
+
+            <label className="admin-package-field">
+              <span>Referensi</span>
+              <input type="text" value={form.refference} onChange={(event) => onFieldChange('refference', event.target.value)} disabled={loading} />
+            </label>
+
+            <label className="admin-package-field">
+              <span>Referensi Lain</span>
+              <input type="text" value={form.reference_other} onChange={(event) => onFieldChange('reference_other', event.target.value)} disabled={loading} />
+            </label>
+
+            <label className="admin-package-field admin-package-field-full">
+              <span>Alamat</span>
+              <textarea value={form.alamat} onChange={(event) => onFieldChange('alamat', event.target.value)} disabled={loading} rows={4} />
+            </label>
+          </div>
+
+          <div className="admin-modal-actions admin-package-form-actions">
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : submitLabel}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function AdminUserManagementPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -6396,6 +6929,15 @@ function AdminUserManagementPage() {
   const [roleToggleTarget, setRoleToggleTarget] = useState(null)
   const [isTogglingRole, setIsTogglingRole] = useState(false)
   const [roleToggleError, setRoleToggleError] = useState(null)
+  const [showUserDetailModal, setShowUserDetailModal] = useState(false)
+  const [userDetail, setUserDetail] = useState(null)
+  const [isLoadingUserDetail, setIsLoadingUserDetail] = useState(false)
+  const [userDetailError, setUserDetailError] = useState(null)
+  const [showUserFormModal, setShowUserFormModal] = useState(false)
+  const [editingUserPid, setEditingUserPid] = useState(null)
+  const [userForm, setUserForm] = useState(() => createUserFormFromDetail())
+  const [isSavingUser, setIsSavingUser] = useState(false)
+  const [userFormError, setUserFormError] = useState(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
 
@@ -6425,35 +6967,38 @@ function AdminUserManagementPage() {
     { label: 'Laporan', href: '#' },
   ]
 
-  useEffect(() => {
-    let cancelled = false
-
-    const loadUsers = async () => {
+  const loadUsers = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
       setIsLoadingUsers(true)
-      setUserError(null)
+    }
 
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/admin/users`)
-        const payload = await response.json()
+    setUserError(null)
 
-        if (!response.ok) {
-          throw new Error(payload.message || 'Data user gagal dimuat.')
-        }
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users`)
+      const payload = await response.json()
 
-        if (!cancelled) {
-          setUserRows(Array.isArray(payload.data) ? payload.data : [])
-          setUserSummary(payload.summary ?? { total_user: 0, user_aktif: 0, user_nonaktif: 0, admin: 0 })
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setUserError(error instanceof Error ? error.message : 'Data user gagal dimuat.')
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingUsers(false)
-        }
+      if (!response.ok) {
+        throw new Error(payload.message || 'Data user gagal dimuat.')
+      }
+
+      if (!cancelled()) {
+        setUserRows(Array.isArray(payload.data) ? payload.data : [])
+        setUserSummary(payload.summary ?? { total_user: 0, user_aktif: 0, user_nonaktif: 0, admin: 0 })
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        setUserError(error instanceof Error ? error.message : 'Data user gagal dimuat.')
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingUsers(false)
       }
     }
+  }
+
+  useEffect(() => {
+    let cancelled = false
 
     void loadUsers()
 
@@ -6555,6 +7100,120 @@ function AdminUserManagementPage() {
       setRoleToggleError(error instanceof Error ? error.message : 'Peran user gagal diperbarui.')
     } finally {
       setIsTogglingRole(false)
+    }
+  }
+
+  const openUserDetailModal = async (row) => {
+    if (!row?.pid) return
+
+    setShowUserDetailModal(true)
+    setUserDetail({ ...row })
+    setUserDetailError(null)
+    setIsLoadingUserDetail(true)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${row.pid}`)
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'Detail user gagal dimuat.')
+      }
+
+      setUserDetail(payload.data ?? null)
+    } catch (error) {
+      setUserDetailError(error instanceof Error ? error.message : 'Detail user gagal dimuat.')
+    } finally {
+      setIsLoadingUserDetail(false)
+    }
+  }
+
+  const openEditUserModal = async (row) => {
+    if (!row?.pid) return
+
+    setEditingUserPid(row.pid)
+    setUserFormError(null)
+    setIsSavingUser(false)
+    setShowUserFormModal(true)
+    setUserForm(createUserFormFromDetail(row))
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${row.pid}`)
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'Data user gagal dimuat.')
+      }
+
+      setUserForm(createUserFormFromDetail(payload.data ?? row))
+    } catch {
+      // Keep edit modal usable with current row data.
+    }
+  }
+
+  const closeUserDetailModal = () => {
+    setShowUserDetailModal(false)
+    setUserDetail(null)
+    setUserDetailError(null)
+  }
+
+  const closeUserFormModal = () => {
+    if (isSavingUser) return
+
+    setShowUserFormModal(false)
+    setEditingUserPid(null)
+    setUserFormError(null)
+  }
+
+  const handleUserFieldChange = (field, value) => {
+    setUserForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  const handleUserSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!editingUserPid) return
+
+    setIsSavingUser(true)
+    setUserFormError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/users/${editingUserPid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          email: String(userForm.email || '').trim(),
+          status: userForm.status,
+          is_admin: Boolean(userForm.is_admin),
+          nama: String(userForm.nama || '').trim(),
+          ttl: String(userForm.ttl || '').trim(),
+          gender: userForm.gender,
+          nohp: String(userForm.nohp || '').trim(),
+          alamat: String(userForm.alamat || '').trim(),
+          refference: String(userForm.refference || '').trim(),
+          reference_other: String(userForm.reference_other || '').trim(),
+        }),
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'User gagal disimpan.')
+      }
+
+      await loadUsers({ cancelled: () => false, showLoading: false })
+      setShowUserFormModal(false)
+      setEditingUserPid(null)
+      setUserForm(createUserFormFromDetail())
+    } catch (error) {
+      setUserFormError(error instanceof Error ? error.message : 'User gagal disimpan.')
+    } finally {
+      setIsSavingUser(false)
     }
   }
 
@@ -6696,7 +7355,8 @@ function AdminUserManagementPage() {
                         <td>{row.joined}</td>
                         <td>
                           <div className="admin-row-actions">
-                            <button type="button" className="admin-row-action">👁</button>
+                            <button type="button" className="admin-row-action" title="Lihat detail user" aria-label={`Lihat detail ${row.name}`} onClick={() => { void openUserDetailModal(row) }}>👁</button>
+                            <button type="button" className="admin-row-action admin-row-action-edit" title="Edit user" aria-label={`Edit ${row.name}`} onClick={() => { void openEditUserModal(row) }}>✎</button>
                             <button
                               type="button"
                               className="admin-row-action admin-row-action-role"
@@ -6767,6 +7427,32 @@ function AdminUserManagementPage() {
               ? `Peran ${roleToggleTarget.name} akan diubah dari ${roleToggleTarget.role} menjadi ${roleToggleTarget.role === 'Admin' ? 'User' : 'Admin'}.`
               : 'Konfirmasi perubahan peran user.')}
             confirmLabel={isTogglingRole ? 'Memproses...' : 'Ya, ubah'}
+          />
+
+          <AdminUserDetailModal
+            open={showUserDetailModal}
+            user={userDetail}
+            loading={isLoadingUserDetail}
+            error={userDetailError}
+            onCancel={closeUserDetailModal}
+            onEdit={() => {
+              if (userDetail?.pid) {
+                void openEditUserModal(userDetail)
+              }
+            }}
+          />
+
+          <AdminUserFormModal
+            open={showUserFormModal}
+            title={editingUserPid ? 'Edit User' : 'Tambah User'}
+            submitLabel="Simpan Perubahan"
+            helpText="Perbarui data akun, status, peran, dan profil user."
+            form={userForm}
+            loading={isSavingUser}
+            error={userFormError}
+            onCancel={closeUserFormModal}
+            onSubmit={handleUserSubmit}
+            onFieldChange={handleUserFieldChange}
           />
         </main>
       </div>
