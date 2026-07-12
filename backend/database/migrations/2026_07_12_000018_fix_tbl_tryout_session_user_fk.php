@@ -7,6 +7,26 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private function getUserIdColumnType(): ?string
+    {
+        if (!Schema::hasTable('tbl_tryout_session') || !Schema::hasColumn('tbl_tryout_session', 'user_id')) {
+            return null;
+        }
+
+        $database = DB::connection()->getDatabaseName();
+        $row = DB::selectOne(
+            'SELECT COLUMN_TYPE
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ?
+               AND TABLE_NAME = ?
+               AND COLUMN_NAME = ?
+             LIMIT 1',
+            [$database, 'tbl_tryout_session', 'user_id']
+        );
+
+        return $row?->COLUMN_TYPE ? strtolower((string) $row->COLUMN_TYPE) : null;
+    }
+
     private function getUserIdForeignKeys(): array
     {
         if (!Schema::hasTable('tbl_tryout_session') || !Schema::hasColumn('tbl_tryout_session', 'user_id')) {
@@ -48,6 +68,38 @@ return new class extends Migration
         });
     }
 
+    private function normalizeUserIdColumn(): void
+    {
+        $columnType = $this->getUserIdColumnType();
+
+        if ($columnType === 'bigint(20) unsigned') {
+            return;
+        }
+
+        DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
+    }
+
+    private function cleanupOrphanSessions(): void
+    {
+        $orphanSessionIds = DB::table('tbl_tryout_session as s')
+            ->leftJoin('tbl_user as u', 'u.pid', '=', 's.user_id')
+            ->whereNotNull('s.user_id')
+            ->whereNull('u.pid')
+            ->pluck('s.id');
+
+        if ($orphanSessionIds->isEmpty()) {
+            return;
+        }
+
+        DB::table('tbl_answer_sheet')
+            ->whereIn('ljk_id', $orphanSessionIds)
+            ->delete();
+
+        DB::table('tbl_tryout_session')
+            ->whereIn('id', $orphanSessionIds)
+            ->delete();
+    }
+
     /**
      * Run the migrations.
      */
@@ -56,6 +108,8 @@ return new class extends Migration
         if (!Schema::hasTable('tbl_tryout_session') || !Schema::hasColumn('tbl_tryout_session', 'user_id')) {
             return;
         }
+
+        $this->normalizeUserIdColumn();
 
         $foreignKeys = $this->getUserIdForeignKeys();
         $hasCorrectForeignKey = false;
@@ -72,6 +126,8 @@ return new class extends Migration
             $this->dropForeignKey((string) $foreignKey->CONSTRAINT_NAME);
         }
 
+        $this->cleanupOrphanSessions();
+
         if (!$hasCorrectForeignKey) {
             $this->addCorrectForeignKey();
         }
@@ -85,6 +141,8 @@ return new class extends Migration
         if (!Schema::hasTable('tbl_tryout_session') || !Schema::hasColumn('tbl_tryout_session', 'user_id')) {
             return;
         }
+
+        $this->normalizeUserIdColumn();
 
         $foreignKeys = $this->getUserIdForeignKeys();
         $hasLegacyForeignKey = false;
