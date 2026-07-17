@@ -4065,7 +4065,7 @@ function LoginPage() {
 
             <div className="divider">ATAU</div>
 
-            <button type="button" className="google-btn">Sign in with Google</button>
+            {false ? <button type="button" className="google-btn">Sign in with Google</button> : null}
             <Link to="/register" className="alt-auth-btn">Belum Punya Akun? Daftar Sekarang!</Link>
 
             <div className="auth-bottom-links">

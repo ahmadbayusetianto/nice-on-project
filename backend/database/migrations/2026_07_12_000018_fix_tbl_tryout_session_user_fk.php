@@ -27,6 +27,45 @@ return new class extends Migration
         return $row?->COLUMN_TYPE ? strtolower((string) $row->COLUMN_TYPE) : null;
     }
 
+    private function getTableEngine(string $table): ?string
+    {
+        if (!Schema::hasTable($table)) {
+            return null;
+        }
+
+        $database = DB::connection()->getDatabaseName();
+        $row = DB::selectOne(
+            'SELECT ENGINE
+             FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = ?
+               AND TABLE_NAME = ?
+             LIMIT 1',
+            [$database, $table]
+        );
+
+        return $row?->ENGINE ? strtolower((string) $row->ENGINE) : null;
+    }
+
+    private function hasIndex(string $table, string $indexName): bool
+    {
+        if (!Schema::hasTable($table)) {
+            return false;
+        }
+
+        $database = DB::connection()->getDatabaseName();
+        $row = DB::selectOne(
+            'SELECT INDEX_NAME
+             FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = ?
+               AND TABLE_NAME = ?
+               AND INDEX_NAME = ?
+             LIMIT 1',
+            [$database, $table, $indexName]
+        );
+
+        return $row !== null;
+    }
+
     private function normalizeUserIdColumn(): void
     {
         $parentColumnType = $this->getColumnType('tbl_user', 'pid');
@@ -46,6 +85,26 @@ return new class extends Migration
         }
 
         DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
+    }
+
+    private function normalizeEngine(string $table): void
+    {
+        $engine = $this->getTableEngine($table);
+
+        if ($engine === 'innodb') {
+            return;
+        }
+
+        DB::statement(sprintf('ALTER TABLE `%s` ENGINE=InnoDB', $table));
+    }
+
+    private function ensureIndex(string $table, string $indexName, string $column): void
+    {
+        if ($this->hasIndex($table, $indexName)) {
+            return;
+        }
+
+        DB::statement(sprintf('ALTER TABLE `%s` ADD INDEX `%s` (`%s`)', $table, $indexName, $column));
     }
 
     private function getUserIdForeignKeys(): array
@@ -134,7 +193,11 @@ return new class extends Migration
             $this->dropForeignKey((string) $foreignKey->CONSTRAINT_NAME);
         }
 
+        $this->normalizeEngine('tbl_user');
+        $this->normalizeEngine('tbl_tryout_session');
         $this->normalizeUserIdColumn();
+        $this->ensureIndex('tbl_user', 'idx_tbl_user_pid_fk', 'pid');
+        $this->ensureIndex('tbl_tryout_session', 'idx_tbl_tryout_session_user_id_fk', 'user_id');
         $this->cleanupOrphanSessions();
 
         if (!$hasCorrectForeignKey) {
@@ -166,7 +229,12 @@ return new class extends Migration
             $this->dropForeignKey((string) $foreignKey->CONSTRAINT_NAME);
         }
 
+        $this->normalizeEngine('users');
+        $this->normalizeEngine('tbl_user');
+        $this->normalizeEngine('tbl_tryout_session');
         $this->normalizeUserIdColumn();
+        $this->ensureIndex('tbl_user', 'idx_tbl_user_pid_fk', 'pid');
+        $this->ensureIndex('tbl_tryout_session', 'idx_tbl_tryout_session_user_id_fk', 'user_id');
 
         if (!$hasLegacyForeignKey && Schema::hasTable('users')) {
             Schema::table('tbl_tryout_session', function (Blueprint $table) {
