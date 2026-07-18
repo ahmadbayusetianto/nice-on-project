@@ -2090,7 +2090,7 @@ Route::post('/admin/questions', function (Request $request) {
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
-        'options' => ['required', 'array', 'min:2'],
+        'options' => ['required', 'array', 'min:1'],
         'options.*.choise' => ['required', 'string'],
         'options.*.answer' => ['nullable', 'boolean'],
         'options.*.istext' => ['nullable', 'boolean'],
@@ -2116,9 +2116,9 @@ Route::post('/admin/questions', function (Request $request) {
         ->filter(fn ($option) => $option['choise'] !== '')
         ->values();
 
-    if ($normalizedOptions->count() < 2) {
+    if ($normalizedOptions->count() < 1) {
         return response()->json([
-            'message' => 'Minimal 2 opsi wajib diisi.',
+            'message' => 'Minimal 1 opsi wajib diisi.',
         ], 422);
     }
 
@@ -2129,7 +2129,7 @@ Route::post('/admin/questions', function (Request $request) {
     }
 
     $now = now();
-    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $request, $now) {
+    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $request, $now, $questionType) {
         $questionId = DB::table('tbl_questions')->insertGetId([
             'question' => $validated['question'],
             'question_type' => $questionType,
@@ -2171,7 +2171,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
-        'options' => ['required', 'array', 'min:2'],
+        'options' => ['required', 'array', 'min:1'],
         'options.*.choise' => ['required', 'string'],
         'options.*.answer' => ['nullable', 'boolean'],
         'options.*.istext' => ['nullable', 'boolean'],
@@ -2202,9 +2202,9 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         ->filter(fn ($option) => $option['choise'] !== '')
         ->values();
 
-    if ($normalizedOptions->count() < 2) {
+    if ($normalizedOptions->count() < 1) {
         return response()->json([
-            'message' => 'Minimal 2 opsi wajib diisi.',
+            'message' => 'Minimal 1 opsi wajib diisi.',
         ], 422);
     }
 
@@ -2214,7 +2214,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         ], 422);
     }
 
-    DB::transaction(function () use ($id, $validated, $normalizedOptions) {
+    DB::transaction(function () use ($id, $validated, $normalizedOptions, $questionType) {
         $now = now();
 
         DB::table('tbl_questions')

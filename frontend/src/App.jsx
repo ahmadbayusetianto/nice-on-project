@@ -1588,7 +1588,7 @@ function AdminQuestionFormModal({
                 <div className="admin-question-panel-head admin-question-panel-head-space">
                   <div>
                     <h4>Opsi Jawaban</h4>
-                    <p>Minimal 2 opsi, maksimal 5 opsi (A-E), pilih 1 jawaban benar.</p>
+                    <p>Minimal 1 opsi, maksimal 5 opsi (A-E), pilih 1 jawaban benar.</p>
                   </div>
                 </div>
 
@@ -2111,8 +2111,8 @@ function AdminQuestionManagementPage() {
       return
     }
 
-    if (normalizedOptions.length < 2) {
-      setQuestionSubmitError('Minimal 2 opsi wajib diisi.')
+    if (normalizedOptions.length < 1) {
+      setQuestionSubmitError('Minimal 1 opsi wajib diisi.')
       return
     }
 
