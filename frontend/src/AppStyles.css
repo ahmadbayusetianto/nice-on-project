@@ -5570,6 +5570,7 @@ html {
   min-width: 0;
   padding: 4px 22px 18px;
   display: grid;
+  align-content: start;
   gap: 18px;
   transition: padding 220ms ease;
 }
@@ -8090,6 +8091,78 @@ html {
   gap: 14px;
 }
 
+.admin-package-combobox {
+  position: relative;
+}
+
+.admin-package-combobox input {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  background: #fff;
+  color: #17305b;
+  padding: 0 16px;
+  font: inherit;
+}
+
+.admin-package-combobox.open input {
+  border-color: rgba(57, 88, 255, 0.35);
+  box-shadow: 0 0 0 3px rgba(57, 88, 255, 0.1);
+}
+
+.admin-package-combobox-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 16px 32px rgba(7, 21, 53, 0.16);
+  padding: 6px;
+}
+
+.admin-package-combobox-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-package-combobox-option:hover,
+.admin-package-combobox-option.active {
+  background: #eef3ff;
+}
+
+.admin-package-combobox-option strong {
+  color: #17305b;
+  font-size: 14px;
+}
+
+.admin-package-combobox-option span {
+  color: #8b97b1;
+  font-size: 12px;
+}
+
+.admin-package-combobox-empty {
+  padding: 14px 12px;
+  color: #8b97b1;
+  font-size: 13px;
+  text-align: center;
+}
+
 .admin-question-editor-shell {
   border: 1px solid rgba(22, 47, 91, 0.12);
   border-radius: 16px;
@@ -8246,12 +8319,62 @@ html {
 
 .admin-question-option-row.rich {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 150px 48px;
+  grid-template-columns: 48px minmax(0, 1fr) auto 48px;
   gap: 14px;
   align-items: start;
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.admin-question-option-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-question-option-tkp-value {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 84px;
+  min-height: 54px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  font-weight: 700;
+  font-size: 11px;
+  color: rgba(22, 47, 91, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-question-option-tkp-value input {
+  width: 64px;
+  border: 1px solid rgba(22, 47, 91, 0.16);
+  border-radius: 8px;
+  padding: 4px 6px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #17305b;
+  text-transform: none;
+  letter-spacing: normal;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.admin-question-option-tkp-value input::-webkit-outer-spin-button,
+.admin-question-option-tkp-value input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.admin-question-option-tkp-value input::placeholder {
+  color: rgba(22, 47, 91, 0.32);
+  font-weight: 500;
 }
 
 .admin-question-option-badge,
@@ -8586,6 +8709,11 @@ html {
 .admin-question-detail-correct.neutral {
   background: #f4f7fb;
   color: #6b7280;
+}
+
+.admin-question-detail-correct.tkp {
+  background: #eef1ff;
+  color: #3958ff;
 }
 
 .admin-question-detail-footer {
@@ -10202,6 +10330,11 @@ html {
 .user-tryout-review-item.wrong {
   border-color: rgba(239, 68, 68, 0.18);
   background: rgba(239, 68, 68, 0.04);
+}
+
+.user-tryout-review-item.tkp {
+  border-color: rgba(57, 88, 255, 0.2);
+  background: rgba(57, 88, 255, 0.05);
 }
 
 .user-tryout-review-item span {

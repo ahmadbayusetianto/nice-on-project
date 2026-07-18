@@ -254,6 +254,7 @@ function createQuestionOptionForm(index = 0, option = {}) {
     choise: option.choise ?? '',
     answer: Boolean(option.answer),
     istext: option.istext !== undefined ? Boolean(option.istext) : true,
+    nilai_tkp: option.nilai_tkp !== undefined && option.nilai_tkp !== null ? String(option.nilai_tkp) : '',
   }
 }
 
@@ -286,6 +287,7 @@ function createQuestionFormFromDetail(detail = {}) {
     question: detail.question ?? '',
     question_type: normalizedType,
     question_group: Number(detail.question_group ?? 1),
+    package_id: detail.package_id ?? '',
     istext: detail.istext !== undefined ? Boolean(detail.istext) : true,
     information: detail.information ?? '',
     pembahasan: detail.pembahasan ?? '',
@@ -293,12 +295,17 @@ function createQuestionFormFromDetail(detail = {}) {
   }
 }
 
-function normalizeQuestionOptions(options = []) {
+function normalizeQuestionOptions(options = [], questionGroup = null) {
+  const isTkpGroup = Number(questionGroup) === 3
+
   return options
     .map((option) => ({
       choise: String(option.choise ?? '').trim(),
       answer: Boolean(option.answer),
       istext: Boolean(option.istext),
+      nilai_tkp: isTkpGroup && option.nilai_tkp !== '' && option.nilai_tkp !== null && option.nilai_tkp !== undefined
+        ? Number(option.nilai_tkp)
+        : null,
     }))
     .filter((option) => option.choise !== '')
 }
@@ -1407,6 +1414,65 @@ function MaintenanceModal({ open, onCancel }) {
   )
 }
 
+function PackageSearchSelect({ value, onChange, packages, disabled, placeholder = 'Cari nama paket...' }) {
+  const [query, setQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+
+  const selectedPackage = packages.find((pkg) => String(pkg.pid) === String(value)) || null
+
+  const filteredPackages = packages.filter((pkg) => {
+    const search = query.trim().toLowerCase()
+    if (!search) return true
+    return [pkg.name, pkg.program, pkg.type]
+      .filter(Boolean)
+      .some((field) => String(field).toLowerCase().includes(search))
+  })
+
+  return (
+    <div
+      className={`admin-package-combobox${isOpen ? ' open' : ''}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setIsOpen(false)
+          setQuery('')
+        }
+      }}
+    >
+      <input
+        type="text"
+        value={isOpen ? query : (selectedPackage?.name ?? '')}
+        onFocus={() => setIsOpen(true)}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {isOpen ? (
+        <div className="admin-package-combobox-menu" role="listbox">
+          {filteredPackages.length ? filteredPackages.map((pkg) => (
+            <button
+              type="button"
+              key={pkg.pid}
+              className={`admin-package-combobox-option${String(pkg.pid) === String(value) ? ' active' : ''}`}
+              onMouseDown={(event) => {
+                event.preventDefault()
+                onChange(pkg.pid)
+                setIsOpen(false)
+                setQuery('')
+              }}
+            >
+              <strong>{pkg.name}</strong>
+              <span>{[pkg.program, pkg.type].filter(Boolean).join(' · ')}</span>
+            </button>
+          )) : (
+            <div className="admin-package-combobox-empty">Paket tidak ditemukan.</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function AdminQuestionFormModal({
   open,
   onCancel,
@@ -1414,6 +1480,7 @@ function AdminQuestionFormModal({
   form,
   onFieldChange,
   onOptionChange,
+  packages,
   onAddOption,
   onRemoveOption,
   onSetCorrectOption,
@@ -1464,44 +1531,30 @@ function AdminQuestionFormModal({
 
               <div className="admin-question-field-group">
                 <label className="admin-question-field admin-question-field-full">
-                  <span>Tulis pertanyaan <sup>*</sup></span>
-                  <div className="admin-question-editor-shell">
-                    <div className="admin-question-editor-toolbar" aria-hidden="true">
-                      <span>B</span>
-                      <span>I</span>
-                      <span>U</span>
-                      <span>≡</span>
-                      <span>≣</span>
-                      <span>↗</span>
-                      <span>▢</span>
-                      <span>Tx</span>
-                    </div>
-                    <textarea
-                      value={form.question}
-                      onChange={(event) => onFieldChange('question', event.target.value)}
-                      placeholder={form.istext ? 'Ketik atau tempel pertanyaan di sini...' : 'Nama file gambar soal'}
-                      disabled={loading}
-                      rows={7}
-                    />
-                    <div className="admin-question-counter">{questionCount}/2000</div>
-                  </div>
+                  <span>Paket <sup>*</sup></span>
+                  <PackageSearchSelect
+                    value={form.package_id}
+                    onChange={(pid) => onFieldChange('package_id', pid)}
+                    packages={packages}
+                    disabled={loading}
+                  />
                 </label>
 
                 <div className="admin-question-field-row">
+                  <label className="admin-question-field">
+                    <span>Tipe Soal <sup>*</sup></span>
+                    <select value={form.question_type} onChange={(event) => onFieldChange('question_type', event.target.value)} disabled={loading}>
+                      <option value="SKD">SKD</option>
+                      <option value="SKB">SKB</option>
+                    </select>
+                  </label>
+
                   <label className="admin-question-field">
                     <span>Grup Soal <sup>*</sup></span>
                     <select value={form.question_group} onChange={(event) => onFieldChange('question_group', Number(event.target.value))} disabled={loading}>
                       <option value={1}>TWK</option>
                       <option value={2}>TIU</option>
                       <option value={3}>TKP</option>
-                    </select>
-                  </label>
-
-                  <label className="admin-question-field">
-                    <span>Tipe Soal <sup>*</sup></span>
-                    <select value={form.question_type} onChange={(event) => onFieldChange('question_type', event.target.value)} disabled={loading}>
-                      <option value="SKD">SKD</option>
-                      <option value="SKB">SKB</option>
                     </select>
                   </label>
                 </div>
@@ -1527,6 +1580,30 @@ function AdminQuestionFormModal({
                       <span aria-hidden="true">◫</span>
                       <strong>Gambar</strong>
                     </button>
+                  </div>
+                </label>
+
+                <label className="admin-question-field admin-question-field-full">
+                  <span>Tulis pertanyaan <sup>*</sup></span>
+                  <div className="admin-question-editor-shell">
+                    <div className="admin-question-editor-toolbar" aria-hidden="true">
+                      <span>B</span>
+                      <span>I</span>
+                      <span>U</span>
+                      <span>≡</span>
+                      <span>≣</span>
+                      <span>↗</span>
+                      <span>▢</span>
+                      <span>Tx</span>
+                    </div>
+                    <textarea
+                      value={form.question}
+                      onChange={(event) => onFieldChange('question', event.target.value)}
+                      placeholder={form.istext ? 'Ketik atau tempel pertanyaan di sini...' : 'Nama file gambar soal'}
+                      disabled={loading}
+                      rows={7}
+                    />
+                    <div className="admin-question-counter">{questionCount}/2000</div>
                   </div>
                 </label>
 
@@ -1588,15 +1665,23 @@ function AdminQuestionFormModal({
                 <div className="admin-question-panel-head admin-question-panel-head-space">
                   <div>
                     <h4>Opsi Jawaban</h4>
-                    <p>Minimal 1 opsi, maksimal 5 opsi (A-E), pilih 1 jawaban benar.</p>
+                    <p>
+                      {Number(form.question_group) === 3
+                        ? 'Minimal 1 opsi, maksimal 5 opsi (A-E), isi nilai 1-5 untuk tiap opsi.'
+                        : 'Minimal 1 opsi, maksimal 5 opsi (A-E), pilih 1 jawaban benar.'}
+                    </p>
                   </div>
                 </div>
 
               <div className="admin-question-option-info" role="note" aria-label="Informasi opsi jawaban">
                 <span className="admin-question-option-info-icon" aria-hidden="true">💡</span>
                 <div>
-                  <strong>Pilih jawaban yang benar</strong>
-                  <p>Pilih satu opsi yang paling tepat sebagai jawaban benar.</p>
+                  <strong>{Number(form.question_group) === 3 ? 'Isi nilai tiap opsi' : 'Pilih jawaban yang benar'}</strong>
+                  <p>
+                    {Number(form.question_group) === 3
+                      ? 'Setiap opsi TKP tidak ada benar/salah, isi bobot nilai 1-5 sesuai kesesuaian jawaban.'
+                      : 'Pilih satu opsi yang paling tepat sebagai jawaban benar.'}
+                  </p>
                 </div>
               </div>
 
@@ -1622,16 +1707,35 @@ function AdminQuestionFormModal({
                       />
                     </div>
 
-                    <label className={`admin-question-option-correct${option.answer ? ' active' : ''}`}>
-                      <input
-                        type="radio"
-                        name="correctOption"
-                        checked={option.answer}
-                        onChange={() => onSetCorrectOption(index)}
-                        disabled={loading}
-                      />
-                      <span className="sr-only">Jawaban benar</span>
-                    </label>
+                    <div className="admin-question-option-side">
+                      {Number(form.question_group) === 3 ? (
+                        <label className="admin-question-option-tkp-value">
+                          <span>Nilai</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={5}
+                            value={option.nilai_tkp}
+                            onChange={(event) => onOptionChange(index, 'nilai_tkp', event.target.value)}
+                            placeholder="1-5"
+                            disabled={loading}
+                          />
+                        </label>
+                      ) : null}
+
+                      {Number(form.question_group) === 3 ? null : (
+                        <label className={`admin-question-option-correct${option.answer ? ' active' : ''}`}>
+                          <input
+                            type="radio"
+                            name="correctOption"
+                            checked={option.answer}
+                            onChange={() => onSetCorrectOption(index)}
+                            disabled={loading}
+                          />
+                          <span className="sr-only">Jawaban benar</span>
+                        </label>
+                      )}
+                    </div>
 
                     <button
                       type="button"
@@ -1671,6 +1775,7 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
   if (!open || !question) return null
 
   const isTrashed = Boolean(question.deleted_at)
+  const isTkpQuestion = Number(question.question_group) === 3
   const detailCards = [
     { label: 'Grup Soal', value: question.question_group_label, tone: 'orange', icon: '📁' },
     { label: 'Tipe Soal', value: formatQuestionTypeLabel(question.question_type), tone: 'blue', icon: '🎯' },
@@ -1756,14 +1861,18 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
 
                   return (
                     <div
-                      className={`admin-question-detail-option wide${option?.answer ? ' correct' : ''}${option ? '' : ' placeholder'}`}
+                      className={`admin-question-detail-option wide${!isTkpQuestion && option?.answer ? ' correct' : ''}${option ? '' : ' placeholder'}`}
                       key={option?.id ?? `empty-${index}`}
                     >
                       <span className="admin-question-detail-option-badge">{letter}</span>
                       <div className="admin-question-detail-option-copy wide">
                         <strong>{option?.choise || 'Belum ada opsi.'}</strong>
                       </div>
-                      {option?.answer ? (
+                      {isTkpQuestion ? (
+                        option ? (
+                          <span className="admin-question-detail-correct tkp" title="Nilai TKP" aria-label="Nilai TKP">{option.nilai_tkp ?? '-'}</span>
+                        ) : null
+                      ) : option?.answer ? (
                         <span className="admin-question-detail-correct success" title="Jawaban benar" aria-label="Jawaban benar">✓</span>
                       ) : (
                         <span className="admin-question-detail-correct neutral" title="Bukan jawaban benar" aria-label="Bukan jawaban benar">○</span>
@@ -2102,12 +2211,18 @@ function AdminQuestionManagementPage() {
     event.preventDefault()
     const submitMode = String(event.nativeEvent?.submitter?.value || 'save')
 
-    const normalizedOptions = normalizeQuestionOptions(questionForm.options)
+    const normalizedOptions = normalizeQuestionOptions(questionForm.options, questionForm.question_group)
     const isEditMode = questionModalMode === 'edit' && editingQuestionId !== null
     const shouldKeepOpenForAddMore = submitMode === 'save-add' && !isEditMode
+    const isTkpGroup = Number(questionForm.question_group) === 3
 
     if (!questionForm.question.trim()) {
       setQuestionSubmitError('Isi soal wajib diisi.')
+      return
+    }
+
+    if (!questionForm.package_id) {
+      setQuestionSubmitError('Paket wajib dipilih.')
       return
     }
 
@@ -2116,8 +2231,13 @@ function AdminQuestionManagementPage() {
       return
     }
 
-    if (normalizedOptions.filter((option) => option.answer).length !== 1) {
+    if (!isTkpGroup && normalizedOptions.filter((option) => option.answer).length !== 1) {
       setQuestionSubmitError('Harus ada tepat 1 jawaban benar.')
+      return
+    }
+
+    if (isTkpGroup && normalizedOptions.some((option) => !Number.isInteger(option.nilai_tkp) || option.nilai_tkp < 1 || option.nilai_tkp > 5)) {
+      setQuestionSubmitError('Nilai TKP (1-5) wajib diisi untuk setiap opsi.')
       return
     }
 
@@ -2136,6 +2256,7 @@ function AdminQuestionManagementPage() {
           question: questionForm.question.trim(),
           question_type: questionForm.question_type,
           question_group: Number(questionForm.question_group),
+          package_id: Number(questionForm.package_id),
           istext: Boolean(questionForm.istext),
           information: questionForm.information.trim(),
           pembahasan: questionForm.pembahasan.trim(),
@@ -2168,6 +2289,7 @@ function AdminQuestionManagementPage() {
         setQuestionForm(createQuestionFormFromDetail({
           question_group: Number(questionForm.question_group) || 1,
           question_type: 'SKD',
+          package_id: questionForm.package_id,
           istext: true,
         }))
         setShowQuestionModal(true)
@@ -2621,11 +2743,16 @@ function AdminQuestionManagementPage() {
                 onRemoveOption={handleQuestionRemoveOption}
                 onSetCorrectOption={handleQuestionSetCorrectOption}
                 onResetForm={resetQuestionForm}
+                packages={packageRows}
                 loading={isSavingQuestion}
                 error={questionSubmitError}
                 title={questionModalMode === 'edit' ? 'Edit Soal' : 'Tambah Soal'}
                 submitLabel={questionModalMode === 'edit' ? 'Perbarui Soal' : 'Simpan Soal'}
-                helpText={questionModalMode === 'edit' ? 'Ubah soal, opsi, dan jawaban benar lalu simpan perubahan.' : 'Isi soal, opsi jawaban, lalu pilih 1 jawaban benar.'}
+                helpText={
+                  Number(questionForm.question_group) === 3
+                    ? (questionModalMode === 'edit' ? 'Ubah soal, opsi, dan nilai TKP lalu simpan perubahan.' : 'Isi soal, opsi jawaban, dan nilai 1-5 untuk tiap opsi.')
+                    : (questionModalMode === 'edit' ? 'Ubah soal, opsi, dan jawaban benar lalu simpan perubahan.' : 'Isi soal, opsi jawaban, lalu pilih 1 jawaban benar.')
+                }
                 mode={questionModalMode}
               />
 
@@ -6250,21 +6377,27 @@ function UserTryoutPage() {
                   <span>{resultData.questions.length} SOAL</span>
                 </div>
                 <div className="user-tryout-review-list">
-                  {resultData.questions.map((question, index) => (
-                    <button
-                      key={question.id}
-                      type="button"
-                      className={`user-tryout-review-item${question.is_correct ? ' correct' : ' wrong'}`}
-                      onClick={() => setCurrentQuestionIndex(index)}
-                    >
-                      <span>{index + 1}</span>
-                      <div>
-                        <strong>{question.question}</strong>
-                        <p>{question.question_group_label}</p>
-                      </div>
-                      <em>{question.is_correct ? 'Benar' : 'Salah'}</em>
-                    </button>
-                  ))}
+                  {resultData.questions.map((question, index) => {
+                    const isTkpQuestion = Number(question.question_group) === 3
+                    const statusClass = isTkpQuestion ? 'tkp' : (question.is_correct ? 'correct' : 'wrong')
+                    const statusLabel = isTkpQuestion ? `Nilai ${question.score_obtained ?? 0}` : (question.is_correct ? 'Benar' : 'Salah')
+
+                    return (
+                      <button
+                        key={question.id}
+                        type="button"
+                        className={`user-tryout-review-item ${statusClass}`}
+                        onClick={() => setCurrentQuestionIndex(index)}
+                      >
+                        <span>{index + 1}</span>
+                        <div>
+                          <strong>{question.question}</strong>
+                          <p>{question.question_group_label}</p>
+                        </div>
+                        <em>{statusLabel}</em>
+                      </button>
+                    )
+                  })}
                 </div>
                 <div className="user-tryout-result-actions">
                   {isAdminSandbox ? null : (
