@@ -138,7 +138,29 @@ function normalizeTryoutType(string $type): string
     return 'SKD';
 }
 
-function mapQuestionOptionRow(object $item): array
+function questionImageMaxUploadKb(): int
+{
+    return 2048;
+}
+
+function buildQuestionImageUrl(?Request $request, ?string $path): ?string
+{
+    if (empty($path) || !$request) {
+        return null;
+    }
+
+    return $request->getSchemeAndHttpHost() . '/storage/' . ltrim($path, '/');
+}
+
+function storeUploadedQuestionImage(\Illuminate\Http\UploadedFile $file, string $folder): string
+{
+    $extension = strtolower($file->getClientOriginalExtension() ?: ($file->extension() ?: 'jpg'));
+    $filename = Str::uuid()->toString() . '.' . $extension;
+
+    return Storage::disk('public')->putFileAs($folder, $file, $filename);
+}
+
+function mapQuestionOptionRow(object $item, ?Request $request = null): array
 {
     return [
         'id' => (int) $item->id,
@@ -147,11 +169,13 @@ function mapQuestionOptionRow(object $item): array
         'answer' => (int) ($item->answer ?? 0) === 1,
         'istext' => (int) ($item->istext ?? 1) === 1,
         'nilai_tkp' => isset($item->nilai_tkp) && $item->nilai_tkp !== null ? (int) $item->nilai_tkp : null,
+        'image_path' => $item->image_path ?? null,
+        'image_url' => buildQuestionImageUrl($request, $item->image_path ?? null),
         'deleted_at' => $item->deleted_at ?? null,
     ];
 }
 
-function mapQuestionRow(object $item, ?array $options = null): array
+function mapQuestionRow(object $item, ?array $options = null, ?Request $request = null): array
 {
     $group = (int) ($item->question_group ?? 1);
     $type = normalizeQuestionType((string) ($item->question_type ?? 'SKD'));
@@ -167,6 +191,8 @@ function mapQuestionRow(object $item, ?array $options = null): array
         'istext' => (int) ($item->istext ?? 1) === 1,
         'information' => $item->information,
         'pembahasan' => $item->pembahasan,
+        'image_path' => $item->image_path ?? null,
+        'image_url' => buildQuestionImageUrl($request, $item->image_path ?? null),
         'created_at' => $item->created_at ?? null,
         'updated_at' => $item->updated_at ?? null,
         'deleted_at' => $item->deleted_at ?? null,
@@ -627,6 +653,8 @@ Route::get('/landing', function () {
 
 Route::get('/admin/dashboard-summary', function () {
     $totalUser = (int) DB::table('tbl_user')->count();
+    $userAktif = (int) DB::table('tbl_user')->where('status', 'active')->count();
+    $userNonaktif = (int) DB::table('tbl_user')->where('status', 'inactive')->count();
     $totalPackage = (int) DB::table('tbl_paket')->count();
     $totalTransaksi = (int) DB::table('tbl_transaksi')->count();
     $totalPendapatan = (float) DB::table('tbl_transaksi as t')
@@ -638,6 +666,8 @@ Route::get('/admin/dashboard-summary', function () {
         'message' => 'Ringkasan dashboard admin.',
         'data' => [
             'total_user' => $totalUser,
+            'user_aktif' => $userAktif,
+            'user_nonaktif' => $userNonaktif,
             'total_transaksi' => $totalTransaksi,
             'total_pendapatan' => $totalPendapatan,
             'total_paket' => $totalPackage,
@@ -1982,6 +2012,7 @@ Route::get('/admin/questions', function (Request $request) {
             'q.istext',
             'q.information',
             'q.pembahasan',
+            'q.image_path',
             'q.created_at',
             'q.updated_at',
             'q.deleted_at',
@@ -2024,6 +2055,7 @@ Route::get('/admin/questions', function (Request $request) {
                 'answer',
                 'istext',
                 'nilai_tkp',
+                'image_path',
                 'deleted_at',
             ])
             ->whereIn('question_id', $questionIds)
@@ -2033,16 +2065,16 @@ Route::get('/admin/questions', function (Request $request) {
 
         foreach ($options as $option) {
             $optionsByQuestion[(int) $option->question_id] ??= [];
-            $optionsByQuestion[(int) $option->question_id][] = mapQuestionOptionRow($option);
+            $optionsByQuestion[(int) $option->question_id][] = mapQuestionOptionRow($option, $request);
         }
     }
 
-    $data = $questions->map(function ($item) use ($optionsByQuestion) {
+    $data = $questions->map(function ($item) use ($optionsByQuestion, $request) {
         $group = (int) $item->question_group;
         $options = $optionsByQuestion[(int) $item->id] ?? [];
         $correctCount = count(array_filter($options, fn ($option) => (bool) ($option['answer'] ?? false)));
 
-        return array_merge(mapQuestionRow($item, $options), [
+        return array_merge(mapQuestionRow($item, $options, $request), [
             'options_count' => count($options),
             'correct_options_count' => $correctCount,
         ]);
@@ -2060,7 +2092,7 @@ Route::get('/admin/questions', function (Request $request) {
     ]);
 });
 
-Route::get('/admin/questions/{id}', function ($id) {
+Route::get('/admin/questions/{id}', function (Request $request, $id) {
     $question = DB::table('tbl_questions as q')
         ->leftJoin('tbl_paket as p', 'q.package_id', '=', 'p.pid')
         ->select([
@@ -2073,6 +2105,7 @@ Route::get('/admin/questions/{id}', function ($id) {
             'q.istext',
             'q.information',
             'q.pembahasan',
+            'q.image_path',
             'q.created_at',
             'q.updated_at',
             'q.deleted_at',
@@ -2092,18 +2125,19 @@ Route::get('/admin/questions/{id}', function ($id) {
             'answer',
             'istext',
             'nilai_tkp',
+            'image_path',
             'deleted_at',
         ])
         ->where('question_id', $id)
         ->whereNull('deleted_at')
         ->orderBy('id')
         ->get()
-        ->map(fn ($item) => mapQuestionOptionRow($item))
+        ->map(fn ($item) => mapQuestionOptionRow($item, $request))
         ->values();
 
     return response()->json([
         'message' => 'Detail soal berhasil dimuat.',
-        'data' => array_merge(mapQuestionRow($question, $options->all()), [
+        'data' => array_merge(mapQuestionRow($question, $options->all(), $request), [
             'options_count' => $options->count(),
             'correct_options_count' => count(array_filter($options->all(), fn ($option) => (bool) ($option['answer'] ?? false))),
         ]),
@@ -2111,8 +2145,9 @@ Route::get('/admin/questions/{id}', function ($id) {
 });
 
 Route::post('/admin/questions', function (Request $request) {
-    $validator = Validator::make($request->all(), [
-        'question' => ['required', 'string'],
+    $isText = $request->boolean('istext');
+
+    $rules = [
         'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
         'question_group' => ['required', 'integer', 'in:1,2,3'],
         'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
@@ -2120,16 +2155,29 @@ Route::post('/admin/questions', function (Request $request) {
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
         'options' => ['required', 'array', 'min:1'],
-        'options.*.choise' => ['required', 'string'],
         'options.*.answer' => ['nullable', 'boolean'],
         'options.*.istext' => ['nullable', 'boolean'],
         'options.*.nilai_tkp' => ['nullable', 'integer', 'min:1', 'max:5', 'required_if:question_group,3'],
-    ], [
+    ];
+
+    if ($isText) {
+        $rules['question'] = ['required', 'string'];
+        $rules['options.*.choise'] = ['required', 'string'];
+    } else {
+        $rules['question'] = ['nullable', 'string'];
+        $rules['question_image'] = ['required', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+        $rules['options.*.choise'] = ['nullable', 'string'];
+        $rules['options.*.image'] = ['required', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+    }
+
+    $validator = Validator::make($request->all(), $rules, [
         'options.*.nilai_tkp.required_if' => 'Nilai TKP (1-5) wajib diisi untuk setiap opsi.',
         'options.*.nilai_tkp.min' => 'Nilai TKP minimal 1.',
         'options.*.nilai_tkp.max' => 'Nilai TKP maksimal 5.',
         'package_id.required' => 'Paket wajib dipilih.',
         'package_id.exists' => 'Paket tidak ditemukan.',
+        'question_image.required' => 'Gambar soal wajib diunggah.',
+        'options.*.image.required' => 'Gambar wajib diunggah untuk setiap opsi jawaban.',
     ]);
 
     if ($validator->fails()) {
@@ -2142,19 +2190,26 @@ Route::post('/admin/questions', function (Request $request) {
     $validated = $validator->validated();
     $questionType = normalizeQuestionType((string) $validated['question_type']);
     $isTkpGroup = (int) $validated['question_group'] === 3;
+
+    $questionImagePath = $isText ? null : storeUploadedQuestionImage($request->file('question_image'), 'questions');
+
     $normalizedOptions = collect($validated['options'])
-        ->map(function ($option) use ($isTkpGroup) {
+        ->values()
+        ->map(function ($option, $index) use ($isTkpGroup, $isText, $request) {
             return [
-                'choise' => trim((string) ($option['choise'] ?? '')),
+                'choise' => $isText ? trim((string) ($option['choise'] ?? '')) : '',
                 'answer' => (int) filter_var($option['answer'] ?? false, FILTER_VALIDATE_BOOL) === 1,
-                'istext' => (int) filter_var($option['istext'] ?? true, FILTER_VALIDATE_BOOL) === 1,
+                'istext' => $isText,
                 'nilai_tkp' => $isTkpGroup && ($option['nilai_tkp'] ?? null) !== null && $option['nilai_tkp'] !== ''
                     ? (int) $option['nilai_tkp']
                     : null,
+                'image_path' => $isText ? null : storeUploadedQuestionImage($request->file("options.$index.image"), 'question-options'),
             ];
-        })
-        ->filter(fn ($option) => $option['choise'] !== '')
-        ->values();
+        });
+
+    if ($isText) {
+        $normalizedOptions = $normalizedOptions->filter(fn ($option) => $option['choise'] !== '')->values();
+    }
 
     if ($normalizedOptions->count() < 1) {
         return response()->json([
@@ -2169,13 +2224,14 @@ Route::post('/admin/questions', function (Request $request) {
     }
 
     $now = now();
-    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $request, $now, $questionType) {
+    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $now, $questionType, $isText, $questionImagePath) {
         $questionId = DB::table('tbl_questions')->insertGetId([
-            'question' => $validated['question'],
+            'question' => $isText ? $validated['question'] : '',
             'question_type' => $questionType,
             'question_group' => $validated['question_group'],
             'package_id' => $validated['package_id'],
-            'istext' => (bool) $validated['istext'],
+            'istext' => (bool) $isText,
+            'image_path' => $questionImagePath,
             'information' => $validated['information'] ?? null,
             'pembahasan' => $validated['pembahasan'] ?? null,
             'created_at' => $now,
@@ -2190,6 +2246,7 @@ Route::post('/admin/questions', function (Request $request) {
                 'answer' => $option['answer'] ? 1 : 0,
                 'istext' => $option['istext'] ? 1 : 0,
                 'nilai_tkp' => $option['nilai_tkp'],
+                'image_path' => $option['image_path'],
                 'created_at' => $now,
                 'updated_at' => null,
                 'deleted_at' => null,
@@ -2206,8 +2263,9 @@ Route::post('/admin/questions', function (Request $request) {
 });
 
 Route::put('/admin/questions/{id}', function (Request $request, $id) {
-    $validator = Validator::make($request->all(), [
-        'question' => ['required', 'string'],
+    $isText = $request->boolean('istext');
+
+    $rules = [
         'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
         'question_group' => ['required', 'integer', 'in:1,2,3'],
         'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
@@ -2215,11 +2273,24 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
         'options' => ['required', 'array', 'min:1'],
-        'options.*.choise' => ['required', 'string'],
         'options.*.answer' => ['nullable', 'boolean'],
         'options.*.istext' => ['nullable', 'boolean'],
         'options.*.nilai_tkp' => ['nullable', 'integer', 'min:1', 'max:5', 'required_if:question_group,3'],
-    ], [
+        'options.*.existing_image_path' => ['nullable', 'string'],
+    ];
+
+    if ($isText) {
+        $rules['question'] = ['required', 'string'];
+        $rules['options.*.choise'] = ['required', 'string'];
+    } else {
+        $rules['question'] = ['nullable', 'string'];
+        $rules['question_image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+        $rules['existing_question_image_path'] = ['nullable', 'string'];
+        $rules['options.*.choise'] = ['nullable', 'string'];
+        $rules['options.*.image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+    }
+
+    $validator = Validator::make($request->all(), $rules, [
         'options.*.nilai_tkp.required_if' => 'Nilai TKP (1-5) wajib diisi untuk setiap opsi.',
         'options.*.nilai_tkp.min' => 'Nilai TKP minimal 1.',
         'options.*.nilai_tkp.max' => 'Nilai TKP maksimal 5.',
@@ -2242,19 +2313,50 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
     $validated = $validator->validated();
     $questionType = normalizeQuestionType((string) $validated['question_type']);
     $isTkpGroup = (int) $validated['question_group'] === 3;
+
+    $questionImagePath = null;
+    if (!$isText) {
+        $uploadedQuestionImage = $request->file('question_image');
+        $questionImagePath = $uploadedQuestionImage
+            ? storeUploadedQuestionImage($uploadedQuestionImage, 'questions')
+            : ($validated['existing_question_image_path'] ?? null);
+
+        if (empty($questionImagePath)) {
+            return response()->json([
+                'message' => 'Gambar soal wajib diunggah.',
+            ], 422);
+        }
+    }
+
     $normalizedOptions = collect($validated['options'])
-        ->map(function ($option) use ($isTkpGroup) {
+        ->values()
+        ->map(function ($option, $index) use ($isTkpGroup, $isText, $request) {
+            $imagePath = null;
+            if (!$isText) {
+                $uploaded = $request->file("options.$index.image");
+                $imagePath = $uploaded
+                    ? storeUploadedQuestionImage($uploaded, 'question-options')
+                    : ($option['existing_image_path'] ?? null);
+            }
+
             return [
-                'choise' => trim((string) ($option['choise'] ?? '')),
+                'choise' => $isText ? trim((string) ($option['choise'] ?? '')) : '',
                 'answer' => (int) filter_var($option['answer'] ?? false, FILTER_VALIDATE_BOOL) === 1,
-                'istext' => (int) filter_var($option['istext'] ?? true, FILTER_VALIDATE_BOOL) === 1,
+                'istext' => $isText,
                 'nilai_tkp' => $isTkpGroup && ($option['nilai_tkp'] ?? null) !== null && $option['nilai_tkp'] !== ''
                     ? (int) $option['nilai_tkp']
                     : null,
+                'image_path' => $imagePath,
             ];
-        })
-        ->filter(fn ($option) => $option['choise'] !== '')
-        ->values();
+        });
+
+    if ($isText) {
+        $normalizedOptions = $normalizedOptions->filter(fn ($option) => $option['choise'] !== '')->values();
+    } elseif ($normalizedOptions->contains(fn ($option) => empty($option['image_path']))) {
+        return response()->json([
+            'message' => 'Gambar wajib diunggah untuk setiap opsi jawaban.',
+        ], 422);
+    }
 
     if ($normalizedOptions->count() < 1) {
         return response()->json([
@@ -2268,17 +2370,18 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         ], 422);
     }
 
-    DB::transaction(function () use ($id, $validated, $normalizedOptions, $questionType) {
+    DB::transaction(function () use ($id, $validated, $normalizedOptions, $questionType, $isText, $questionImagePath) {
         $now = now();
 
         DB::table('tbl_questions')
             ->where('id', $id)
             ->update([
-                'question' => $validated['question'],
+                'question' => $isText ? $validated['question'] : '',
                 'question_type' => $questionType,
                 'question_group' => $validated['question_group'],
                 'package_id' => $validated['package_id'],
-                'istext' => (bool) $validated['istext'],
+                'istext' => (bool) $isText,
+                'image_path' => $questionImagePath,
                 'information' => $validated['information'] ?? null,
                 'pembahasan' => $validated['pembahasan'] ?? null,
                 'updated_at' => $now,
@@ -2300,6 +2403,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
                 'answer' => $option['answer'] ? 1 : 0,
                 'istext' => $option['istext'] ? 1 : 0,
                 'nilai_tkp' => $option['nilai_tkp'],
+                'image_path' => $option['image_path'],
                 'created_at' => $now,
                 'updated_at' => null,
                 'deleted_at' => null,

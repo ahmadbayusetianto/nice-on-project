@@ -255,6 +255,10 @@ function createQuestionOptionForm(index = 0, option = {}) {
     answer: Boolean(option.answer),
     istext: option.istext !== undefined ? Boolean(option.istext) : true,
     nilai_tkp: option.nilai_tkp !== undefined && option.nilai_tkp !== null ? String(option.nilai_tkp) : '',
+    image: null,
+    image_preview: null,
+    existing_image_path: option.image_path ?? null,
+    existing_image_url: option.image_url ?? null,
   }
 }
 
@@ -291,23 +295,29 @@ function createQuestionFormFromDetail(detail = {}) {
     istext: detail.istext !== undefined ? Boolean(detail.istext) : true,
     information: detail.information ?? '',
     pembahasan: detail.pembahasan ?? '',
+    question_image: null,
+    question_image_preview: null,
+    existing_question_image_path: detail.image_path ?? null,
+    existing_question_image_url: detail.image_url ?? null,
     options,
   }
 }
 
-function normalizeQuestionOptions(options = [], questionGroup = null) {
-  const isTkpGroup = Number(questionGroup) === 3
+const QUESTION_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+const QUESTION_IMAGE_ACCEPTED_TYPES = ['image/jpeg', 'image/png']
 
-  return options
-    .map((option) => ({
-      choise: String(option.choise ?? '').trim(),
-      answer: Boolean(option.answer),
-      istext: Boolean(option.istext),
-      nilai_tkp: isTkpGroup && option.nilai_tkp !== '' && option.nilai_tkp !== null && option.nilai_tkp !== undefined
-        ? Number(option.nilai_tkp)
-        : null,
-    }))
-    .filter((option) => option.choise !== '')
+function validateQuestionImageFile(file) {
+  if (!file) return 'File gambar tidak valid.'
+  if (!QUESTION_IMAGE_ACCEPTED_TYPES.includes(file.type)) return 'Format gambar harus JPG atau PNG.'
+  if (file.size > QUESTION_IMAGE_MAX_BYTES) return 'Ukuran gambar maksimal 2MB.'
+  return null
+}
+
+function revokeQuestionFormPreviews(form) {
+  if (form?.question_image_preview) URL.revokeObjectURL(form.question_image_preview)
+  form?.options?.forEach((option) => {
+    if (option.image_preview) URL.revokeObjectURL(option.image_preview)
+  })
 }
 
 function formatQuestionGroupLabel(group) {
@@ -1472,6 +1482,50 @@ function PackageSearchSelect({ value, onChange, packages, disabled, placeholder 
   )
 }
 
+function QuestionImageUploadField({ label, required, preview, existingImageUrl, onSelectFile, onClear, disabled }) {
+  const inputRef = useRef(null)
+  const displayUrl = preview || existingImageUrl
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0] ?? null
+    if (file) onSelectFile(file)
+    event.target.value = ''
+  }
+
+  return (
+    <div className="admin-question-image-field">
+      {displayUrl ? (
+        <div className="admin-question-image-preview">
+          <img src={displayUrl} alt={label} />
+          <div className="admin-question-image-preview-actions">
+            <button type="button" className="admin-outline-action" onClick={() => inputRef.current?.click()} disabled={disabled}>Ganti gambar</button>
+            <button type="button" className="admin-question-option-remove" onClick={onClear} disabled={disabled} title="Hapus gambar" aria-label="Hapus gambar">🗑</button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="admin-question-upload-box admin-question-upload-box-interactive"
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled}
+        >
+          <div className="admin-question-upload-icon" aria-hidden="true">☁</div>
+          <strong>{label}{required ? <sup>*</sup> : null}</strong>
+          <p>Format: JPG, PNG. Maks 2MB</p>
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png"
+        className="admin-question-image-input-hidden"
+        onChange={handleFileChange}
+        disabled={disabled}
+      />
+    </div>
+  )
+}
+
 function AdminQuestionFormModal({
   open,
   onCancel,
@@ -1484,6 +1538,10 @@ function AdminQuestionFormModal({
   onRemoveOption,
   onSetCorrectOption,
   onResetForm,
+  onQuestionImageChange,
+  onQuestionImageClear,
+  onOptionImageChange,
+  onOptionImageClear,
   loading,
   error,
   title = 'Tambah Soal',
@@ -1582,29 +1640,44 @@ function AdminQuestionFormModal({
                   </div>
                 </label>
 
-                <label className="admin-question-field admin-question-field-full">
-                  <span>Tulis pertanyaan <sup>*</sup></span>
-                  <div className="admin-question-editor-shell">
-                    <div className="admin-question-editor-toolbar" aria-hidden="true">
-                      <span>B</span>
-                      <span>I</span>
-                      <span>U</span>
-                      <span>≡</span>
-                      <span>≣</span>
-                      <span>↗</span>
-                      <span>▢</span>
-                      <span>Tx</span>
+                {form.istext ? (
+                  <label className="admin-question-field admin-question-field-full">
+                    <span>Tulis pertanyaan <sup>*</sup></span>
+                    <div className="admin-question-editor-shell">
+                      <div className="admin-question-editor-toolbar" aria-hidden="true">
+                        <span>B</span>
+                        <span>I</span>
+                        <span>U</span>
+                        <span>≡</span>
+                        <span>≣</span>
+                        <span>↗</span>
+                        <span>▢</span>
+                        <span>Tx</span>
+                      </div>
+                      <textarea
+                        value={form.question}
+                        onChange={(event) => onFieldChange('question', event.target.value)}
+                        placeholder="Ketik atau tempel pertanyaan di sini..."
+                        disabled={loading}
+                        rows={7}
+                      />
+                      <div className="admin-question-counter">{questionCount}/2000</div>
                     </div>
-                    <textarea
-                      value={form.question}
-                      onChange={(event) => onFieldChange('question', event.target.value)}
-                      placeholder={form.istext ? 'Ketik atau tempel pertanyaan di sini...' : 'Nama file gambar soal'}
+                  </label>
+                ) : (
+                  <label className="admin-question-field admin-question-field-full">
+                    <span>Gambar Soal <sup>*</sup></span>
+                    <QuestionImageUploadField
+                      label="Tambah gambar soal"
+                      required
+                      preview={form.question_image_preview}
+                      existingImageUrl={form.existing_question_image_url}
+                      onSelectFile={onQuestionImageChange}
+                      onClear={onQuestionImageClear}
                       disabled={loading}
-                      rows={7}
                     />
-                    <div className="admin-question-counter">{questionCount}/2000</div>
-                  </div>
-                </label>
+                  </label>
+                )}
 
                 <label className="admin-question-field admin-question-field-full">
                   <span>Informasi Tambahan (Opsional)</span>
@@ -1686,25 +1759,37 @@ function AdminQuestionFormModal({
 
               <div className="admin-question-options-list">
                 {form.options.map((option, index) => (
-                  <div className="admin-question-option-row rich" key={option.key}>
+                  <div className={`admin-question-option-row${form.istext ? ' rich' : ' image'}`} key={option.key}>
                     <div className="admin-question-option-badge">{optionLabels[index] || index + 1}</div>
 
-                    <div className="admin-question-option-editor">
-                      <div className="admin-question-option-toolbar" aria-hidden="true">
-                        <span>B</span>
-                        <span>I</span>
-                        <span>U</span>
-                        <span>≡</span>
-                        <span>≣</span>
+                    {form.istext ? (
+                      <div className="admin-question-option-editor">
+                        <div className="admin-question-option-toolbar" aria-hidden="true">
+                          <span>B</span>
+                          <span>I</span>
+                          <span>U</span>
+                          <span>≡</span>
+                          <span>≣</span>
+                        </div>
+                        <textarea
+                          value={option.choise}
+                          onChange={(event) => onOptionChange(index, 'choise', event.target.value)}
+                          placeholder={`Tulis opsi jawaban ${optionLabels[index] || index + 1}`}
+                          disabled={loading}
+                          rows={2}
+                        />
                       </div>
-                      <textarea
-                        value={option.choise}
-                        onChange={(event) => onOptionChange(index, 'choise', event.target.value)}
-                        placeholder={`Tulis opsi jawaban ${optionLabels[index] || index + 1}`}
+                    ) : (
+                      <QuestionImageUploadField
+                        label={`Tambah gambar opsi ${optionLabels[index] || index + 1}`}
+                        required
+                        preview={option.image_preview}
+                        existingImageUrl={option.existing_image_url}
+                        onSelectFile={(file) => onOptionImageChange(index, file)}
+                        onClear={() => onOptionImageClear(index)}
                         disabled={loading}
-                        rows={2}
                       />
-                    </div>
+                    )}
 
                     <div className="admin-question-option-side">
                       {Number(form.question_group) === 3 ? (
@@ -1750,11 +1835,13 @@ function AdminQuestionFormModal({
                 ))}
               </div>
 
-              <div className="admin-question-upload-box" aria-label="Tambah gambar opsional">
-                <div className="admin-question-upload-icon" aria-hidden="true">☁</div>
-                <strong>Tambah gambar (opsional)</strong>
-                <p>Format: JPG, PNG. Maks 2MB</p>
-              </div>
+              {form.istext ? (
+                <div className="admin-question-upload-box" aria-label="Tambah gambar opsional">
+                  <div className="admin-question-upload-icon" aria-hidden="true">☁</div>
+                  <strong>Tambah gambar (opsional)</strong>
+                  <p>Format: JPG, PNG. Maks 2MB</p>
+                </div>
+              ) : null}
             </section>
           </div>
 
@@ -1835,7 +1922,11 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
                 <span className="admin-question-detail-section-icon question" aria-hidden="true">?</span>
                 <h4>Pertanyaan</h4>
               </div>
-              <p className="admin-question-detail-question">{question.question}</p>
+              {!question.istext && question.image_url ? (
+                <img className="admin-question-detail-image" src={question.image_url} alt="Gambar soal" />
+              ) : (
+                <p className="admin-question-detail-question">{question.question}</p>
+              )}
             </section>
 
             <section className="admin-question-detail-section explanation-card">
@@ -1865,7 +1956,11 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
                     >
                       <span className="admin-question-detail-option-badge">{letter}</span>
                       <div className="admin-question-detail-option-copy wide">
-                        <strong>{option?.choise || 'Belum ada opsi.'}</strong>
+                        {!question.istext && option?.image_url ? (
+                          <img className="admin-question-detail-option-image" src={option.image_url} alt={`Gambar opsi ${letter}`} />
+                        ) : (
+                          <strong>{option?.choise || 'Belum ada opsi.'}</strong>
+                        )}
                       </div>
                       {isTkpQuestion ? (
                         option ? (
@@ -2090,20 +2185,26 @@ function AdminQuestionManagementPage() {
     setEditingQuestionId(null)
     setQuestionSubmitError(null)
     setQuestionSubmitSuccess(null)
-    setQuestionForm(createQuestionFormFromDetail({
-      question_group: selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1,
-      question_type: 'SKD',
-      istext: true,
-    }))
+    setQuestionForm((current) => {
+      revokeQuestionFormPreviews(current)
+      return createQuestionFormFromDetail({
+        question_group: selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1,
+        question_type: 'SKD',
+        istext: true,
+      })
+    })
     setShowQuestionModal(true)
   }
 
   const resetQuestionForm = () => {
-    setQuestionForm(createQuestionFormFromDetail({
-      question_group: Number(questionForm.question_group) || (selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1),
-      question_type: 'SKD',
-      istext: true,
-    }))
+    setQuestionForm((current) => {
+      revokeQuestionFormPreviews(current)
+      return createQuestionFormFromDetail({
+        question_group: Number(current.question_group) || (selectedQuestionGroup !== 'Semua Grup' ? Number(selectedQuestionGroup) : 1),
+        question_type: 'SKD',
+        istext: true,
+      })
+    })
     setQuestionSubmitError(null)
   }
 
@@ -2124,7 +2225,10 @@ function AdminQuestionManagementPage() {
     setEditingQuestionId(row?.id ?? null)
     setQuestionSubmitError(null)
     setQuestionSubmitSuccess(null)
-    setQuestionForm(createQuestionFormFromDetail(row ?? {}))
+    setQuestionForm((current) => {
+      revokeQuestionFormPreviews(current)
+      return createQuestionFormFromDetail(row ?? {})
+    })
     setShowQuestionModal(true)
 
     try {
@@ -2138,7 +2242,10 @@ function AdminQuestionManagementPage() {
         throw new Error(message)
       }
 
-      setQuestionForm(createQuestionFormFromDetail(payload?.data ?? {}))
+      setQuestionForm((current) => {
+        revokeQuestionFormPreviews(current)
+        return createQuestionFormFromDetail(payload?.data ?? {})
+      })
     } catch {
       // Keep modal usable even if detail fetch fails.
     }
@@ -2178,6 +2285,68 @@ function AdminQuestionManagementPage() {
     }))
   }
 
+  const handleQuestionImageChange = (file) => {
+    const validationError = validateQuestionImageFile(file)
+    if (validationError) {
+      setQuestionSubmitError(validationError)
+      return
+    }
+
+    setQuestionForm((current) => {
+      if (current.question_image_preview) {
+        URL.revokeObjectURL(current.question_image_preview)
+      }
+      return {
+        ...current,
+        question_image: file,
+        question_image_preview: URL.createObjectURL(file),
+      }
+    })
+  }
+
+  const handleQuestionImageClear = () => {
+    setQuestionForm((current) => {
+      if (current.question_image_preview) {
+        URL.revokeObjectURL(current.question_image_preview)
+      }
+      return {
+        ...current,
+        question_image: null,
+        question_image_preview: null,
+        existing_question_image_path: null,
+        existing_question_image_url: null,
+      }
+    })
+  }
+
+  const handleQuestionOptionImageChange = (index, file) => {
+    const validationError = validateQuestionImageFile(file)
+    if (validationError) {
+      setQuestionSubmitError(validationError)
+      return
+    }
+
+    setQuestionForm((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => {
+        if (optionIndex !== index) return option
+        if (option.image_preview) URL.revokeObjectURL(option.image_preview)
+        return { ...option, image: file, image_preview: URL.createObjectURL(file) }
+      }),
+    }))
+  }
+
+  const handleQuestionOptionImageClear = (index) => {
+    setQuestionForm((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => {
+        if (optionIndex !== index) return option
+        if (option.image_preview) URL.revokeObjectURL(option.image_preview)
+        return { ...option, image: null, image_preview: null, existing_image_path: null, existing_image_url: null }
+      }),
+    }))
+  }
+
   const handleQuestionAddOption = () => {
     setQuestionForm((current) => ({
       ...current,
@@ -2187,8 +2356,9 @@ function AdminQuestionManagementPage() {
 
   const handleQuestionRemoveOption = (index) => {
     setQuestionForm((current) => {
+      if (current.options.length < 2) return current
+      if (current.options[index]?.image_preview) URL.revokeObjectURL(current.options[index].image_preview)
       const nextOptions = current.options.filter((_, optionIndex) => optionIndex !== index)
-      if (nextOptions.length < 2) return current
       if (!nextOptions.some((option) => option.answer) && nextOptions.length) {
         nextOptions[0] = { ...nextOptions[0], answer: true }
       }
@@ -2210,32 +2380,46 @@ function AdminQuestionManagementPage() {
     event.preventDefault()
     const submitMode = String(event.nativeEvent?.submitter?.value || 'save')
 
-    const normalizedOptions = normalizeQuestionOptions(questionForm.options, questionForm.question_group)
     const isEditMode = questionModalMode === 'edit' && editingQuestionId !== null
     const shouldKeepOpenForAddMore = submitMode === 'save-add' && !isEditMode
     const isTkpGroup = Number(questionForm.question_group) === 3
-
-    if (!questionForm.question.trim()) {
-      setQuestionSubmitError('Isi soal wajib diisi.')
-      return
-    }
+    const isText = Boolean(questionForm.istext)
 
     if (!questionForm.package_id) {
       setQuestionSubmitError('Paket wajib dipilih.')
       return
     }
 
-    if (normalizedOptions.length < 1) {
+    if (isText && !questionForm.question.trim()) {
+      setQuestionSubmitError('Isi soal wajib diisi.')
+      return
+    }
+
+    if (!isText && !questionForm.question_image && !questionForm.existing_question_image_url) {
+      setQuestionSubmitError('Gambar soal wajib diunggah.')
+      return
+    }
+
+    const activeOptions = isText
+      ? questionForm.options.filter((option) => option.choise.trim() !== '')
+      : questionForm.options
+
+    if (activeOptions.length < 1) {
       setQuestionSubmitError('Minimal 1 opsi wajib diisi.')
       return
     }
 
-    if (!isTkpGroup && normalizedOptions.filter((option) => option.answer).length !== 1) {
+    if (!isText && activeOptions.some((option) => !option.image && !option.existing_image_url)) {
+      setQuestionSubmitError('Gambar wajib diunggah untuk setiap opsi jawaban.')
+      return
+    }
+
+    if (!isTkpGroup && activeOptions.filter((option) => option.answer).length !== 1) {
       setQuestionSubmitError('Harus ada tepat 1 jawaban benar.')
       return
     }
 
-    if (isTkpGroup && normalizedOptions.some((option) => !Number.isInteger(option.nilai_tkp) || option.nilai_tkp < 1 || option.nilai_tkp > 5)) {
+    if (isTkpGroup && activeOptions.some((option) => !Number.isInteger(Number(option.nilai_tkp)) || Number(option.nilai_tkp) < 1 || Number(option.nilai_tkp) > 5)) {
       setQuestionSubmitError('Nilai TKP (1-5) wajib diisi untuk setiap opsi.')
       return
     }
@@ -2245,22 +2429,47 @@ function AdminQuestionManagementPage() {
     setQuestionSubmitSuccess(null)
 
     try {
+      const formData = new FormData()
+      if (isEditMode) formData.append('_method', 'PUT')
+      formData.append('question', isText ? questionForm.question.trim() : '')
+      formData.append('question_type', questionForm.question_type)
+      formData.append('question_group', String(Number(questionForm.question_group)))
+      formData.append('package_id', String(Number(questionForm.package_id)))
+      formData.append('istext', isText ? '1' : '0')
+      formData.append('information', questionForm.information.trim())
+      formData.append('pembahasan', questionForm.pembahasan.trim())
+
+      if (!isText) {
+        if (questionForm.question_image) {
+          formData.append('question_image', questionForm.question_image)
+        } else if (questionForm.existing_question_image_path) {
+          formData.append('existing_question_image_path', questionForm.existing_question_image_path)
+        }
+      }
+
+      activeOptions.forEach((option, index) => {
+        formData.append(`options[${index}][answer]`, option.answer ? '1' : '0')
+        formData.append(`options[${index}][istext]`, isText ? '1' : '0')
+
+        if (isTkpGroup && option.nilai_tkp !== '') {
+          formData.append(`options[${index}][nilai_tkp]`, String(Number(option.nilai_tkp)))
+        }
+
+        if (isText) {
+          formData.append(`options[${index}][choise]`, option.choise.trim())
+        } else if (option.image) {
+          formData.append(`options[${index}][image]`, option.image)
+        } else if (option.existing_image_path) {
+          formData.append(`options[${index}][existing_image_path]`, option.existing_image_path)
+        }
+      })
+
       const response = await fetch(`${BACKEND_URL}/api/admin/questions${isEditMode ? `/${editingQuestionId}` : ''}`, {
-        method: isEditMode ? 'PUT' : 'POST',
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          question: questionForm.question.trim(),
-          question_type: questionForm.question_type,
-          question_group: Number(questionForm.question_group),
-          package_id: Number(questionForm.package_id),
-          istext: Boolean(questionForm.istext),
-          information: questionForm.information.trim(),
-          pembahasan: questionForm.pembahasan.trim(),
-          options: normalizedOptions,
-        }),
+        body: formData,
       })
 
       const contentType = response.headers.get('content-type') || ''
@@ -2285,19 +2494,25 @@ function AdminQuestionManagementPage() {
       }, 2800)
 
       if (shouldKeepOpenForAddMore) {
-        setQuestionForm(createQuestionFormFromDetail({
-          question_group: Number(questionForm.question_group) || 1,
-          question_type: 'SKD',
-          package_id: questionForm.package_id,
-          istext: true,
-        }))
+        setQuestionForm((current) => {
+          revokeQuestionFormPreviews(current)
+          return createQuestionFormFromDetail({
+            question_group: Number(current.question_group) || 1,
+            question_type: 'SKD',
+            package_id: current.package_id,
+            istext: true,
+          })
+        })
         setShowQuestionModal(true)
         return
       }
 
       setShowQuestionModal(false)
       setEditingQuestionId(null)
-      setQuestionForm(createQuestionFormFromDetail())
+      setQuestionForm((current) => {
+        revokeQuestionFormPreviews(current)
+        return createQuestionFormFromDetail()
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Soal gagal disimpan.'
       setQuestionSubmitError(message)
@@ -2674,7 +2889,7 @@ function AdminQuestionManagementPage() {
                             <div className="admin-user-cell admin-question-cell">
                               <div className={`admin-user-avatar admin-question-avatar ${row.deleted_at ? 'inactive' : 'active'}`}>{String(index + 1).padStart(2, '0')}</div>
                               <div>
-                                <strong>{row.question}</strong>
+                                <strong>{row.istext ? row.question : '🖼 Soal bergambar'}</strong>
                                 <span>{row.information || row.pembahasan || '-'}</span>
                               </div>
                             </div>
@@ -2742,6 +2957,10 @@ function AdminQuestionManagementPage() {
                 onRemoveOption={handleQuestionRemoveOption}
                 onSetCorrectOption={handleQuestionSetCorrectOption}
                 onResetForm={resetQuestionForm}
+                onQuestionImageChange={handleQuestionImageChange}
+                onQuestionImageClear={handleQuestionImageClear}
+                onOptionImageChange={handleQuestionOptionImageChange}
+                onOptionImageClear={handleQuestionOptionImageClear}
                 packages={packageRows}
                 loading={isSavingQuestion}
                 error={questionSubmitError}
@@ -2907,7 +3126,6 @@ function AdminTransactionManagementPage() {
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
     { label: 'Materi', href: '/dashboard-admin/materials' },
-    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -6585,6 +6803,8 @@ function AdminDashboardPage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
   const [dashboardSummary, setDashboardSummary] = useState({
     total_user: 0,
+    user_aktif: 0,
+    user_nonaktif: 0,
     total_transaksi: 0,
     total_pendapatan: 0,
     total_paket: 0,
@@ -6605,6 +6825,13 @@ function AdminDashboardPage() {
     { label: 'Total Pendapatan', value: formatCurrency(dashboardSummary.total_pendapatan ?? 0), delta: 'Transaksi berstatus paid', accent: 'orange', icon: '💳' },
     { label: 'Total Paket', value: String(dashboardSummary.total_paket ?? 0), delta: 'Data dari tbl_paket', accent: 'purple', icon: '📦' },
   ]
+  const userAktif = Number(dashboardSummary.user_aktif ?? 0)
+  const userNonaktif = Number(dashboardSummary.user_nonaktif ?? 0)
+  const userDistribusiTotal = userAktif + userNonaktif
+  const aktifPct = userDistribusiTotal > 0 ? (userAktif / userDistribusiTotal) * 100 : 0
+  const nonaktifPct = userDistribusiTotal > 0 ? 100 - aktifPct : 0
+  const formatPct = (value) => `${value.toFixed(1).replace('.', ',')}%`
+
   const activityItems = [
     { icon: '👤', title: 'User baru mendaftar', subtitle: 'Budi Santoso', time: '10 menit lalu', tone: 'blue' },
     { icon: '✅', title: 'Transaksi berhasil', subtitle: 'INV-202505-1289', time: '35 menit lalu', tone: 'green' },
@@ -6640,7 +6867,6 @@ function AdminDashboardPage() {
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
     { label: 'Materi', href: '/dashboard-admin/materials' },
-    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -6674,6 +6900,8 @@ function AdminDashboardPage() {
         if (!cancelled && nextSummary) {
           setDashboardSummary({
             total_user: Number(nextSummary.total_user ?? 0),
+            user_aktif: Number(nextSummary.user_aktif ?? 0),
+            user_nonaktif: Number(nextSummary.user_nonaktif ?? 0),
             total_transaksi: Number(nextSummary.total_transaksi ?? 0),
             total_pendapatan: Number(nextSummary.total_pendapatan ?? 0),
             total_paket: Number(nextSummary.total_paket ?? 0),
@@ -6819,17 +7047,22 @@ function AdminDashboardPage() {
             <article className="admin-card admin-donut-card">
               <h3>Distribusi User</h3>
               <div className="admin-donut-wrap">
-                <div className="admin-donut" aria-hidden="true">
+                <div
+                  className="admin-donut"
+                  aria-hidden="true"
+                  style={{
+                    background: `conic-gradient(#2dbf75 0 ${aktifPct}%, #ffbf1f ${aktifPct}% 100%)`,
+                  }}
+                >
                   <div className="admin-donut-center">
-                    <strong>1.248</strong>
+                    <strong>{userDistribusiTotal.toLocaleString('id-ID')}</strong>
                     <span>Total User</span>
                   </div>
                 </div>
 
                 <div className="admin-donut-legend">
-                  <div><i className="dot green" /> Active <span>876 (70.2%)</span></div>
-                  <div><i className="dot yellow" /> Inactive <span>234 (18.8%)</span></div>
-                  <div><i className="dot purple" /> Pending <span>138 (11.0%)</span></div>
+                  <div><i className="dot green" /> Active <span>{userAktif.toLocaleString('id-ID')} ({formatPct(aktifPct)})</span></div>
+                  <div><i className="dot yellow" /> Inactive <span>{userNonaktif.toLocaleString('id-ID')} ({formatPct(nonaktifPct)})</span></div>
                 </div>
               </div>
             </article>
@@ -7093,7 +7326,6 @@ function AdminUserManagementPage() {
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
     { label: 'Materi', href: '/dashboard-admin/materials' },
-    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -7644,7 +7876,6 @@ function AdminPackageManagementPage() {
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
     { label: 'Materi', href: '/dashboard-admin/materials' },
-    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -8247,7 +8478,6 @@ function AdminSettingsParameterPage() {
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
     { label: 'Materi', href: '/dashboard-admin/materials' },
-    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },
@@ -9107,6 +9337,8 @@ function AdminSettingsFaqPage() {
             ))}
           </nav>
 
+          <AdminQuestionMenu currentPath={currentPath} navigate={navigate} />
+
           <AdminSystemMenu currentPath={currentPath} navigate={navigate} />
 
           <AdminUserMenu profileUser={user} displayName={displayName} onResumeProfile={(activeUser) => navigate('/account-profile', { state: { user: activeUser } })} onLogout={handleLogout} />
@@ -9455,7 +9687,6 @@ function AdminMaterialManagementPage() {
     { label: 'User', href: '/dashboard-admin/users' },
     { label: 'Paket', href: '/dashboard-admin/packages' },
     { label: 'Materi', href: '/dashboard-admin/materials' },
-    { label: 'Bank Soal', href: '/dashboard-admin/questions' },
     { label: 'Transaksi', href: '/dashboard-admin/transactions' },
     { label: 'Konten', href: '#' },
     { label: 'Laporan', href: '#' },

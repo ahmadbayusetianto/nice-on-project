@@ -1,0 +1,44 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        if (Schema::hasTable('tbl_questions') && !Schema::hasColumn('tbl_questions', 'image_path')) {
+            Schema::table('tbl_questions', function (Blueprint $table) {
+                $table->string('image_path', 255)->nullable()->after('istext');
+            });
+        }
+
+        if (Schema::hasTable('tbl_question_options') && !Schema::hasColumn('tbl_question_options', 'image_path')) {
+            Schema::table('tbl_question_options', function (Blueprint $table) {
+                $table->string('image_path', 255)->nullable()->after('istext');
+            });
+        }
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        if (Schema::hasTable('tbl_questions') && Schema::hasColumn('tbl_questions', 'image_path')) {
+            Schema::table('tbl_questions', function (Blueprint $table) {
+                $table->dropColumn('image_path');
+            });
+        }
+
+        if (Schema::hasTable('tbl_question_options') && Schema::hasColumn('tbl_question_options', 'image_path')) {
+            Schema::table('tbl_question_options', function (Blueprint $table) {
+                $table->dropColumn('image_path');
+            });
+        }
+    }
+};
