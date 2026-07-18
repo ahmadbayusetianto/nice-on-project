@@ -1535,7 +1535,6 @@ function AdminQuestionFormModal({
   onOptionChange,
   packages,
   onAddOption,
-  onRemoveOption,
   onSetCorrectOption,
   onResetForm,
   onQuestionImageChange,
@@ -1820,17 +1819,6 @@ function AdminQuestionFormModal({
                         </label>
                       )}
                     </div>
-
-                    <button
-                      type="button"
-                      className="admin-question-option-remove"
-                      onClick={() => onRemoveOption(index)}
-                      disabled={loading || form.options.length <= 2}
-                      title="Hapus opsi"
-                      aria-label="Hapus opsi"
-                    >
-                      🗑
-                    </button>
                   </div>
                 ))}
               </div>
@@ -2352,18 +2340,6 @@ function AdminQuestionManagementPage() {
       ...current,
       options: [...current.options, createQuestionOptionForm(current.options.length)],
     }))
-  }
-
-  const handleQuestionRemoveOption = (index) => {
-    setQuestionForm((current) => {
-      if (current.options.length < 2) return current
-      if (current.options[index]?.image_preview) URL.revokeObjectURL(current.options[index].image_preview)
-      const nextOptions = current.options.filter((_, optionIndex) => optionIndex !== index)
-      if (!nextOptions.some((option) => option.answer) && nextOptions.length) {
-        nextOptions[0] = { ...nextOptions[0], answer: true }
-      }
-      return { ...current, options: nextOptions }
-    })
   }
 
   const handleQuestionSetCorrectOption = (index) => {
@@ -2954,7 +2930,6 @@ function AdminQuestionManagementPage() {
                 onFieldChange={handleQuestionFieldChange}
                 onOptionChange={handleQuestionOptionChange}
                 onAddOption={handleQuestionAddOption}
-                onRemoveOption={handleQuestionRemoveOption}
                 onSetCorrectOption={handleQuestionSetCorrectOption}
                 onResetForm={resetQuestionForm}
                 onQuestionImageChange={handleQuestionImageChange}
