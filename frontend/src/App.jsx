@@ -665,7 +665,6 @@ function AdminTopbar({
         <button type="button" className="admin-date-chip">
           <span aria-hidden="true">📅</span>
           <span>{currentDateLabel}</span>
-          <span aria-hidden="true">⌄</span>
         </button>
 
         <div className="dashboard-profile-menu-wrap admin-profile-menu-wrap" ref={profileMenuRef}>
@@ -681,7 +680,7 @@ function AdminTopbar({
               <strong>{displayName}</strong>
               <span>{profileRoleLabel}</span>
             </span>
-            <span aria-hidden="true">⌄</span>
+            <span className="admin-profile-chip-chevron" aria-hidden="true">⌄</span>
           </button>
 
           {isProfileMenuOpen ? (
@@ -6745,7 +6744,6 @@ function AdminDashboardPage() {
             <button type="button" className="admin-range-chip">
               <span aria-hidden="true">📅</span>
               <span>19 Mei 2025 - 26 Mei 2025</span>
-              <span aria-hidden="true">⌄</span>
             </button>
           </section>
 

@@ -5772,6 +5772,27 @@ html {
   font-weight: 800;
 }
 
+.admin-profile-chip-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #eef1ff, #dce4ff);
+  color: #3958ff;
+  font-size: 13px;
+  font-weight: 900;
+  transition: transform 200ms ease, background 200ms ease, color 200ms ease;
+}
+
+.admin-profile-chip[aria-expanded="true"] .admin-profile-chip-chevron {
+  transform: rotate(180deg);
+  background: linear-gradient(135deg, #3958ff, #4a63ff);
+  color: #fff;
+}
+
 .admin-profile-copy {
   display: grid;
   gap: 2px;
