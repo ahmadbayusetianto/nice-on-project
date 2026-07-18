@@ -74,17 +74,23 @@ return new class extends Migration
             return;
         }
 
+        // Match the parent's actual signedness instead of assuming UNSIGNED —
+        // some environments were seeded from a raw SQL dump where `pid` was
+        // created as plain (signed) BIGINT, and a foreign key requires both
+        // sides to match exactly or MySQL rejects it with errno 150.
+        $suffix = str_contains($parentColumnType, 'unsigned') ? ' UNSIGNED' : '';
+
         if (str_contains($parentColumnType, 'bigint')) {
-            DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
+            DB::statement("ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT{$suffix} NULL");
             return;
         }
 
         if (str_contains($parentColumnType, 'int')) {
-            DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` INT UNSIGNED NULL');
+            DB::statement("ALTER TABLE `tbl_tryout_session` MODIFY `user_id` INT{$suffix} NULL");
             return;
         }
 
-        DB::statement('ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT UNSIGNED NULL');
+        DB::statement("ALTER TABLE `tbl_tryout_session` MODIFY `user_id` BIGINT{$suffix} NULL");
     }
 
     private function normalizeEngine(string $table): void
