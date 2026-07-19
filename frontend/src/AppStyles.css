@@ -6056,6 +6056,12 @@ html {
   resize: vertical;
 }
 
+.admin-package-field-hint {
+  color: #8b97b1;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .admin-faq-editor-shell {
   display: grid;
   gap: 10px;
@@ -7717,6 +7723,19 @@ html {
   line-height: 1.45;
 }
 
+.admin-package-bundling-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(119, 93, 255, 0.12);
+  color: #7f63f1;
+  font-size: 11px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
 .admin-package-type-badge,
 .admin-package-discount-pill {
   display: inline-flex;
@@ -8242,6 +8261,109 @@ html {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.admin-question-group-hint {
+  margin: 0;
+  color: #6b7a99;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-question-group-hint-error {
+  color: #ef4444;
+}
+
+.admin-question-groups-card {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-question-groups-intro h3 {
+  margin: 0 0 4px;
+  color: #17305b;
+  font-size: 18px;
+}
+
+.admin-question-groups-intro p {
+  margin: 0;
+  color: #6b7a99;
+  font-size: 14px;
+}
+
+.admin-question-groups-package-field {
+  max-width: 420px;
+}
+
+.admin-question-groups-empty,
+.admin-question-groups-empty-row {
+  padding: 24px;
+  text-align: center;
+  color: #6b7a99;
+  font-weight: 600;
+  border: 1px dashed rgba(22, 47, 91, 0.16);
+  border-radius: 14px;
+}
+
+.admin-question-groups-add-row {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-question-groups-add-row input {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  background: #fff;
+  color: #17305b;
+  padding: 0 16px;
+  font: inherit;
+}
+
+.admin-question-groups-add-row button {
+  flex: 0 0 auto;
+}
+
+.admin-question-groups-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-question-groups-table th,
+.admin-question-groups-table td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(22, 47, 91, 0.1);
+  color: #17305b;
+}
+
+.admin-question-groups-table th {
+  font-size: 13px;
+  color: #6b7a99;
+  font-weight: 700;
+}
+
+.admin-question-groups-table td input {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  background: #fff;
+  color: #17305b;
+  padding: 0 12px;
+  font: inherit;
+  width: 100%;
+  max-width: 320px;
+}
+
+.admin-question-groups-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-question-groups-delete-button {
+  padding: 10px 16px;
+  box-shadow: none;
 }
 
 .admin-package-combobox {

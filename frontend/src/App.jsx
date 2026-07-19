@@ -240,6 +240,8 @@ function createPackageFormFromDetail(detail = {}) {
     formasi: detail.formasi ?? '',
     jadwal: detail.jadwal ?? '',
     nama_paket: detail.nama_paket ?? '',
+    tipe_paket: detail.tipe_paket ?? 'tunggal',
+    bundling_id: detail.bundling_id !== undefined && detail.bundling_id !== null ? String(detail.bundling_id) : '',
     harga: detail.harga !== undefined && detail.harga !== null ? String(detail.harga) : '',
     ket: detail.ket ?? '',
   }
@@ -299,7 +301,7 @@ function createQuestionFormFromDetail(detail = {}) {
   return {
     question: detail.question ?? '',
     question_type: normalizedType,
-    question_group: Number(detail.question_group ?? 1),
+    question_group: detail.question_group ? Number(detail.question_group) : '',
     package_id: detail.package_id ?? '',
     istext: detail.istext !== undefined ? Boolean(detail.istext) : true,
     information: detail.information ?? '',
@@ -1091,8 +1093,10 @@ function AdminLogoutModal({ open, onCancel, onConfirm, title = 'Keluar dari akun
   )
 }
 
-function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah Paket', submitLabel = 'Simpan Paket', helpText = 'Isi data paket sesuai kolom yang tersedia di tabel paket.' }) {
+function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, packages = [], editingPid = null, loading, error, title = 'Tambah Paket', submitLabel = 'Simpan Paket', helpText = 'Isi data paket sesuai kolom yang tersedia di tabel paket.' }) {
   if (!open) return null
+
+  const bundlingOptions = packages.filter((pkg) => pkg.tipe_paket === 'bundling' && String(pkg.pid) !== String(editingPid))
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
@@ -1106,6 +1110,37 @@ function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, 
           {error ? <div className="admin-package-form-error">{error}</div> : null}
 
           <div className="admin-package-form-grid">
+            <label className="admin-package-field admin-package-field-full">
+              <span>Tipe Paket</span>
+              <select
+                value={form.tipe_paket}
+                onChange={(event) => {
+                  onFieldChange('tipe_paket', event.target.value)
+                  if (event.target.value === 'bundling') onFieldChange('bundling_id', '')
+                }}
+                disabled={loading}
+              >
+                <option value="tunggal" disabled={!bundlingOptions.length}>Paket Tunggal</option>
+                <option value="bundling">Bundling Paket</option>
+              </select>
+              {!bundlingOptions.length ? (
+                <small className="admin-package-field-hint">Belum ada Bundling Paket. Buat Bundling Paket terlebih dahulu sebelum bisa menambahkan Paket Tunggal.</small>
+              ) : null}
+            </label>
+
+            {form.tipe_paket !== 'bundling' ? (
+              <label className="admin-package-field admin-package-field-full">
+                <span>Bundling Paket <sup>*</sup></span>
+                <select value={form.bundling_id} onChange={(event) => onFieldChange('bundling_id', event.target.value)} disabled={loading} required>
+                  <option value="" disabled>Pilih Bundling Paket...</option>
+                  {bundlingOptions.map((pkg) => (
+                    <option key={pkg.pid} value={pkg.pid}>{pkg.name}</option>
+                  ))}
+                </select>
+                <small className="admin-package-field-hint">Setiap Paket Tunggal wajib berada di bawah satu Bundling Paket.</small>
+              </label>
+            ) : null}
+
             <label className="admin-package-field">
               <span>Kategori</span>
                <select value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)} disabled={loading}>
@@ -1562,6 +1597,65 @@ function AdminQuestionFormModal({
   helpText = 'Kelola soal CAT dengan opsi jawaban yang dapat ditambah atau dihapus secara dinamis.',
   mode = 'create',
 }) {
+  const [selectedBundlingId, setSelectedBundlingId] = useState('')
+  const [groups, setGroups] = useState([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+
+    const currentPackage = packages.find((pkg) => String(pkg.pid) === String(form.package_id))
+    setSelectedBundlingId(currentPackage?.bundling_id !== undefined && currentPackage?.bundling_id !== null ? String(currentPackage.bundling_id) : '')
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    if (form.question_type === 'SKB' && !form.package_id) {
+      setGroups([])
+      return
+    }
+
+    let cancelled = false
+    setGroupsLoading(true)
+
+    const params = new URLSearchParams({ type: form.question_type })
+    if (form.question_type === 'SKB') params.set('package_id', String(form.package_id))
+
+    fetch(`${BACKEND_URL}/api/admin/question-groups?${params.toString()}`)
+      .then((response) => response.json().catch(() => null).then((payload) => ({ ok: response.ok, payload })))
+      .then(({ ok, payload }) => {
+        if (cancelled) return
+        setGroups(ok ? (payload?.data ?? []) : [])
+      })
+      .catch(() => {
+        if (!cancelled) setGroups([])
+      })
+      .finally(() => {
+        if (!cancelled) setGroupsLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [open, form.question_type, form.package_id])
+
+  useEffect(() => {
+    if (!open || groupsLoading) return
+
+    const hasSelection = form.question_group !== '' && form.question_group !== null && form.question_group !== undefined
+    const stillValid = hasSelection && groups.some((group) => String(group.id) === String(form.question_group))
+
+    if (hasSelection && !stillValid) {
+      onFieldChange('question_group', '')
+      return
+    }
+
+    // SKD is locked to the 3 seeded groups, so default straight to the first
+    // one (TWK) instead of making the admin pick every time.
+    if (!hasSelection && form.question_type === 'SKD' && groups.length) {
+      onFieldChange('question_group', groups[0].id)
+    }
+  }, [groups, groupsLoading, open, form.question_type])
+
   if (!open) return null
 
   const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -1600,20 +1694,57 @@ function AdminQuestionFormModal({
               </div>
 
               <div className="admin-question-field-group">
-                <label className="admin-question-field admin-question-field-full">
-                  <span>Paket <sup>*</sup></span>
-                  <PackageSearchSelect
-                    value={form.package_id}
-                    onChange={(pid) => onFieldChange('package_id', pid)}
-                    packages={packages}
-                    disabled={loading}
-                  />
-                </label>
+                <div className="admin-question-field-row">
+                  <label className="admin-question-field">
+                    <span>Bundling Paket <sup>*</sup></span>
+                    <select
+                      value={selectedBundlingId}
+                      onChange={(event) => {
+                        const nextBundlingId = event.target.value
+                        setSelectedBundlingId(nextBundlingId)
+
+                        const currentPackage = packages.find((pkg) => String(pkg.pid) === String(form.package_id))
+                        const currentBundlingId = currentPackage?.bundling_id !== undefined && currentPackage?.bundling_id !== null ? String(currentPackage.bundling_id) : ''
+
+                        if (nextBundlingId !== currentBundlingId) {
+                          onFieldChange('package_id', '')
+                        }
+                      }}
+                      disabled={loading}
+                    >
+                      <option value="" disabled>Pilih bundling paket dahulu...</option>
+                      {packages.filter((pkg) => pkg.tipe_paket === 'bundling').map((pkg) => (
+                        <option key={pkg.pid} value={pkg.pid}>{pkg.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="admin-question-field">
+                    <span>Paket <sup>*</sup></span>
+                    <PackageSearchSelect
+                      value={form.package_id}
+                      onChange={(pid) => onFieldChange('package_id', pid)}
+                      packages={!selectedBundlingId ? [] : packages.filter((pkg) => (
+                        pkg.tipe_paket !== 'bundling' && String(pkg.bundling_id ?? '') === String(selectedBundlingId)
+                      ))}
+                      disabled={loading || !selectedBundlingId}
+                      placeholder={selectedBundlingId ? 'Cari nama paket...' : 'Pilih bundling paket dahulu...'}
+                    />
+                  </label>
+                </div>
 
                 <div className="admin-question-field-row">
                   <label className="admin-question-field">
                     <span>Tipe Soal <sup>*</sup></span>
-                    <select value={form.question_type} onChange={(event) => onFieldChange('question_type', event.target.value)} disabled={loading}>
+                    <select
+                      value={form.question_type}
+                      onChange={(event) => {
+                        const nextType = event.target.value
+                        onFieldChange('question_type', nextType)
+                        onFieldChange('question_group', nextType === 'SKB' ? '' : 1)
+                      }}
+                      disabled={loading}
+                    >
                       <option value="SKD">SKD</option>
                       <option value="SKB">SKB</option>
                     </select>
@@ -1621,11 +1752,21 @@ function AdminQuestionFormModal({
 
                   <label className="admin-question-field">
                     <span>Grup Soal <sup>*</sup></span>
-                    <select value={form.question_group} onChange={(event) => onFieldChange('question_group', Number(event.target.value))} disabled={loading}>
-                      <option value={1}>TWK</option>
-                      <option value={2}>TIU</option>
-                      <option value={3}>TKP</option>
+                    <select
+                      value={form.question_group}
+                      onChange={(event) => onFieldChange('question_group', event.target.value ? Number(event.target.value) : '')}
+                      disabled={loading || groupsLoading || (form.question_type === 'SKB' && !form.package_id)}
+                    >
+                      <option value="" disabled>
+                        {form.question_type === 'SKB' && !form.package_id ? 'Pilih paket dahulu...' : 'Pilih grup...'}
+                      </option>
+                      {groups.map((group) => (
+                        <option key={group.id} value={group.id}>{group.name}</option>
+                      ))}
                     </select>
+                    {form.question_type === 'SKB' && form.package_id && !groupsLoading && !groups.length ? (
+                      <p className="admin-question-group-hint">Belum ada grup untuk paket ini — kelola di tab "Grup Soal".</p>
+                    ) : null}
                   </label>
                 </div>
 
@@ -2001,6 +2142,228 @@ function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, 
   )
 }
 
+function AdminQuestionGroupsPanel({ packages }) {
+  const [selectedPackageId, setSelectedPackageId] = useState('')
+  const [groups, setGroups] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [isSavingNew, setIsSavingNew] = useState(false)
+  const [addError, setAddError] = useState(null)
+  const [editingGroupId, setEditingGroupId] = useState(null)
+  const [editingName, setEditingName] = useState('')
+  const [rowError, setRowError] = useState(null)
+  const [busyGroupId, setBusyGroupId] = useState(null)
+
+  useEffect(() => {
+    if (!selectedPackageId) {
+      setGroups([])
+      return
+    }
+
+    let cancelled = false
+    setIsLoading(true)
+    setLoadError(null)
+    setEditingGroupId(null)
+    setRowError(null)
+    setAddError(null)
+
+    const params = new URLSearchParams({ type: 'SKB', package_id: String(selectedPackageId) })
+
+    fetch(`${BACKEND_URL}/api/admin/question-groups?${params.toString()}`)
+      .then((response) => response.json().catch(() => null).then((payload) => ({ ok: response.ok, payload })))
+      .then(({ ok, payload }) => {
+        if (cancelled) return
+        if (!ok) throw new Error(payload?.message || 'Gagal memuat grup soal.')
+        setGroups(payload?.data ?? [])
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLoadError(error.message)
+          setGroups([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [selectedPackageId])
+
+  const handleAddGroup = async (event) => {
+    event.preventDefault()
+    const name = newGroupName.trim()
+    if (!name || !selectedPackageId) return
+
+    setIsSavingNew(true)
+    setAddError(null)
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/question-groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ package_id: Number(selectedPackageId), question_type: 'SKB', name }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(payload?.message || 'Gagal menambah grup.')
+
+      setGroups((current) => [...current, payload.data])
+      setNewGroupName('')
+    } catch (error) {
+      setAddError(error.message)
+    } finally {
+      setIsSavingNew(false)
+    }
+  }
+
+  const startEditing = (group) => {
+    setEditingGroupId(group.id)
+    setEditingName(group.name)
+    setRowError(null)
+  }
+
+  const cancelEditing = () => {
+    setEditingGroupId(null)
+    setEditingName('')
+  }
+
+  const handleRename = async (group) => {
+    const name = editingName.trim()
+    if (!name) return
+
+    setBusyGroupId(group.id)
+    setRowError(null)
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/question-groups/${group.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(payload?.message || 'Gagal mengubah grup.')
+
+      setGroups((current) => current.map((item) => (item.id === group.id ? payload.data : item)))
+      setEditingGroupId(null)
+    } catch (error) {
+      setRowError(error.message)
+    } finally {
+      setBusyGroupId(null)
+    }
+  }
+
+  const handleDelete = async (group) => {
+    if (!window.confirm(`Hapus grup "${group.name}"? Grup yang masih dipakai soal tidak akan bisa dihapus.`)) return
+
+    setBusyGroupId(group.id)
+    setRowError(null)
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/question-groups/${group.id}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(payload?.message || 'Gagal menghapus grup.')
+
+      setGroups((current) => current.filter((item) => item.id !== group.id))
+    } catch (error) {
+      setRowError(error.message)
+    } finally {
+      setBusyGroupId(null)
+    }
+  }
+
+  return (
+    <section className="admin-card admin-question-groups-card">
+      <div className="admin-question-groups-intro">
+        <div>
+          <h3>Grup Soal SKB</h3>
+          <p>Kelola grup soal SKB per paket. Grup SKD (TWK/TIU/TKP) sudah baku dan tidak perlu dikelola di sini.</p>
+        </div>
+      </div>
+
+      <label className="admin-question-field admin-question-groups-package-field">
+        <span>Paket <sup>*</sup></span>
+        <PackageSearchSelect
+          value={selectedPackageId}
+          onChange={(pid) => setSelectedPackageId(pid)}
+          packages={packages.filter((pkg) => pkg.tipe_paket !== 'bundling')}
+          placeholder="Cari nama paket..."
+        />
+      </label>
+
+      {!selectedPackageId ? (
+        <div className="admin-question-groups-empty">Pilih paket untuk melihat/mengelola grup soalnya.</div>
+      ) : (
+        <>
+          {loadError ? <div className="admin-user-message error">{loadError}</div> : null}
+          {rowError ? <div className="admin-user-message error">{rowError}</div> : null}
+          {isLoading ? <div className="admin-user-message">Memuat grup soal...</div> : null}
+
+          <form className="admin-question-groups-add-row" onSubmit={handleAddGroup}>
+            <input
+              type="text"
+              value={newGroupName}
+              onChange={(event) => setNewGroupName(event.target.value)}
+              placeholder="Nama grup baru, misal: Kompetensi Teknis"
+              maxLength={100}
+              disabled={isSavingNew}
+            />
+            <button type="submit" className="admin-primary-action" disabled={isSavingNew || !newGroupName.trim()}>
+              {isSavingNew ? 'Menyimpan...' : '＋ Tambah Grup'}
+            </button>
+          </form>
+          {addError ? <p className="admin-question-group-hint admin-question-group-hint-error">{addError}</p> : null}
+
+          <table className="admin-question-groups-table">
+            <thead>
+              <tr>
+                <th>Nama Grup</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((group) => (
+                <tr key={group.id}>
+                  <td>
+                    {editingGroupId === group.id ? (
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        maxLength={100}
+                        disabled={busyGroupId === group.id}
+                      />
+                    ) : (
+                      group.name
+                    )}
+                  </td>
+                  <td>
+                    {editingGroupId === group.id ? (
+                      <div className="admin-question-groups-row-actions">
+                        <button type="button" className="admin-outline-action" onClick={() => handleRename(group)} disabled={busyGroupId === group.id || !editingName.trim()}>Simpan</button>
+                        <button type="button" className="admin-outline-action" onClick={cancelEditing} disabled={busyGroupId === group.id}>Batal</button>
+                      </div>
+                    ) : (
+                      <div className="admin-question-groups-row-actions">
+                        <button type="button" className="admin-outline-action" onClick={() => startEditing(group)} disabled={busyGroupId === group.id}>Ubah Nama</button>
+                        <button type="button" className="admin-danger-action admin-question-groups-delete-button" onClick={() => handleDelete(group)} disabled={busyGroupId === group.id}>Hapus</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!isLoading && !groups.length ? (
+                <tr>
+                  <td colSpan={2} className="admin-question-groups-empty-row">Belum ada grup untuk paket ini.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  )
+}
+
 function AdminQuestionManagementPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -2041,7 +2404,8 @@ function AdminQuestionManagementPage() {
 
   const currentPath = location.pathname
   const currentSearchParams = new URLSearchParams(location.search)
-  const activeAdminTab = currentSearchParams.get('tab') === 'tryout' ? 'tryout' : 'questions'
+  const activeAdminTabParam = currentSearchParams.get('tab')
+  const activeAdminTab = activeAdminTabParam === 'tryout' ? 'tryout' : activeAdminTabParam === 'groups' ? 'groups' : 'questions'
   const displayName = user?.email?.split('@')?.[0] || 'Admin'
   const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
@@ -2274,7 +2638,7 @@ function AdminQuestionManagementPage() {
   const handleQuestionFieldChange = (field, value) => {
     setQuestionForm((current) => ({
       ...current,
-      [field]: field === 'question_group' ? Number(value) : value,
+      [field]: value,
     }))
   }
 
@@ -2377,6 +2741,11 @@ function AdminQuestionManagementPage() {
 
     if (!questionForm.package_id) {
       setQuestionSubmitError('Paket wajib dipilih.')
+      return
+    }
+
+    if (!questionForm.question_group) {
+      setQuestionSubmitError('Grup Soal wajib dipilih.')
       return
     }
 
@@ -2567,7 +2936,7 @@ function AdminQuestionManagementPage() {
   }
 
   const switchAdminQuestionTab = (tab) => {
-    const nextSearch = tab === 'tryout' ? '?tab=tryout' : ''
+    const nextSearch = tab === 'tryout' || tab === 'groups' ? `?tab=${tab}` : ''
     navigate(`${currentPath}${nextSearch}`, { replace: true, state: { user } })
   }
 
@@ -2748,7 +3117,7 @@ function AdminQuestionManagementPage() {
                   <button type="button" className="admin-outline-action" aria-label="Muat ulang data soal" onClick={() => { void loadQuestions({ cancelled: () => false, showLoading: true }) }}>↻</button>
                   <button type="button" className="admin-primary-action" onClick={openAddQuestionModal}>＋ Tambah Soal</button>
                 </>
-              ) : (
+              ) : activeAdminTab === 'tryout' ? (
                 <>
                   <label className="admin-package-filter-group admin-question-tryout-type-filter">
                     <select className="admin-package-select" value={sandboxTryoutType} onChange={(event) => setSandboxTryoutType(event.target.value)}>
@@ -2758,7 +3127,7 @@ function AdminQuestionManagementPage() {
                   </label>
                   <button type="button" className="admin-outline-action" aria-label="Muat ulang data paket" onClick={() => { void loadSandboxPackages({ cancelled: () => false, showLoading: true }) }}>↻</button>
                 </>
-              )}
+              ) : null}
             </div>
           </section>
 
@@ -2773,6 +3142,14 @@ function AdminQuestionManagementPage() {
             </button>
             <button
               type="button"
+              className={`admin-question-tab${activeAdminTab === 'groups' ? ' active' : ''}`}
+              onClick={() => switchAdminQuestionTab('groups')}
+            >
+              <span aria-hidden="true">📁</span>
+              <span>Grup Soal</span>
+            </button>
+            <button
+              type="button"
               className={`admin-question-tab${activeAdminTab === 'tryout' ? ' active' : ''}`}
               onClick={() => switchAdminQuestionTab('tryout')}
             >
@@ -2781,7 +3158,9 @@ function AdminQuestionManagementPage() {
             </button>
           </section>
 
-          {activeAdminTab === 'questions' ? (
+          {activeAdminTab === 'groups' ? (
+            <AdminQuestionGroupsPanel packages={packageRows} />
+          ) : activeAdminTab === 'questions' ? (
             <>
               <section className="admin-summary-grid admin-question-summary-grid">
                 {questionSummaryCards.map((card) => (
@@ -8013,6 +8392,8 @@ function AdminPackageManagementPage() {
     formasi: '',
     jadwal: '',
     nama_paket: '',
+    tipe_paket: 'tunggal',
+    bundling_id: '',
     harga: '',
     ket: '',
   })
@@ -8111,6 +8492,8 @@ function AdminPackageManagementPage() {
       packageSuccessTimerRef.current = null
     }
 
+    const hasBundlingOption = packageRows.some((row) => row.tipe_paket === 'bundling')
+
     setPackageModalMode('create')
     setEditingPackagePid(null)
     setPackageSubmitError(null)
@@ -8120,6 +8503,8 @@ function AdminPackageManagementPage() {
       formasi: '',
       jadwal: '',
       nama_paket: '',
+      tipe_paket: hasBundlingOption ? 'tunggal' : 'bundling',
+      bundling_id: '',
       harga: '',
       ket: '',
     })
@@ -8142,6 +8527,8 @@ function AdminPackageManagementPage() {
       formasi: row?.type || '',
       jadwal: '',
       nama_paket: row?.name || '',
+      tipe_paket: row?.tipe_paket || 'tunggal',
+      bundling_id: row?.bundling_id !== undefined && row?.bundling_id !== null ? String(row.bundling_id) : '',
       harga: parseCurrencyToNumber(row?.price),
       ket: row?.desc || '',
     })
@@ -8193,6 +8580,11 @@ function AdminPackageManagementPage() {
       return
     }
 
+    if (packageForm.tipe_paket !== 'bundling' && !packageForm.bundling_id) {
+      setPackageSubmitError('Pilih Bundling Paket terlebih dahulu. Setiap paket tunggal wajib memiliki Bundling Paket.')
+      return
+    }
+
     setIsSavingPackage(true)
     setPackageSubmitError(null)
     setPackageSubmitSuccess(null)
@@ -8210,6 +8602,8 @@ function AdminPackageManagementPage() {
           formasi: packageForm.formasi.trim(),
           jadwal: packageForm.jadwal.trim(),
           nama_paket: packageForm.nama_paket.trim(),
+          tipe_paket: packageForm.tipe_paket === 'bundling' ? 'bundling' : 'tunggal',
+          bundling_id: packageForm.tipe_paket === 'bundling' || !packageForm.bundling_id ? null : Number(packageForm.bundling_id),
           harga: Number(packageForm.harga),
           ket: packageForm.ket.trim(),
         }),
@@ -8232,6 +8626,8 @@ function AdminPackageManagementPage() {
         formasi: '',
         jadwal: '',
         nama_paket: '',
+        tipe_paket: 'tunggal',
+        bundling_id: '',
         harga: '',
         ket: '',
       })
@@ -8500,8 +8896,11 @@ function AdminPackageManagementPage() {
                             <span>{row.thumb}</span>
                           </div>
                           <div className="admin-package-name">
-                            <strong>{row.name}</strong>
-                            <span>{row.desc}</span>
+                            <strong>
+                              {row.name}
+                              {row.tipe_paket === 'bundling' ? <span className="admin-package-bundling-badge">Bundling</span> : null}
+                            </strong>
+                            <span>{row.tipe_paket === 'tunggal' && row.bundling_nama ? `Bagian dari ${row.bundling_nama}` : row.desc}</span>
                           </div>
                         </div>
                       </td>
@@ -8571,6 +8970,8 @@ function AdminPackageManagementPage() {
             onSubmit={handlePackageSubmit}
             form={packageForm}
             onFieldChange={handlePackageFieldChange}
+            packages={packageRows}
+            editingPid={editingPackagePid}
             loading={isSavingPackage}
             error={packageSubmitError}
             title={packageModalMode === 'edit' ? 'Edit Paket' : 'Tambah Paket'}

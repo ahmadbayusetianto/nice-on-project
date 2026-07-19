@@ -32,4 +32,9 @@ class Question extends Model
     {
         return $this->hasMany(AnswerSheet::class, 'question_id');
     }
+
+    public function group()
+    {
+        return $this->belongsTo(QuestionGroup::class, 'question_group');
+    }
 }

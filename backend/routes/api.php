@@ -102,14 +102,59 @@ function faqTableMissingResponse()
     ], 503);
 }
 
-function questionGroupLabel(int $group): string
+function questionGroupLabel(mixed $group, string $questionType = 'SKD', array $groupsById = []): string
 {
-    return match ($group) {
-        1 => 'TWK',
-        2 => 'TIU',
-        3 => 'TKP',
-        default => 'Unknown',
-    };
+    if (normalizeQuestionType($questionType) === 'SKD') {
+        return match ((int) $group) {
+            1 => 'TWK',
+            2 => 'TIU',
+            3 => 'TKP',
+            default => 'Unknown',
+        };
+    }
+
+    return $groupsById[(int) $group] ?? 'Unknown';
+}
+
+/**
+ * The question_group a request selects must actually belong to the request's
+ * question_type — and, for SKB, to the request's package_id too, since SKB
+ * groups are scoped per package.
+ */
+function questionGroupValidationRule(string $questionType, mixed $packageId): \Illuminate\Validation\Rules\Exists
+{
+    return Rule::exists('tbl_question_groups', 'id')
+        ->whereNull('deleted_at')
+        ->where(function ($query) use ($questionType, $packageId) {
+            if ($questionType === 'SKB') {
+                $query->where('question_type', 'SKB')->where('package_id', $packageId);
+            } else {
+                $query->where('question_type', 'SKD');
+            }
+        });
+}
+
+/**
+ * Build an {id => name} lookup for a set of question_group ids, for
+ * resolving question_group_label without an N+1 query per row.
+ */
+function questionGroupNamesByIds(array $groupIds): array
+{
+    $groupIds = array_values(array_unique(array_filter($groupIds, fn ($id) => $id !== null && $id !== '')));
+
+    if (empty($groupIds)) {
+        return [];
+    }
+
+    return DB::table('tbl_question_groups')
+        ->whereIn('id', $groupIds)
+        ->pluck('name', 'id')
+        ->all();
+}
+
+function isTkpQuestionGroup(mixed $group, string $questionType = 'SKD'): bool
+{
+    return normalizeQuestionType($questionType) === 'SKD' && (int) $group === 3;
 }
 
 function normalizeQuestionType(string $type): string
@@ -175,17 +220,17 @@ function mapQuestionOptionRow(object $item, ?Request $request = null): array
     ];
 }
 
-function mapQuestionRow(object $item, ?array $options = null, ?Request $request = null): array
+function mapQuestionRow(object $item, ?array $options = null, ?Request $request = null, array $groupsById = []): array
 {
-    $group = (int) ($item->question_group ?? 1);
     $type = normalizeQuestionType((string) ($item->question_type ?? 'SKD'));
+    $group = (int) ($item->question_group ?? 0);
 
     return [
         'id' => (int) $item->id,
         'question' => (string) $item->question,
         'question_type' => $type,
         'question_group' => $group,
-        'question_group_label' => questionGroupLabel($group),
+        'question_group_label' => questionGroupLabel($group, $type, $groupsById),
         'package_id' => isset($item->package_id) && $item->package_id !== null ? (int) $item->package_id : null,
         'package_name' => $item->package_name ?? null,
         'istext' => (int) ($item->istext ?? 1) === 1,
@@ -311,19 +356,19 @@ function mapTryoutOptionRow(object $item): array
     ];
 }
 
-function mapTryoutQuestionRow(object $question, array $options, ?object $sheet = null, bool $includeResult = false): array
+function mapTryoutQuestionRow(object $question, array $options, ?object $sheet = null, bool $includeResult = false, array $groupsById = []): array
 {
-    $group = (int) ($question->question_group ?? 1);
     $type = normalizeQuestionType((string) ($question->question_type ?? 'SKD'));
+    $group = (int) ($question->question_group ?? 0);
     $selectedOptionId = $sheet ? (int) ($sheet->option_id ?? 0) : null;
-    $isTkpGroup = $group === 3;
+    $isTkpGroup = isTkpQuestionGroup($group, $type);
 
     return [
         'id' => (int) $question->id,
         'question' => (string) $question->question,
         'question_type' => $type,
         'question_group' => $group,
-        'question_group_label' => questionGroupLabel($group),
+        'question_group_label' => questionGroupLabel($group, $type, $groupsById),
         'istext' => (int) ($question->istext ?? 1) === 1,
         'information' => $question->information,
         'pembahasan' => $includeResult ? $question->pembahasan : null,
@@ -424,7 +469,9 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
         ->get()
         ->groupBy('question_id');
 
-    $questions = $sheetRows->map(function ($sheet) use ($questionsById, $optionsByQuestion, $includeResult) {
+    $groupsById = questionGroupNamesByIds($questionsById->pluck('question_group')->all());
+
+    $questions = $sheetRows->map(function ($sheet) use ($questionsById, $optionsByQuestion, $includeResult, $groupsById) {
         $question = $questionsById[(int) $sheet->question_id] ?? null;
         if (!$question) {
             return null;
@@ -435,7 +482,7 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
             ->values()
             ->all();
 
-        return mapTryoutQuestionRow($question, $options, $sheet, $includeResult);
+        return mapTryoutQuestionRow($question, $options, $sheet, $includeResult, $groupsById);
     })->filter()->values();
 
     return [
@@ -501,7 +548,7 @@ function createTryoutSessionRecord(array $validated, object $package, $selectedQ
         DB::table('tbl_answer_sheet')->insert([
             'ljk_id' => $ljkId,
             'question_id' => $question->id,
-            'question_group' => (int) $question->question_group,
+            'question_group' => $tryoutType === 'SKD' ? (string) (int) $question->question_group : (string) $question->question_group,
             'option_id' => null,
             'answer_id' => $answerOption?->id,
             'value' => null,
@@ -511,9 +558,9 @@ function createTryoutSessionRecord(array $validated, object $package, $selectedQ
     return (int) $ljkId;
 }
 
-function calculateTryoutSheetValue(?int $selectedOptionId, ?int $answerOptionId, int $questionGroup = 1): int
+function calculateTryoutSheetValue(?int $selectedOptionId, ?int $answerOptionId, mixed $questionGroup = 1, string $questionType = 'SKD'): int
 {
-    if ($questionGroup === 3) {
+    if (isTkpQuestionGroup($questionGroup, $questionType)) {
         if (!$selectedOptionId) {
             return 0;
         }
@@ -1806,20 +1853,28 @@ Route::post('/tryout/start', function (Request $request) {
         ->get()
         ->groupBy('question_group');
 
-    $groupQuotas = [
-        1 => parameterIntValue('catcpns.twk_default', 30),
-        2 => parameterIntValue('catcpns.tiu_default', 35),
-        3 => parameterIntValue('catcpns.tkp_default', 45),
-    ];
+    if ($tryoutType === 'SKD') {
+        $groupQuotas = [
+            1 => parameterIntValue('catcpns.twk_default', 30),
+            2 => parameterIntValue('catcpns.tiu_default', 35),
+            3 => parameterIntValue('catcpns.tkp_default', 45),
+        ];
 
-    foreach ($groupQuotas as $group => $quota) {
-        $groupQuestions = collect($questionsByGroup->get($group, []));
-        if ($groupQuestions->isEmpty()) {
-            continue;
+        foreach ($groupQuotas as $group => $quota) {
+            $groupQuestions = collect($questionsByGroup->get((string) $group, []));
+            if ($groupQuestions->isEmpty()) {
+                continue;
+            }
+
+            $limit = $quota > 0 ? min($quota, $groupQuestions->count()) : $groupQuestions->count();
+            $selectedQuestions = $selectedQuestions->merge($groupQuestions->take($limit)->values());
         }
-
-        $limit = $quota > 0 ? min($quota, $groupQuestions->count()) : $groupQuestions->count();
-        $selectedQuestions = $selectedQuestions->merge($groupQuestions->take($limit)->values());
+    } else {
+        // SKB groups are admin-defined free text with no fixed taxonomy/quota —
+        // take every SKB question found for this package, across all groups.
+        foreach ($questionsByGroup as $groupQuestions) {
+            $selectedQuestions = $selectedQuestions->merge(collect($groupQuestions)->values());
+        }
     }
 
     if ($shuffleQuestion) {
@@ -1904,20 +1959,28 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
         ->get()
         ->groupBy('question_group');
 
-    $groupQuotas = [
-        1 => parameterIntValue('catcpns.twk_default', 30),
-        2 => parameterIntValue('catcpns.tiu_default', 35),
-        3 => parameterIntValue('catcpns.tkp_default', 45),
-    ];
+    if ($tryoutType === 'SKD') {
+        $groupQuotas = [
+            1 => parameterIntValue('catcpns.twk_default', 30),
+            2 => parameterIntValue('catcpns.tiu_default', 35),
+            3 => parameterIntValue('catcpns.tkp_default', 45),
+        ];
 
-    foreach ($groupQuotas as $group => $quota) {
-        $groupQuestions = collect($questionsByGroup->get($group, []));
-        if ($groupQuestions->isEmpty()) {
-            continue;
+        foreach ($groupQuotas as $group => $quota) {
+            $groupQuestions = collect($questionsByGroup->get((string) $group, []));
+            if ($groupQuestions->isEmpty()) {
+                continue;
+            }
+
+            $limit = $quota > 0 ? min($quota, $groupQuestions->count()) : $groupQuestions->count();
+            $selectedQuestions = $selectedQuestions->merge($groupQuestions->take($limit)->values());
         }
-
-        $limit = $quota > 0 ? min($quota, $groupQuestions->count()) : $groupQuestions->count();
-        $selectedQuestions = $selectedQuestions->merge($groupQuestions->take($limit)->values());
+    } else {
+        // SKB groups are admin-defined free text with no fixed taxonomy/quota —
+        // take every SKB question found for this package, across all groups.
+        foreach ($questionsByGroup as $groupQuestions) {
+            $selectedQuestions = $selectedQuestions->merge(collect($groupQuestions)->values());
+        }
     }
 
     if ($shuffleQuestion) {
@@ -2024,7 +2087,7 @@ Route::put('/tryout/{ljkId}/answer', function (Request $request, $ljkId) {
         ->where('id', $sheet->id)
         ->update([
             'option_id' => $selectedOptionId,
-            'value' => calculateTryoutSheetValue($selectedOptionId, $answerOptionId, (int) ($sheet->question_group ?? 1)),
+            'value' => calculateTryoutSheetValue($selectedOptionId, $answerOptionId, $sheet->question_group ?? 1, normalizeTryoutType((string) ($session->jenis_tryout ?? 'SKD'))),
         ]);
 
     return response()->json([
@@ -2065,17 +2128,19 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
         return response()->json(['message' => 'Sesi tryout tidak memiliki soal.'], 422);
     }
 
+    $tryoutType = normalizeTryoutType((string) ($session->jenis_tryout ?? 'SKD'));
     $scoreTwk = 0;
     $scoreTiu = 0;
     $scoreTkp = 0;
+    $scoreOther = 0;
     $now = now();
 
-    DB::transaction(function () use ($sheetRows, $ljkId, $now, &$scoreTwk, &$scoreTiu, &$scoreTkp) {
+    DB::transaction(function () use ($sheetRows, $ljkId, $now, $tryoutType, &$scoreTwk, &$scoreTiu, &$scoreTkp, &$scoreOther) {
         foreach ($sheetRows as $sheet) {
-            $questionGroup = (int) ($sheet->question_group ?? 1);
+            $rawGroup = $sheet->question_group ?? 1;
             $selectedOptionId = $sheet->option_id ? (int) $sheet->option_id : null;
             $answerOptionId = $sheet->answer_id ? (int) $sheet->answer_id : null;
-            $value = calculateTryoutSheetValue($selectedOptionId, $answerOptionId, $questionGroup);
+            $value = calculateTryoutSheetValue($selectedOptionId, $answerOptionId, $rawGroup, $tryoutType);
 
             DB::table('tbl_answer_sheet')
                 ->where('id', $sheet->id)
@@ -2083,6 +2148,13 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
                     'value' => $value,
                 ]);
 
+            if ($tryoutType !== 'SKD') {
+                // SKB groups are admin-defined free text with no TWK/TIU/TKP taxonomy.
+                $scoreOther += $value;
+                continue;
+            }
+
+            $questionGroup = (int) $rawGroup;
             if ($questionGroup === 1) {
                 $scoreTwk += $value;
             } elseif ($questionGroup === 2) {
@@ -2098,7 +2170,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
                 'skor_twk' => $scoreTwk,
                 'skor_tiu' => $scoreTiu,
                 'skor_tkp' => $scoreTkp,
-                'skor_total' => $scoreTwk + $scoreTiu + $scoreTkp,
+                'skor_total' => $scoreTwk + $scoreTiu + $scoreTkp + $scoreOther,
                 'status' => 1,
                 'finish_at' => $now,
                 'updated_at' => $now,
@@ -2112,10 +2184,10 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
         notifyAdminUsers(
             'tryout.finished',
             'Tryout selesai',
-            'User ' . ($user->email ?? ('#' . $userId)) . ' menyelesaikan tryout dengan skor ' . ($scoreTwk + $scoreTiu + $scoreTkp) . '.',
+            'User ' . ($user->email ?? ('#' . $userId)) . ' menyelesaikan tryout dengan skor ' . ($scoreTwk + $scoreTiu + $scoreTkp + $scoreOther) . '.',
             '/dashboard-admin/transactions',
             ['icon' => '🏁'],
-            ['pid' => $userId, 'session_id' => (int) $ljkId, 'score_total' => $scoreTwk + $scoreTiu + $scoreTkp]
+            ['pid' => $userId, 'session_id' => (int) $ljkId, 'score_total' => $scoreTwk + $scoreTiu + $scoreTkp + $scoreOther]
         );
     }
 
@@ -2155,7 +2227,7 @@ Route::get('/admin/questions', function (Request $request) {
         $query->whereNull('q.deleted_at');
     }
 
-    if ($group !== '' && in_array((int) $group, [1, 2, 3], true)) {
+    if ($group !== '' && ctype_digit($group)) {
         $query->where('q.question_group', (int) $group);
     }
 
@@ -2200,12 +2272,13 @@ Route::get('/admin/questions', function (Request $request) {
         }
     }
 
-    $data = $questions->map(function ($item) use ($optionsByQuestion, $request) {
-        $group = (int) $item->question_group;
+    $groupsById = questionGroupNamesByIds($questions->pluck('question_group')->all());
+
+    $data = $questions->map(function ($item) use ($optionsByQuestion, $request, $groupsById) {
         $options = $optionsByQuestion[(int) $item->id] ?? [];
         $correctCount = count(array_filter($options, fn ($option) => (bool) ($option['answer'] ?? false)));
 
-        return array_merge(mapQuestionRow($item, $options, $request), [
+        return array_merge(mapQuestionRow($item, $options, $request, $groupsById), [
             'options_count' => count($options),
             'correct_options_count' => $correctCount,
         ]);
@@ -2266,9 +2339,11 @@ Route::get('/admin/questions/{id}', function (Request $request, $id) {
         ->map(fn ($item) => mapQuestionOptionRow($item, $request))
         ->values();
 
+    $groupsById = questionGroupNamesByIds([$question->question_group]);
+
     return response()->json([
         'message' => 'Detail soal berhasil dimuat.',
-        'data' => array_merge(mapQuestionRow($question, $options->all(), $request), [
+        'data' => array_merge(mapQuestionRow($question, $options->all(), $request, $groupsById), [
             'options_count' => $options->count(),
             'correct_options_count' => count(array_filter($options->all(), fn ($option) => (bool) ($option['answer'] ?? false))),
         ]),
@@ -2277,10 +2352,11 @@ Route::get('/admin/questions/{id}', function (Request $request, $id) {
 
 Route::post('/admin/questions', function (Request $request) {
     $isText = $request->boolean('istext');
+    $questionTypeInput = normalizeQuestionType((string) $request->input('question_type', 'SKD'));
 
     $rules = [
         'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
-        'question_group' => ['required', 'integer', 'in:1,2,3'],
+        'question_group' => ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
         'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
@@ -2307,6 +2383,7 @@ Route::post('/admin/questions', function (Request $request) {
         'options.*.nilai_tkp.max' => 'Nilai TKP maksimal 5.',
         'package_id.required' => 'Paket wajib dipilih.',
         'package_id.exists' => 'Paket tidak ditemukan.',
+        'question_group.exists' => 'Grup soal tidak ditemukan untuk paket/tipe soal ini.',
         'question_image.required' => 'Gambar soal wajib diunggah.',
         'options.*.image.required' => 'Gambar wajib diunggah untuk setiap opsi jawaban.',
     ]);
@@ -2320,7 +2397,7 @@ Route::post('/admin/questions', function (Request $request) {
 
     $validated = $validator->validated();
     $questionType = normalizeQuestionType((string) $validated['question_type']);
-    $isTkpGroup = (int) $validated['question_group'] === 3;
+    $isTkpGroup = isTkpQuestionGroup($validated['question_group'], $questionType);
 
     $questionImagePath = $isText ? null : storeUploadedQuestionImage($request->file('question_image'), 'questions');
 
@@ -2395,10 +2472,11 @@ Route::post('/admin/questions', function (Request $request) {
 
 Route::put('/admin/questions/{id}', function (Request $request, $id) {
     $isText = $request->boolean('istext');
+    $questionTypeInput = normalizeQuestionType((string) $request->input('question_type', 'SKD'));
 
     $rules = [
         'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
-        'question_group' => ['required', 'integer', 'in:1,2,3'],
+        'question_group' => ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
         'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
@@ -2427,6 +2505,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         'options.*.nilai_tkp.max' => 'Nilai TKP maksimal 5.',
         'package_id.required' => 'Paket wajib dipilih.',
         'package_id.exists' => 'Paket tidak ditemukan.',
+        'question_group.exists' => 'Grup soal tidak ditemukan untuk paket/tipe soal ini.',
     ]);
 
     if ($validator->fails()) {
@@ -2443,7 +2522,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     $validated = $validator->validated();
     $questionType = normalizeQuestionType((string) $validated['question_type']);
-    $isTkpGroup = (int) $validated['question_group'] === 3;
+    $isTkpGroup = isTkpQuestionGroup($validated['question_group'], $questionType);
 
     $questionImagePath = null;
     if (!$isText) {
@@ -2615,26 +2694,226 @@ Route::patch('/admin/questions/{id}/restore', function ($id) {
     ]);
 });
 
+Route::get('/admin/question-groups', function (Request $request) {
+    $type = normalizeQuestionType((string) $request->query('type', 'SKD'));
+    $packageId = $request->query('package_id');
+
+    $query = DB::table('tbl_question_groups')
+        ->where('question_type', $type)
+        ->whereNull('deleted_at')
+        ->orderBy('sort_order')
+        ->orderBy('id');
+
+    if ($type === 'SKB') {
+        if (!$packageId) {
+            return response()->json([
+                'message' => 'Grup soal berhasil dimuat.',
+                'data' => [],
+            ]);
+        }
+
+        $query->where('package_id', $packageId);
+    } else {
+        $query->whereNull('package_id');
+    }
+
+    $groups = $query->get()->map(fn ($item) => [
+        'id' => (int) $item->id,
+        'package_id' => $item->package_id !== null ? (int) $item->package_id : null,
+        'question_type' => $item->question_type,
+        'name' => $item->name,
+        'sort_order' => (int) $item->sort_order,
+        'is_locked' => (bool) $item->is_locked,
+    ])->values();
+
+    return response()->json([
+        'message' => 'Grup soal berhasil dimuat.',
+        'data' => $groups,
+    ]);
+});
+
+Route::post('/admin/question-groups', function (Request $request) {
+    $questionType = normalizeQuestionType((string) $request->input('question_type', 'SKB'));
+
+    if ($questionType === 'SKD') {
+        return response()->json([
+            'message' => 'Grup SKD tidak dapat ditambahkan karena sudah baku (TWK/TIU/TKP).',
+        ], 422);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
+        'name' => ['required', 'string', 'max:100'],
+    ], [
+        'package_id.required' => 'Paket wajib dipilih.',
+        'package_id.exists' => 'Paket tidak ditemukan.',
+        'name.required' => 'Nama grup wajib diisi.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi grup soal gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $validated = $validator->validated();
+    $name = trim($validated['name']);
+
+    $duplicate = DB::table('tbl_question_groups')
+        ->where('package_id', $validated['package_id'])
+        ->where('question_type', 'SKB')
+        ->whereNull('deleted_at')
+        ->whereRaw('LOWER(name) = ?', [strtolower($name)])
+        ->exists();
+
+    if ($duplicate) {
+        return response()->json([
+            'message' => 'Grup dengan nama tersebut sudah ada di paket ini.',
+        ], 422);
+    }
+
+    $now = now();
+    $groupId = DB::table('tbl_question_groups')->insertGetId([
+        'package_id' => $validated['package_id'],
+        'question_type' => 'SKB',
+        'name' => $name,
+        'sort_order' => 0,
+        'is_locked' => false,
+        'created_at' => $now,
+        'updated_at' => null,
+        'deleted_at' => null,
+    ]);
+
+    return response()->json([
+        'message' => 'Grup soal berhasil ditambahkan.',
+        'data' => [
+            'id' => $groupId,
+            'package_id' => (int) $validated['package_id'],
+            'question_type' => 'SKB',
+            'name' => $name,
+            'sort_order' => 0,
+            'is_locked' => false,
+        ],
+    ], 201);
+});
+
+Route::put('/admin/question-groups/{id}', function (Request $request, $id) {
+    $group = DB::table('tbl_question_groups')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$group) {
+        return response()->json(['message' => 'Grup soal tidak ditemukan.'], 404);
+    }
+
+    if ($group->is_locked) {
+        return response()->json(['message' => 'Grup SKD sudah baku dan tidak dapat diubah.'], 422);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'name' => ['required', 'string', 'max:100'],
+    ], [
+        'name.required' => 'Nama grup wajib diisi.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi grup soal gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $name = trim($validator->validated()['name']);
+
+    $duplicate = DB::table('tbl_question_groups')
+        ->where('package_id', $group->package_id)
+        ->where('question_type', $group->question_type)
+        ->whereNull('deleted_at')
+        ->where('id', '!=', $id)
+        ->whereRaw('LOWER(name) = ?', [strtolower($name)])
+        ->exists();
+
+    if ($duplicate) {
+        return response()->json([
+            'message' => 'Grup dengan nama tersebut sudah ada di paket ini.',
+        ], 422);
+    }
+
+    DB::table('tbl_question_groups')
+        ->where('id', $id)
+        ->update(['name' => $name, 'updated_at' => now()]);
+
+    return response()->json([
+        'message' => 'Grup soal berhasil diperbarui.',
+        'data' => [
+            'id' => (int) $group->id,
+            'package_id' => $group->package_id !== null ? (int) $group->package_id : null,
+            'question_type' => $group->question_type,
+            'name' => $name,
+            'sort_order' => (int) $group->sort_order,
+            'is_locked' => (bool) $group->is_locked,
+        ],
+    ]);
+});
+
+Route::delete('/admin/question-groups/{id}', function ($id) {
+    $group = DB::table('tbl_question_groups')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$group) {
+        return response()->json(['message' => 'Grup soal tidak ditemukan.'], 404);
+    }
+
+    if ($group->is_locked) {
+        return response()->json(['message' => 'Grup SKD sudah baku dan tidak dapat dihapus.'], 422);
+    }
+
+    $stillUsed = DB::table('tbl_questions')
+        ->where('question_group', $id)
+        ->whereNull('deleted_at')
+        ->exists();
+
+    if ($stillUsed) {
+        return response()->json(['message' => 'Grup masih dipakai oleh soal, tidak bisa dihapus.'], 422);
+    }
+
+    DB::table('tbl_question_groups')
+        ->where('id', $id)
+        ->update(['deleted_at' => now(), 'updated_at' => now()]);
+
+    return response()->json([
+        'message' => 'Grup soal berhasil dihapus.',
+    ]);
+});
+
 Route::get('/admin/packages', function (Request $request) {
     $kategori = trim((string) $request->query('kategori', ''));
 
-    $query = DB::table('tbl_paket')
-        ->whereNull('deleted_at')
+    $query = DB::table('tbl_paket as p')
+        ->leftJoin('tbl_paket as b', 'p.bundling_id', '=', 'b.pid')
+        ->whereNull('p.deleted_at')
         ->select([
-            'pid',
-            'kategori',
-            'formasi',
-            'jadwal',
-            'nama_paket',
-            'harga',
-            'ket',
-            'created_at',
+            'p.pid',
+            'p.kategori',
+            'p.formasi',
+            'p.jadwal',
+            'p.nama_paket',
+            'p.tipe_paket',
+            'p.bundling_id',
+            'b.nama_paket as bundling_nama',
+            'p.harga',
+            'p.ket',
+            'p.created_at',
         ])
-        ->orderByDesc('created_at')
-        ->orderByDesc('pid');
+        ->orderByDesc('p.created_at')
+        ->orderByDesc('p.pid');
 
     if ($kategori !== '' && strtoupper($kategori) !== 'ALL') {
-        $query->whereRaw('UPPER(kategori) = ?', [strtoupper($kategori)]);
+        $query->whereRaw('UPPER(p.kategori) = ?', [strtoupper($kategori)]);
     }
 
     $packages = $query->get()->map(function ($item) {
@@ -2653,6 +2932,9 @@ Route::get('/admin/packages', function (Request $request) {
             'program' => $program,
             'type' => $type,
             'typeClass' => strtoupper((string) $program) === 'PPPK' ? 'online' : 'tryout',
+            'tipe_paket' => $item->tipe_paket ?: 'tunggal',
+            'bundling_id' => $item->bundling_id !== null ? (int) $item->bundling_id : null,
+            'bundling_nama' => $item->bundling_nama,
             'price' => 'Rp'.number_format($price, 0, ',', '.'),
             'discount' => '-',
             'finalPrice' => 'Rp'.number_format($price, 0, ',', '.'),
@@ -2677,13 +2959,24 @@ Route::get('/admin/packages', function (Request $request) {
 });
 
 Route::post('/admin/packages', function (Request $request) {
+    $request->merge(['tipe_paket' => $request->input('tipe_paket') ?: 'tunggal']);
+
     $validator = Validator::make($request->all(), [
         'kategori' => ['required', 'string', 'max:100'],
         'formasi' => ['nullable', 'string', 'max:100'],
         'jadwal' => ['nullable', 'string', 'max:150'],
         'nama_paket' => ['required', 'string', 'max:150'],
+        'tipe_paket' => ['required', 'in:tunggal,bundling'],
+        'bundling_id' => [
+            'required_if:tipe_paket,tunggal',
+            'nullable',
+            'integer',
+            Rule::exists('tbl_paket', 'pid')->where('tipe_paket', 'bundling')->whereNull('deleted_at'),
+        ],
         'harga' => ['required', 'numeric', 'min:0'],
         'ket' => ['nullable', 'string'],
+    ], [
+        'bundling_id.required_if' => 'Setiap paket tunggal wajib memiliki Bundling Paket. Buat Bundling Paket terlebih dahulu jika belum tersedia.',
     ]);
 
     if ($validator->fails()) {
@@ -2694,6 +2987,7 @@ Route::post('/admin/packages', function (Request $request) {
     }
 
     $validated = $validator->validated();
+    $tipePaket = $validated['tipe_paket'] ?? 'tunggal';
     $now = now();
 
     $pid = DB::table('tbl_paket')->insertGetId([
@@ -2701,6 +2995,8 @@ Route::post('/admin/packages', function (Request $request) {
         'formasi' => $validated['formasi'] ?? null,
         'jadwal' => $validated['jadwal'] ?? null,
         'nama_paket' => $validated['nama_paket'],
+        'tipe_paket' => $tipePaket,
+        'bundling_id' => $tipePaket === 'tunggal' ? ($validated['bundling_id'] ?? null) : null,
         'harga' => $validated['harga'],
         'ket' => $validated['ket'] ?? null,
         'created_at' => $now,
@@ -2718,21 +3014,25 @@ Route::post('/admin/packages', function (Request $request) {
 });
 
 Route::get('/admin/packages/{pid}', function ($pid) {
-    $package = DB::table('tbl_paket')
+    $package = DB::table('tbl_paket as p')
+        ->leftJoin('tbl_paket as b', 'p.bundling_id', '=', 'b.pid')
         ->select([
-            'pid',
-            'kategori',
-            'formasi',
-            'jadwal',
-            'nama_paket',
-            'harga',
-            'ket',
-            'created_at',
-            'created_by',
-            'updated_at',
-            'updated_by',
+            'p.pid',
+            'p.kategori',
+            'p.formasi',
+            'p.jadwal',
+            'p.nama_paket',
+            'p.tipe_paket',
+            'p.bundling_id',
+            'b.nama_paket as bundling_nama',
+            'p.harga',
+            'p.ket',
+            'p.created_at',
+            'p.created_by',
+            'p.updated_at',
+            'p.updated_by',
         ])
-        ->where('pid', $pid)
+        ->where('p.pid', $pid)
         ->first();
 
     if (!$package) {
@@ -2749,6 +3049,9 @@ Route::get('/admin/packages/{pid}', function ($pid) {
             'formasi' => $package->formasi,
             'jadwal' => $package->jadwal,
             'nama_paket' => $package->nama_paket,
+            'tipe_paket' => $package->tipe_paket ?: 'tunggal',
+            'bundling_id' => $package->bundling_id !== null ? (int) $package->bundling_id : null,
+            'bundling_nama' => $package->bundling_nama,
             'harga' => (float) $package->harga,
             'ket' => $package->ket,
             'created_at' => $package->created_at,
@@ -2760,13 +3063,24 @@ Route::get('/admin/packages/{pid}', function ($pid) {
 });
 
 Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
+    $request->merge(['tipe_paket' => $request->input('tipe_paket') ?: 'tunggal']);
+
     $validator = Validator::make($request->all(), [
         'kategori' => ['required', 'string', 'max:100'],
         'formasi' => ['nullable', 'string', 'max:100'],
         'jadwal' => ['nullable', 'string', 'max:150'],
         'nama_paket' => ['required', 'string', 'max:150'],
+        'tipe_paket' => ['required', 'in:tunggal,bundling'],
+        'bundling_id' => [
+            'required_if:tipe_paket,tunggal',
+            'nullable',
+            'integer',
+            Rule::exists('tbl_paket', 'pid')->where('tipe_paket', 'bundling')->whereNull('deleted_at'),
+        ],
         'harga' => ['required', 'numeric', 'min:0'],
         'ket' => ['nullable', 'string'],
+    ], [
+        'bundling_id.required_if' => 'Setiap paket tunggal wajib memiliki Bundling Paket. Buat Bundling Paket terlebih dahulu jika belum tersedia.',
     ]);
 
     if ($validator->fails()) {
@@ -2785,6 +3099,25 @@ Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
     }
 
     $validated = $validator->validated();
+    $tipePaket = $validated['tipe_paket'] ?? 'tunggal';
+
+    if ($tipePaket === 'tunggal' && (int) ($validated['bundling_id'] ?? 0) === (int) $pid) {
+        return response()->json([
+            'message' => 'Validasi paket gagal.',
+            'errors' => ['bundling_id' => ['Paket tidak bisa menjadi bundling untuk dirinya sendiri.']],
+        ], 422);
+    }
+
+    if ($existingPackage->tipe_paket === 'bundling' && $tipePaket === 'tunggal') {
+        $hasChildren = DB::table('tbl_paket')->where('bundling_id', $pid)->whereNull('deleted_at')->exists();
+
+        if ($hasChildren) {
+            return response()->json([
+                'message' => 'Validasi paket gagal.',
+                'errors' => ['tipe_paket' => ['Paket ini masih menjadi Bundling Paket untuk paket lain. Pindahkan atau hapus paket-paket tersebut terlebih dahulu.']],
+            ], 422);
+        }
+    }
 
     DB::table('tbl_paket')
         ->where('pid', $pid)
@@ -2793,6 +3126,8 @@ Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
             'formasi' => $validated['formasi'] ?? null,
             'jadwal' => $validated['jadwal'] ?? null,
             'nama_paket' => $validated['nama_paket'],
+            'tipe_paket' => $tipePaket,
+            'bundling_id' => $tipePaket === 'tunggal' ? ($validated['bundling_id'] ?? null) : null,
             'harga' => $validated['harga'],
             'ket' => $validated['ket'] ?? null,
             'updated_at' => now(),
@@ -2817,6 +3152,16 @@ Route::delete('/admin/packages/{pid}', function (Request $request, $pid) {
         return response()->json([
             'message' => 'Paket tidak ditemukan.',
         ], 404);
+    }
+
+    if ($existingPackage->tipe_paket === 'bundling') {
+        $hasChildren = DB::table('tbl_paket')->where('bundling_id', $pid)->whereNull('deleted_at')->exists();
+
+        if ($hasChildren) {
+            return response()->json([
+                'message' => 'Bundling Paket ini masih memiliki paket tunggal di dalamnya. Pindahkan atau hapus paket-paket tersebut terlebih dahulu.',
+            ], 422);
+        }
     }
 
     DB::table('tbl_paket')
