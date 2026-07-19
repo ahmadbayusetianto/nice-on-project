@@ -962,6 +962,10 @@ function AdminUserMenu({ profileUser, displayName, onResumeProfile, onLogout }) 
           <div className="admin-sidebar-user-copy">
             <strong>{displayName || 'Admin'}</strong>
             <span>{profileUser?.email || 'Akun admin'}</span>
+            <span className="admin-sidebar-user-status">
+              <span className="admin-sidebar-user-status-dot" aria-hidden="true" />
+              Online
+            </span>
           </div>
         </div>
 
@@ -5187,7 +5191,7 @@ function AccountProfilePage() {
                 <button
                   key={item.label}
                   type="button"
-                  className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
+                  className={`admin-sidebar-item${currentPath === item.href || (item.label === 'Dashboard' && currentPath === '/account-profile') ? ' active' : ''}`}
                   onClick={() => item.href !== '#' && navigate(item.href)}
                 >
                   <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
@@ -5251,14 +5255,25 @@ function AccountProfilePage() {
                 <div className="dashboard-profile-menu-wrap" ref={profileMenuRef}>
                   <button
                     type="button"
-                    className="dashboard-profile-chip"
+                    className={isAdminProfile ? 'dashboard-profile-chip admin-profile-chip' : 'dashboard-profile-chip'}
                     aria-haspopup="menu"
                     aria-expanded={isProfileMenuOpen}
                     onClick={() => setIsProfileMenuOpen((current) => !current)}
                   >
-                    <span className="dashboard-profile-avatar">{displayName.slice(0, 2).toUpperCase()}</span>
-                    <span>{displayName}</span>
-                    <span aria-hidden="true">⌄</span>
+                    <span className={isAdminProfile ? 'dashboard-profile-avatar admin-profile-avatar' : 'dashboard-profile-avatar'}>{displayName.slice(0, 2).toUpperCase()}</span>
+                    {isAdminProfile ? (
+                      <span className="dashboard-profile-copy admin-profile-copy">
+                        <strong>{displayName}</strong>
+                        <span>{roleLabel}</span>
+                      </span>
+                    ) : (
+                      <span>{displayName}</span>
+                    )}
+                    {isAdminProfile ? (
+                      <span className="admin-profile-chip-chevron" aria-hidden="true">⌄</span>
+                    ) : (
+                      <span aria-hidden="true">⌄</span>
+                    )}
                   </button>
 
                   {isProfileMenuOpen ? (
@@ -5307,90 +5322,94 @@ function AccountProfilePage() {
                 </div>
 
                 <button type="button" className="account-profile-hero-edit" onClick={() => setShowEditModal(true)}>
+                  <span aria-hidden="true">✎</span>
                   Edit Profil
                 </button>
               </div>
             </section>
 
             <section className="account-profile-grid-layout">
-              <div className="account-profile-column">
-                <article className="account-profile-card">
-                  <div className="account-profile-card-head">
-                    <div className="account-profile-card-title">
-                      <span className="account-profile-card-icon" aria-hidden="true">👤</span>
-                      <h2>Informasi Pribadi</h2>
+              <article className="account-profile-card">
+                <div className="account-profile-card-head">
+                  <div className="account-profile-card-title">
+                    <span className="account-profile-card-icon" aria-hidden="true">👤</span>
+                    <h2>Informasi Pribadi</h2>
+                  </div>
+                  <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit</button>
+                </div>
+                <div className="account-profile-card-body">
+                  {personalInfoItems.map(([label, value]) => (
+                    <div className="account-profile-row" key={label}>
+                      <span className="account-profile-row-label">{label}</span>
+                      <strong className="account-profile-row-value">{value}</strong>
                     </div>
-                    <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit</button>
-                  </div>
-                  <div className="account-profile-card-body">
-                    {personalInfoItems.map(([label, value]) => (
-                      <div className="account-profile-row" key={label}>
-                        <span className="account-profile-row-label">{label}</span>
-                        <strong className="account-profile-row-value">{value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </article>
+                  ))}
+                </div>
+              </article>
 
-                <article className="account-profile-card account-profile-empty-card">
-                  <div className="account-profile-card-head">
-                    <div className="account-profile-card-title">
-                      <span className="account-profile-card-icon" aria-hidden="true">💼</span>
-                      <h2>Job Roles</h2>
+              <article className="account-profile-card">
+                <div className="account-profile-card-head">
+                  <div className="account-profile-card-title">
+                    <span className="account-profile-card-icon" aria-hidden="true">📝</span>
+                    <h2>Biografi</h2>
+                  </div>
+                  <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit</button>
+                </div>
+                <div className="account-profile-card-body">
+                  {bioText ? (
+                    <div className="account-profile-bio-box">
+                      <p>{bioText}</p>
                     </div>
-                  </div>
-                  <div className="account-profile-empty-state account-profile-job-empty">
-                    <div className="account-profile-empty-icon" aria-hidden="true">💼</div>
-                    <strong>Belum ada job role</strong>
-                    <p>Mohon pilih minimal satu job role untuk akun ini.</p>
-                    <button type="button" className="account-profile-empty-action">Kelola Job Role</button>
-                  </div>
-                </article>
-              </div>
+                  ) : (
+                    <div className="account-profile-empty-state account-profile-bio-empty">
+                      <div className="account-profile-empty-icon" aria-hidden="true">📝</div>
+                      <strong>Belum ada biografi</strong>
+                      <p>Tambahkan biografi untuk memperkenalkan diri Anda.</p>
+                      <button type="button" className="account-profile-empty-action account-profile-empty-action-primary" onClick={() => setShowEditModal(true)}>
+                        <span aria-hidden="true">+</span>
+                        Tambah Biografi
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </article>
 
-              <div className="account-profile-column">
-                <article className="account-profile-card">
-                  <div className="account-profile-card-head">
-                    <div className="account-profile-card-title">
-                      <span className="account-profile-card-icon" aria-hidden="true">📝</span>
-                      <h2>Biografi</h2>
-                    </div>
-                    <button type="button" className="account-profile-edit-button" onClick={() => setShowEditModal(true)}>Edit</button>
+              <article className="account-profile-card account-profile-empty-card">
+                <div className="account-profile-card-head">
+                  <div className="account-profile-card-title">
+                    <span className="account-profile-card-icon" aria-hidden="true">💼</span>
+                    <h2>Job Roles</h2>
                   </div>
-                  <div className="account-profile-card-body">
-                    {bioText ? (
-                      <div className="account-profile-bio-box">
-                        <p>{bioText}</p>
-                      </div>
-                    ) : (
-                      <div className="account-profile-empty-state account-profile-bio-empty">
-                        <div className="account-profile-empty-icon" aria-hidden="true">📝</div>
-                        <strong>Belum ada biografi</strong>
-                        <p>Tambahkan biografi untuk memperkenalkan diri Anda.</p>
-                        <button type="button" className="account-profile-empty-action" onClick={() => setShowEditModal(true)}>Tambah Biografi</button>
-                      </div>
-                    )}
-                  </div>
-                </article>
+                </div>
+                <div className="account-profile-empty-state account-profile-job-empty">
+                  <div className="account-profile-empty-icon" aria-hidden="true">💼</div>
+                  <strong>Belum ada job role</strong>
+                  <p>Mohon pilih minimal satu job role untuk akun ini.</p>
+                  <button type="button" className="account-profile-empty-action">
+                    <span aria-hidden="true">⚙</span>
+                    Kelola Job Role
+                  </button>
+                </div>
+              </article>
 
-                <article className="account-profile-card account-profile-empty-card">
-                  <div className="account-profile-card-head">
-                    <div className="account-profile-card-title">
-                      <span className="account-profile-card-icon" aria-hidden="true">🕘</span>
-                      <h2>Riwayat Aktivitas</h2>
-                    </div>
+              <article className="account-profile-card account-profile-empty-card">
+                <div className="account-profile-card-head">
+                  <div className="account-profile-card-title">
+                    <span className="account-profile-card-icon" aria-hidden="true">🕘</span>
+                    <h2>Riwayat Aktivitas</h2>
                   </div>
-                  <div className="account-profile-empty-state account-profile-history-empty">
-                    <div className="account-profile-empty-icon account-profile-history-icon" aria-hidden="true">🧾</div>
-                    <strong>Tidak ada riwayat aktivitas</strong>
-                    <p>Riwayat aktivitas akan tampil setelah aktivitas tersedia.</p>
-                  </div>
-                </article>
-              </div>
+                </div>
+                <div className="account-profile-empty-state account-profile-history-empty">
+                  <div className="account-profile-empty-icon account-profile-history-icon" aria-hidden="true">🧾</div>
+                  <strong>Tidak ada riwayat aktivitas</strong>
+                  <p>Riwayat aktivitas akan tampil setelah aktivitas tersedia.</p>
+                </div>
+              </article>
             </section>
 
             <div className="account-profile-footer-actions">
               <button type="button" className="dashboard-secondary-action" onClick={() => navigate(backDashboardPath, { state: { user: activeProfile } })}>
+                <span aria-hidden="true">←</span>
                 Kembali ke Dashboard
               </button>
             </div>

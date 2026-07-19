@@ -3977,6 +3977,9 @@ html {
   height: 144px;
   position: relative;
   background:
+    radial-gradient(circle at 88% 22%, transparent 0 8.4%, rgba(255, 255, 255, 0.16) 8.4% 9.6%, transparent 9.6% 100%),
+    radial-gradient(circle at 65% 84%, transparent 0 4.6%, rgba(255, 255, 255, 0.13) 4.6% 5.6%, transparent 5.6% 100%),
+    radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.6px) 0 0/20px 20px,
     radial-gradient(circle at 82% 30%, rgba(255, 255, 255, 0.12), transparent 0 11%),
     radial-gradient(circle at 90% 12%, rgba(255, 255, 255, 0.10), transparent 0 7%),
     linear-gradient(135deg, #3f52ff 0%, #3e7bff 44%, #4f8bff 100%);
@@ -4080,8 +4083,8 @@ html {
 .account-profile-hero-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  margin-top: 12px;
+  align-items: center;
+  margin-top: 20px;
   color: #6d7682;
   font-size: 14px;
 }
@@ -4090,9 +4093,30 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  position: relative;
+  padding: 0 16px;
+}
+
+.account-profile-hero-meta span:first-child {
+  padding-left: 0;
+}
+
+.account-profile-hero-meta span:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(109, 118, 130, 0.4);
+  transform: translateY(-50%);
 }
 
 .account-profile-hero-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid rgba(22, 47, 91, 0.12);
   background: #fff;
   color: #1d2a44;
@@ -4128,20 +4152,29 @@ html {
 .account-profile-grid-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
-  gap: 20px;
-}
-
-.account-profile-column {
-  display: grid;
+  align-items: stretch;
   gap: 20px;
 }
 
 .account-profile-card {
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border-radius: 18px;
   border: 1px solid rgba(22, 47, 91, 0.08);
   box-shadow: 0 14px 30px rgba(20, 34, 58, 0.06);
   overflow: hidden;
+}
+
+.account-profile-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+.account-profile-bio-box,
+.account-profile-empty-state {
+  flex: 1 1 auto;
 }
 
 .account-profile-card-head {
@@ -4269,6 +4302,9 @@ html {
 }
 
 .account-profile-empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid rgba(22, 47, 91, 0.12);
   background: #fff;
   color: #1f2c45;
@@ -4279,6 +4315,13 @@ html {
   font-weight: 700;
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.account-profile-empty-action-primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #4a5cff, #3a6dff);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(58, 109, 255, 0.28);
 }
 
 .account-profile-footer-actions {
@@ -4846,7 +4889,11 @@ html {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: linear-gradient(180deg, #071f4f 0%, #0b3476 52%, #0c204e 100%);
+  background:
+    radial-gradient(circle at 85% 6%, rgba(120, 165, 255, 0.16), transparent 0 22%),
+    radial-gradient(circle at -10% 60%, rgba(94, 140, 255, 0.14), transparent 0 30%),
+    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.6px) 0 0/22px 22px,
+    linear-gradient(180deg, #071f4f 0%, #0b3476 52%, #0c204e 100%);
   color: #fff;
   box-shadow: 16px 0 40px rgba(7, 25, 61, 0.14);
   overflow-x: hidden;
@@ -5519,6 +5566,22 @@ html {
   color: rgba(223, 235, 255, 0.75);
   font-size: 13px;
   margin-top: 2px;
+}
+
+.admin-sidebar-user-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6ee7a8;
+  font-weight: 700;
+}
+
+.admin-sidebar-user-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #34d573;
+  box-shadow: 0 0 0 3px rgba(52, 213, 115, 0.22);
 }
 
 .admin-sidebar-resume-profile {
