@@ -5906,6 +5906,19 @@ function UserTryoutPage() {
   const [startingPackageId, setStartingPackageId] = useState(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const [resultData, setResultData] = useState(null)
+  const [expandedReviewIds, setExpandedReviewIds] = useState(() => new Set())
+
+  const toggleReviewExpanded = (questionId) => {
+    setExpandedReviewIds((current) => {
+      const next = new Set(current)
+      if (next.has(questionId)) {
+        next.delete(questionId)
+      } else {
+        next.add(questionId)
+      }
+      return next
+    })
+  }
 
   useEffect(() => {
     const handleDocumentPointerDown = (event) => {
@@ -6583,21 +6596,33 @@ function UserTryoutPage() {
                     const isTkpQuestion = Number(question.question_group) === 3
                     const statusClass = isTkpQuestion ? 'tkp' : (question.is_correct ? 'correct' : 'wrong')
                     const statusLabel = isTkpQuestion ? `Nilai ${question.score_obtained ?? 0}` : (question.is_correct ? 'Benar' : 'Salah')
+                    const isExpanded = expandedReviewIds.has(question.id)
+                    const pembahasanText = String(question.pembahasan || '').trim()
 
                     return (
-                      <button
-                        key={question.id}
-                        type="button"
-                        className={`user-tryout-review-item ${statusClass}`}
-                        onClick={() => setCurrentQuestionIndex(index)}
-                      >
-                        <span>{index + 1}</span>
-                        <div>
-                          <strong>{question.question}</strong>
-                          <p>{question.question_group_label}</p>
-                        </div>
-                        <em>{statusLabel}</em>
-                      </button>
+                      <div className={`user-tryout-review-item ${statusClass}${isExpanded ? ' expanded' : ''}`} key={question.id}>
+                        <button
+                          type="button"
+                          className="user-tryout-review-item-head"
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleReviewExpanded(question.id)}
+                        >
+                          <span>{index + 1}</span>
+                          <div>
+                            <strong>{question.question}</strong>
+                            <p>{question.question_group_label}</p>
+                          </div>
+                          <em>{statusLabel}</em>
+                          <i className="user-tryout-review-chevron" aria-hidden="true">⌄</i>
+                        </button>
+
+                        {isExpanded ? (
+                          <div className="user-tryout-review-pembahasan">
+                            <strong>Pembahasan</strong>
+                            <p>{pembahasanText || 'Belum ada pembahasan untuk soal ini.'}</p>
+                          </div>
+                        ) : null}
+                      </div>
                     )
                   })}
                 </div>

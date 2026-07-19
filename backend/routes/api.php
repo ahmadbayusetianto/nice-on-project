@@ -326,6 +326,7 @@ function mapTryoutQuestionRow(object $question, array $options, ?object $sheet =
         'question_group_label' => questionGroupLabel($group),
         'istext' => (int) ($question->istext ?? 1) === 1,
         'information' => $question->information,
+        'pembahasan' => $includeResult ? $question->pembahasan : null,
         'options' => $options,
         'selected_option_id' => $selectedOptionId ?: null,
         'answered' => $selectedOptionId ? true : false,

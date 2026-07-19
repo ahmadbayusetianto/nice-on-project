@@ -10482,16 +10482,11 @@ html {
 }
 
 .user-tryout-review-item {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  padding: 14px;
   border-radius: 16px;
   border: 1px solid rgba(22, 47, 91, 0.08);
   background: #fff;
-  text-align: left;
+  overflow: hidden;
+  transition: border-color 180ms ease, background 180ms ease;
 }
 
 .user-tryout-review-item.correct {
@@ -10509,6 +10504,21 @@ html {
   background: rgba(57, 88, 255, 0.05);
 }
 
+.user-tryout-review-item-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .user-tryout-review-item span {
   width: 40px;
   height: 40px;
@@ -10524,6 +10534,47 @@ html {
   font-style: normal;
   font-weight: 800;
   color: #4a5cff;
+}
+
+.user-tryout-review-chevron {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(22, 47, 91, 0.05);
+  color: #5f6f8c;
+  font-style: normal;
+  font-size: 16px;
+  transition: transform 200ms ease;
+}
+
+.user-tryout-review-item.expanded .user-tryout-review-chevron {
+  transform: rotate(180deg);
+  background: rgba(74, 92, 255, 0.12);
+  color: #4a5cff;
+}
+
+.user-tryout-review-pembahasan {
+  margin: 0 14px 14px;
+  padding: 12px 16px 0 66px;
+  border-top: 1px solid rgba(22, 47, 91, 0.06);
+}
+
+.user-tryout-review-pembahasan strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #17315f;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.user-tryout-review-pembahasan p {
+  margin: 0;
+  color: #48608a;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 1180px) {
@@ -10598,8 +10649,12 @@ html {
   }
 
   .user-tryout-option,
-  .user-tryout-review-item {
+  .user-tryout-review-item-head {
     grid-template-columns: 1fr;
+  }
+
+  .user-tryout-review-pembahasan {
+    padding-left: 16px;
   }
 
   .user-tryout-option-badge,
