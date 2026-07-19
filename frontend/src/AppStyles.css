@@ -6488,6 +6488,12 @@ html {
   gap: 16px;
 }
 
+.admin-donut-divider {
+  margin: 0 0 20px;
+  border: 0;
+  border-top: 1px solid rgba(22, 47, 91, 0.08);
+}
+
 .admin-donut-wrap {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -6502,6 +6508,7 @@ html {
   background: conic-gradient(#2dbf75 0 70%, #ffbf1f 70% 88%, #8c6bff 88% 100%);
   display: grid;
   place-items: center;
+  box-shadow: 0 20px 40px rgba(20, 34, 58, 0.12), inset 0 0 0 6px #fff;
 }
 
 .admin-donut::before {
@@ -6522,31 +6529,91 @@ html {
 
 .admin-donut-center strong {
   color: #172b55;
-  font-size: 26px;
+  font-size: 30px;
+  line-height: 1.1;
 }
 
 .admin-donut-center span {
-  color: #62739a;
-  font-size: 14px;
+  margin-top: 2px;
+  color: #8b97b1;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .admin-donut-legend {
   display: grid;
-  gap: 16px;
+  gap: 12px;
+  align-content: center;
   color: #172b55;
 }
 
-.admin-donut-legend div {
-  display: flex;
+.admin-donut-legend-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f7f9ff;
+  border: 1px solid rgba(22, 47, 91, 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.admin-donut-legend-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 26px rgba(20, 34, 58, 0.08);
+}
+
+.admin-donut-legend-row.active {
+  background: rgba(45, 191, 117, 0.07);
+  border-color: rgba(45, 191, 117, 0.18);
+}
+
+.admin-donut-legend-row.inactive {
+  background: rgba(255, 191, 31, 0.08);
+  border-color: rgba(255, 191, 31, 0.22);
+}
+
+.admin-donut-legend-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(20, 34, 58, 0.08);
+  flex: 0 0 auto;
+}
+
+.admin-donut-legend-copy {
+  min-width: 0;
+}
+
+.admin-donut-legend-copy strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
   color: #172b55;
 }
 
-.admin-donut-legend span {
-  color: #62739a;
-  margin-left: auto;
+.admin-donut-legend-copy span {
+  display: block;
+  margin-top: 2px;
+  color: #8b97b1;
+  font-size: 12px;
 }
+
+.admin-donut-legend-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #172b55;
+  white-space: nowrap;
+}
+
+.admin-donut-legend-row.active .admin-donut-legend-value { color: #199a5c; }
+.admin-donut-legend-row.inactive .admin-donut-legend-value { color: #c98a00; }
 
 .dot {
   width: 12px;

@@ -7055,7 +7055,10 @@ function AdminDashboardPage() {
 
           <section className="admin-bottom-grid">
             <article className="admin-card admin-donut-card">
-              <h3>Distribusi User</h3>
+              <div className="admin-card-head">
+                <h3>Distribusi User</h3>
+              </div>
+              <hr className="admin-donut-divider" />
               <div className="admin-donut-wrap">
                 <div
                   className="admin-donut"
@@ -7071,8 +7074,22 @@ function AdminDashboardPage() {
                 </div>
 
                 <div className="admin-donut-legend">
-                  <div><i className="dot green" /> Active <span>{userAktif.toLocaleString('id-ID')} ({formatPct(aktifPct)})</span></div>
-                  <div><i className="dot yellow" /> Inactive <span>{userNonaktif.toLocaleString('id-ID')} ({formatPct(nonaktifPct)})</span></div>
+                  <div className="admin-donut-legend-row active">
+                    <span className="admin-donut-legend-dot"><i className="dot green" /></span>
+                    <div className="admin-donut-legend-copy">
+                      <strong>Active</strong>
+                      <span>{formatPct(aktifPct)} dari total user</span>
+                    </div>
+                    <strong className="admin-donut-legend-value">{userAktif.toLocaleString('id-ID')}</strong>
+                  </div>
+                  <div className="admin-donut-legend-row inactive">
+                    <span className="admin-donut-legend-dot"><i className="dot yellow" /></span>
+                    <div className="admin-donut-legend-copy">
+                      <strong>Inactive</strong>
+                      <span>{formatPct(nonaktifPct)} dari total user</span>
+                    </div>
+                    <strong className="admin-donut-legend-value">{userNonaktif.toLocaleString('id-ID')}</strong>
+                  </div>
                 </div>
               </div>
             </article>
