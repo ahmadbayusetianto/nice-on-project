@@ -6555,11 +6555,21 @@ function UserTryoutPage() {
                   <h3>Hasil Tryout</h3>
                   <span>Selesai</span>
                 </div>
-                <div className="user-tryout-result-grid">
-                  <div><span>TWK</span><strong>{resultData.session.score_twk}</strong></div>
-                  <div><span>TIU</span><strong>{resultData.session.score_tiu}</strong></div>
-                  <div><span>TKP</span><strong>{resultData.session.score_tkp}</strong></div>
-                  <div><span>Total</span><strong>{resultData.session.score_total}</strong></div>
+                <div className="user-tryout-score-grid">
+                  {[
+                    { label: 'TWK', value: resultData.session.score_twk, icon: '🏛️', accent: 'green' },
+                    { label: 'TIU', value: resultData.session.score_tiu, icon: '🧠', accent: 'purple' },
+                    { label: 'TKP', value: resultData.session.score_tkp, icon: '🤝', accent: 'orange' },
+                    { label: 'Total', value: resultData.session.score_total, icon: '🏆', accent: 'total' },
+                  ].map((card) => (
+                    <div className={`user-tryout-score-card ${card.accent}`} key={card.label}>
+                      <div className="user-tryout-score-icon" aria-hidden="true">{card.icon}</div>
+                      <div className="user-tryout-score-copy">
+                        <span>{card.label}</span>
+                        <strong>{card.value}</strong>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </article>
 
