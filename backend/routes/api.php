@@ -1225,6 +1225,136 @@ Route::get('/admin/users', function (Request $request) {
     ]);
 });
 
+Route::post('/admin/users', function (Request $request) {
+    $input = [
+        'email' => $request->input('email'),
+        'password' => $request->input('password'),
+        'status' => $request->input('status', 'active'),
+        'is_admin' => $request->input('is_admin', false),
+        'nama' => $request->input('nama'),
+        'ttl' => $request->input('ttl'),
+        'gender' => $request->input('gender'),
+        'nohp' => $request->input('nohp'),
+        'alamat' => $request->input('alamat'),
+        'refference' => $request->input('refference'),
+        'reference_other' => $request->input('reference_other'),
+    ];
+
+    $validator = Validator::make($input, [
+        'email' => ['required', 'email:rfc,dns', 'max:150', 'unique:tbl_user,email'],
+        'password' => ['required', 'string', 'min:8'],
+        'status' => ['required', 'in:active,inactive,Active,Inactive,AKTIF,NONAKTIF,Aktif,Nonaktif'],
+        'is_admin' => ['required', 'boolean'],
+        'nama' => ['required', 'string', 'max:150'],
+        'ttl' => ['nullable', 'string', 'max:150'],
+        'gender' => ['nullable', 'in:L,P'],
+        'nohp' => ['nullable', 'string', 'max:30'],
+        'alamat' => ['nullable', 'string'],
+        'refference' => ['nullable', 'string', 'max:150'],
+        'reference_other' => ['nullable', 'string', 'max:150', 'required_if:refference,Lainnya'],
+    ], [
+        'email.unique' => 'Email sudah digunakan oleh user lain.',
+        'password.required' => 'Password wajib diisi.',
+        'password.min' => 'Password minimal 8 karakter.',
+        'status.required' => 'Status wajib diisi.',
+        'is_admin.required' => 'Role user wajib diisi.',
+        'nama.required' => 'Nama wajib diisi.',
+        'gender.in' => 'Jenis kelamin harus L atau P.',
+        'reference_other.required_if' => 'Isi referensi lainnya jika memilih Lainnya.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi user gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $validated = $validator->validated();
+    $normalizedStatus = strtolower(trim((string) $validated['status'])) === 'inactive' || strtolower(trim((string) $validated['status'])) === 'nonaktif'
+        ? 'inactive'
+        : 'active';
+    $isAdmin = (int) filter_var($validated['is_admin'], FILTER_VALIDATE_BOOL) === 1 ? 1 : 0;
+
+    $newUserId = DB::transaction(function () use ($validated, $normalizedStatus, $isAdmin) {
+        $now = now();
+
+        $userId = DB::table('tbl_user')->insertGetId([
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'status' => $normalizedStatus,
+            'is_admin' => $isAdmin,
+            'created_at' => $now,
+            'created_by' => null,
+            'updated_at' => null,
+            'updated_by' => null,
+        ]);
+
+        DB::table('tbl_detail_user')->insert([
+            'pid_user' => $userId,
+            'nama' => $validated['nama'],
+            'ttl' => $validated['ttl'] ?: null,
+            'gender' => $validated['gender'] ?: null,
+            'nohp' => $validated['nohp'] ?: null,
+            'alamat' => $validated['alamat'] ?: null,
+            'refference' => $validated['refference'] ?: null,
+            'reference_other' => $validated['refference'] === 'Lainnya' ? ($validated['reference_other'] ?: null) : null,
+            'created_at' => $now,
+            'created_by' => null,
+            'updated_at' => null,
+            'updated_by' => null,
+        ]);
+
+        return $userId;
+    });
+
+    $newUser = DB::table('tbl_user')
+        ->leftJoin('tbl_detail_user', 'tbl_user.pid', '=', 'tbl_detail_user.pid_user')
+        ->where('tbl_user.pid', $newUserId)
+        ->select([
+            'tbl_user.pid as pid',
+            'tbl_user.email as email',
+            'tbl_user.status as status',
+            'tbl_user.is_admin as is_admin',
+            'tbl_user.created_at as created_at',
+            'tbl_detail_user.pid as detail_pid',
+            'tbl_detail_user.nama as nama',
+            'tbl_detail_user.ttl as ttl',
+            'tbl_detail_user.gender as gender',
+            'tbl_detail_user.nohp as nohp',
+            'tbl_detail_user.alamat as alamat',
+            'tbl_detail_user.refference as refference',
+            'tbl_detail_user.reference_other as reference_other',
+        ])
+        ->first();
+
+    return response()->json([
+        'message' => 'User berhasil ditambahkan.',
+        'data' => [
+            'pid' => (int) $newUser->pid,
+            'code' => '#USR-'.str_pad((string) $newUser->pid, 4, '0', STR_PAD_LEFT),
+            'email' => $newUser->email,
+            'status' => (string) $newUser->status === 'active' ? 'Aktif' : 'Nonaktif',
+            'status_key' => (string) $newUser->status === 'active' ? 'active' : 'inactive',
+            'is_admin' => (int) $newUser->is_admin,
+            'role' => (int) $newUser->is_admin === 1 ? 'Admin' : 'User',
+            'created_at' => $newUser->created_at,
+            'joined' => $newUser->created_at ? date('j M Y', strtotime($newUser->created_at)) : '-',
+            'profile_completed' => true,
+            'detail' => [
+                'pid' => $newUser->detail_pid ? (int) $newUser->detail_pid : null,
+                'nama' => $newUser->nama,
+                'ttl' => $newUser->ttl,
+                'gender' => $newUser->gender,
+                'nohp' => $newUser->nohp,
+                'alamat' => $newUser->alamat,
+                'refference' => $newUser->refference,
+                'reference_other' => $newUser->reference_other,
+            ],
+        ],
+    ], 201);
+});
+
 Route::patch('/admin/users/{pid}/toggle-role', function ($pid) {
     $user = DB::table('tbl_user')->where('pid', $pid)->first();
 

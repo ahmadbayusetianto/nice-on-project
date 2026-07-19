@@ -135,6 +135,15 @@ function formatAdminDate(value, options = {}) {
   }).format(date)
 }
 
+function getUserInitials(name) {
+  const cleaned = String(name || '').replace(/[^a-zA-Z\s]/g, ' ').trim()
+  if (!cleaned) return '?'
+
+  const parts = cleaned.split(/\s+/).filter(Boolean)
+  const initials = parts.slice(0, 2).map((part) => part[0]).join('')
+  return initials.toUpperCase() || '?'
+}
+
 function formatProfileJoinDate(value) {
   if (!value) return 'Belum tersedia'
 
@@ -369,6 +378,7 @@ function createUserFormFromDetail(detail = {}) {
   return {
     pid: detail.pid ?? null,
     email: detail.email ?? '',
+    password: '',
     nama: nestedDetail.nama ?? detail.name ?? '',
     ttl: nestedDetail.ttl ?? '',
     gender: nestedDetail.gender ?? '',
@@ -7140,15 +7150,21 @@ function AdminUserDetailModal({ open, user, loading = false, error = null, onCan
 
   const detail = user?.detail ?? {}
   const joinedLabel = user?.joined || formatAdminDate(user?.created_at, { hour: false })
+  const name = detail.nama || user?.name || '-'
+  const isActive = String(user?.status || '').toLowerCase() === 'aktif'
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
       <div className="admin-modal admin-user-detail-modal" role="dialog" aria-modal="true" aria-labelledby="adminUserDetailTitle" onClick={(event) => event.stopPropagation()}>
         <div className="admin-question-detail-header">
           <div className="admin-question-detail-title-block">
+            <div className="admin-user-detail-avatar-wrap">
+              <div className="admin-user-detail-avatar">{getUserInitials(name)}</div>
+              <span className={`admin-user-detail-avatar-dot${isActive ? ' active' : ' inactive'}`} aria-hidden="true" />
+            </div>
             <div>
               <h3 id="adminUserDetailTitle">Detail User</h3>
-              <p>Lihat informasi akun dan profil user secara lengkap.</p>
+              <p>Informasi akun dan profil user secara lengkap.</p>
             </div>
           </div>
           <div className="admin-question-detail-header-actions">
@@ -7160,67 +7176,110 @@ function AdminUserDetailModal({ open, user, loading = false, error = null, onCan
         {loading ? <div className="admin-package-form-loading">Memuat detail user...</div> : null}
         {error ? <div className="admin-package-form-error">{error}</div> : null}
 
-        <div className="admin-user-detail-grid">
-          {[
-            { label: 'Nama', value: detail.nama || user?.name || '-' },
-            { label: 'Email', value: user?.email || '-' },
-            { label: 'No HP', value: detail.nohp || user?.phone || '-' },
-            { label: 'Peran', value: user?.role || (Number(user?.is_admin ?? 0) === 1 ? 'Admin' : 'User') },
-            { label: 'Status', value: user?.status || '-' },
-            { label: 'Bergabung', value: joinedLabel || '-' },
-          ].map((item) => (
-            <article className="admin-user-detail-card" key={item.label}>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </article>
-          ))}
+        <div className="admin-user-detail-panel">
+          <div className="admin-user-detail-panel-top">
+            <div>
+              <strong className="admin-user-detail-name">{name}</strong>
+              <div className="admin-user-detail-email">
+                <span aria-hidden="true">✉</span>
+                {user?.email || '-'}
+              </div>
+            </div>
+            <span className={`admin-user-detail-status-pill${isActive ? ' active' : ' inactive'}`}>
+              <i aria-hidden="true" />
+              {user?.status || '-'}
+            </span>
+          </div>
+
+          <hr className="admin-user-detail-divider" />
+
+          <div className="admin-user-detail-stats">
+            {[
+              { label: 'Peran', value: user?.role || (Number(user?.is_admin ?? 0) === 1 ? 'Admin' : 'User'), icon: '🛡️' },
+              { label: 'Kode User', value: user?.code || '-', icon: '🆔' },
+              { label: 'Bergabung', value: joinedLabel || '-', icon: '📅' },
+            ].map((item) => (
+              <div className="admin-user-detail-stat" key={item.label}>
+                <span className="admin-user-detail-stat-icon" aria-hidden="true">{item.icon}</span>
+                <div>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <hr className="admin-user-detail-divider" />
+
+          <div className="admin-user-detail-inline-row">
+            <div className="admin-user-detail-inline-item">
+              <span className="admin-user-detail-inline-icon" aria-hidden="true">📞</span>
+              <div>
+                <span>No HP</span>
+                <strong className="link">{detail.nohp || user?.phone || '-'}</strong>
+              </div>
+            </div>
+            <div className="admin-user-detail-inline-item">
+              <span className="admin-user-detail-inline-icon" aria-hidden="true">🧑</span>
+              <div>
+                <span>Jenis Kelamin</span>
+                <strong>{detail.gender || '-'}</strong>
+              </div>
+            </div>
+          </div>
+
+          <hr className="admin-user-detail-divider" />
+
+          <div className="admin-user-detail-inline-row single">
+            <div className="admin-user-detail-inline-item">
+              <span className="admin-user-detail-inline-icon" aria-hidden="true">📍</span>
+              <div>
+                <span>Alamat</span>
+                <strong>{detail.alamat || '-'}</strong>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <form className="admin-package-form admin-user-detail-form" onSubmit={(event) => event.preventDefault()}>
-          <div className="admin-package-form-grid">
-            <label className="admin-package-field">
-              <span>Kode User</span>
-              <input type="text" value={user?.code || '-'} readOnly />
-            </label>
-
-            <label className="admin-package-field">
-              <span>Jenis Kelamin</span>
-              <input type="text" value={detail.gender || '-'} readOnly />
-            </label>
-
-            <label className="admin-package-field admin-package-field-full">
-              <span>Alamat</span>
-              <textarea value={detail.alamat || '-'} readOnly rows={3} />
-            </label>
-
-            <label className="admin-package-field">
+        <div className="admin-user-detail-reference-grid">
+          <div className="admin-user-detail-stat standalone">
+            <span className="admin-user-detail-stat-icon" aria-hidden="true">🔖</span>
+            <div>
               <span>Referensi</span>
-              <input type="text" value={detail.refference || '-'} readOnly />
-            </label>
-
-            <label className="admin-package-field">
-              <span>Referensi Lain</span>
-              <input type="text" value={detail.reference_other || '-'} readOnly />
-            </label>
+              <strong>{detail.refference || '-'}</strong>
+            </div>
           </div>
-        </form>
+          <div className="admin-user-detail-stat standalone orange">
+            <span className="admin-user-detail-stat-icon" aria-hidden="true">🔖</span>
+            <div>
+              <span>Referensi Lain</span>
+              <strong>{detail.reference_other || '-'}</strong>
+            </div>
+          </div>
+        </div>
 
         <div className="admin-modal-actions admin-user-detail-actions">
-          <button type="button" className="admin-modal-button secondary" onClick={onCancel}>Tutup</button>
+          <button type="button" className="admin-modal-button primary" onClick={onCancel}>Tutup</button>
         </div>
       </div>
     </div>
   )
 }
 
-function AdminUserFormModal({ open, title = 'Edit User', submitLabel = 'Simpan', helpText = 'Perbarui data akun dan profil user.', form, loading = false, error = null, onCancel, onSubmit, onFieldChange }) {
+function AdminUserFormModal({ open, mode = 'edit', title = 'Edit User', submitLabel = 'Simpan', helpText = 'Perbarui data akun dan profil user.', form, loading = false, error = null, onCancel, onSubmit, onFieldChange }) {
   if (!open) return null
+
+  const isCreateMode = mode === 'create'
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
       <div className="admin-modal admin-user-form-modal" role="dialog" aria-modal="true" aria-labelledby="adminUserFormTitle" onClick={(event) => event.stopPropagation()}>
         <div className="admin-question-detail-header">
           <div className="admin-question-detail-title-block">
+            <div className="admin-user-form-avatar-wrap">
+              <div className="admin-user-form-avatar" aria-hidden="true">👤</div>
+              <span className="admin-user-form-avatar-badge" aria-hidden="true">✎</span>
+            </div>
             <div>
               <h3 id="adminUserFormTitle">{title}</h3>
               <p>{helpText}</p>
@@ -7235,30 +7294,40 @@ function AdminUserFormModal({ open, title = 'Edit User', submitLabel = 'Simpan',
         <form className="admin-package-form admin-user-form" onSubmit={onSubmit}>
           <div className="admin-package-form-grid">
             <label className="admin-package-field">
-              <span>Nama</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">👤</i>Nama Lengkap</span>
               <input type="text" value={form.nama} onChange={(event) => onFieldChange('nama', event.target.value)} disabled={loading} />
             </label>
 
             <label className="admin-package-field">
-              <span>Email</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">✉</i>Email</span>
               <input type="email" value={form.email} onChange={(event) => onFieldChange('email', event.target.value)} disabled={loading} />
             </label>
 
+            {isCreateMode ? (
+              <label className="admin-package-field">
+                <span><i className="admin-user-field-icon" aria-hidden="true">🔒</i>Password</span>
+                <input type="password" value={form.password} onChange={(event) => onFieldChange('password', event.target.value)} disabled={loading} placeholder="Minimal 8 karakter" autoComplete="new-password" />
+              </label>
+            ) : null}
+
             <label className="admin-package-field">
-              <span>No HP</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">📞</i>No HP</span>
               <input type="text" value={form.nohp} onChange={(event) => onFieldChange('nohp', event.target.value)} disabled={loading} />
             </label>
 
             <label className="admin-package-field">
-              <span>Status</span>
-              <select value={form.status} onChange={(event) => onFieldChange('status', event.target.value)} disabled={loading}>
-                <option value="active">Aktif</option>
-                <option value="inactive">Nonaktif</option>
-              </select>
+              <span><i className="admin-user-field-icon" aria-hidden="true">◐</i>Status</span>
+              <div className="admin-user-status-select-wrap">
+                <span className={`admin-user-status-dot${form.status === 'active' ? ' active' : ' inactive'}`} aria-hidden="true" />
+                <select value={form.status} onChange={(event) => onFieldChange('status', event.target.value)} disabled={loading}>
+                  <option value="active">Aktif</option>
+                  <option value="inactive">Nonaktif</option>
+                </select>
+              </div>
             </label>
 
             <label className="admin-package-field">
-              <span>Peran</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">🛡️</i>Peran</span>
               <select value={form.is_admin ? '1' : '0'} onChange={(event) => onFieldChange('is_admin', event.target.value === '1')} disabled={loading}>
                 <option value="0">User</option>
                 <option value="1">Admin</option>
@@ -7266,12 +7335,12 @@ function AdminUserFormModal({ open, title = 'Edit User', submitLabel = 'Simpan',
             </label>
 
             <label className="admin-package-field">
-              <span>TTL</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">📅</i>TTL</span>
               <input type="text" value={form.ttl} onChange={(event) => onFieldChange('ttl', event.target.value)} disabled={loading} />
             </label>
 
             <label className="admin-package-field">
-              <span>Jenis Kelamin</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">⚧</i>Jenis Kelamin</span>
               <select value={form.gender} onChange={(event) => onFieldChange('gender', event.target.value)} disabled={loading}>
                 <option value="">-</option>
                 <option value="L">L</option>
@@ -7280,24 +7349,24 @@ function AdminUserFormModal({ open, title = 'Edit User', submitLabel = 'Simpan',
             </label>
 
             <label className="admin-package-field">
-              <span>Referensi</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">🔖</i>Referensi</span>
               <input type="text" value={form.refference} onChange={(event) => onFieldChange('refference', event.target.value)} disabled={loading} />
             </label>
 
             <label className="admin-package-field">
-              <span>Referensi Lain</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">🔖</i>Referensi Lain</span>
               <input type="text" value={form.reference_other} onChange={(event) => onFieldChange('reference_other', event.target.value)} disabled={loading} />
             </label>
 
             <label className="admin-package-field admin-package-field-full">
-              <span>Alamat</span>
+              <span><i className="admin-user-field-icon" aria-hidden="true">📍</i>Alamat</span>
               <textarea value={form.alamat} onChange={(event) => onFieldChange('alamat', event.target.value)} disabled={loading} rows={4} />
             </label>
           </div>
 
           <div className="admin-modal-actions admin-package-form-actions">
-            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>Batal</button>
-            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : submitLabel}</button>
+            <button type="button" className="admin-modal-button secondary" onClick={onCancel} disabled={loading}>✕ Batal</button>
+            <button type="submit" className="admin-modal-button primary" disabled={loading}>{loading ? 'Menyimpan...' : `💾 ${submitLabel}`}</button>
           </div>
         </form>
       </div>
@@ -7567,33 +7636,52 @@ function AdminUserManagementPage() {
     }))
   }
 
+  const openAddUserModal = () => {
+    setEditingUserPid(null)
+    setUserFormError(null)
+    setIsSavingUser(false)
+    setUserForm(createUserFormFromDetail())
+    setShowUserFormModal(true)
+  }
+
   const handleUserSubmit = async (event) => {
     event.preventDefault()
 
-    if (!editingUserPid) return
+    const isCreateMode = !editingUserPid
+
+    if (isCreateMode && String(userForm.password || '').length < 8) {
+      setUserFormError('Password minimal 8 karakter.')
+      return
+    }
 
     setIsSavingUser(true)
     setUserFormError(null)
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/admin/users/${editingUserPid}`, {
-        method: 'PUT',
+      const payloadBody = {
+        email: String(userForm.email || '').trim(),
+        status: userForm.status,
+        is_admin: Boolean(userForm.is_admin),
+        nama: String(userForm.nama || '').trim(),
+        ttl: String(userForm.ttl || '').trim(),
+        gender: userForm.gender,
+        nohp: String(userForm.nohp || '').trim(),
+        alamat: String(userForm.alamat || '').trim(),
+        refference: String(userForm.refference || '').trim(),
+        reference_other: String(userForm.reference_other || '').trim(),
+      }
+
+      if (isCreateMode) {
+        payloadBody.password = String(userForm.password || '')
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/admin/users${isCreateMode ? '' : `/${editingUserPid}`}`, {
+        method: isCreateMode ? 'POST' : 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          email: String(userForm.email || '').trim(),
-          status: userForm.status,
-          is_admin: Boolean(userForm.is_admin),
-          nama: String(userForm.nama || '').trim(),
-          ttl: String(userForm.ttl || '').trim(),
-          gender: userForm.gender,
-          nohp: String(userForm.nohp || '').trim(),
-          alamat: String(userForm.alamat || '').trim(),
-          refference: String(userForm.refference || '').trim(),
-          reference_other: String(userForm.reference_other || '').trim(),
-        }),
+        body: JSON.stringify(payloadBody),
       })
 
       const payload = await response.json()
@@ -7674,7 +7762,7 @@ function AdminUserManagementPage() {
 
             <div className="admin-package-actions admin-user-actions">
               <button type="button" className="admin-outline-action">⬇ Export</button>
-              <button type="button" className="admin-primary-action">＋ Tambah User</button>
+              <button type="button" className="admin-primary-action" onClick={openAddUserModal}>＋ Tambah User</button>
             </div>
           </section>
 
@@ -7865,9 +7953,10 @@ function AdminUserManagementPage() {
 
           <AdminUserFormModal
             open={showUserFormModal}
+            mode={editingUserPid ? 'edit' : 'create'}
             title={editingUserPid ? 'Edit User' : 'Tambah User'}
-            submitLabel="Simpan Perubahan"
-            helpText="Perbarui data akun, status, peran, dan profil user."
+            submitLabel={editingUserPid ? 'Simpan Perubahan' : 'Simpan User'}
+            helpText={editingUserPid ? 'Perbarui data akun, status, peran, dan profil user.' : 'Isi data akun, status, peran, dan profil user baru.'}
             form={userForm}
             loading={isSavingUser}
             error={userFormError}
