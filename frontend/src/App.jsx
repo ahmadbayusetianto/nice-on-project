@@ -7297,6 +7297,8 @@ function AdminUserManagementPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
   const [userError, setUserError] = useState(null)
   const [userSearch, setUserSearch] = useState('')
+  const [selectedUserStatus, setSelectedUserStatus] = useState('Semua Status')
+  const [selectedUserRole, setSelectedUserRole] = useState('Semua Peran')
   const [userSummary, setUserSummary] = useState({ total_user: 0, user_aktif: 0, user_nonaktif: 0, admin: 0 })
   const [userCurrentPage, setUserCurrentPage] = useState(1)
   const [userPageSize, setUserPageSize] = useState(10)
@@ -7383,11 +7385,14 @@ function AdminUserManagementPage() {
 
   const visibleUserRows = userRows.filter((row) => {
     const normalizedSearch = userSearch.trim().toLowerCase()
-    if (!normalizedSearch) return true
-
-    return [row.name, row.email, row.phone, row.role, row.status, row.code]
+    const matchesSearch = !normalizedSearch || [row.name, row.email, row.phone, row.role, row.status, row.code]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+
+    const matchesStatus = selectedUserStatus === 'Semua Status' || String(row.status || '').toLowerCase() === selectedUserStatus.toLowerCase()
+    const matchesRole = selectedUserRole === 'Semua Peran' || String(row.role || '').toLowerCase() === selectedUserRole.toLowerCase()
+
+    return matchesSearch && matchesStatus && matchesRole
   })
 
   const totalUserPages = Math.max(1, Math.ceil(visibleUserRows.length / userPageSize))
@@ -7397,7 +7402,7 @@ function AdminUserManagementPage() {
 
   useEffect(() => {
     setUserCurrentPage(1)
-  }, [userSearch, userPageSize])
+  }, [userSearch, userPageSize, selectedUserStatus, selectedUserRole])
 
   useEffect(() => {
     if (userCurrentPage > totalUserPages) {
@@ -7680,9 +7685,34 @@ function AdminUserManagementPage() {
               </label>
 
               <div className="admin-user-filter-group">
-                <button type="button" className="admin-user-filter-pill">Semua Status <span aria-hidden="true">⌄</span></button>
-                <button type="button" className="admin-user-filter-pill">Semua Peran <span aria-hidden="true">⌄</span></button>
-                <button type="button" className="admin-user-filter-button">Filter</button>
+                <select
+                  className="admin-user-filter-pill"
+                  aria-label="Filter status user"
+                  value={selectedUserStatus}
+                  onChange={(event) => setSelectedUserStatus(event.target.value)}
+                >
+                  {['Semua Status', 'Aktif', 'Nonaktif'].map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <select
+                  className="admin-user-filter-pill"
+                  aria-label="Filter peran user"
+                  value={selectedUserRole}
+                  onChange={(event) => setSelectedUserRole(event.target.value)}
+                >
+                  {['Semua Peran', 'Admin', 'User'].map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="admin-user-filter-button"
+                  onClick={() => { void loadUsers({ cancelled: () => false, showLoading: true }) }}
+                  title="Muat ulang data user dari server dengan filter yang aktif"
+                >
+                  Filter
+                </button>
                 <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
                   <select
                     className="admin-page-size-select"
