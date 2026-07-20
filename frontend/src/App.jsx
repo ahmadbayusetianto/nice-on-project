@@ -7069,8 +7069,10 @@ function UserTryoutPage() {
                     const isTkpQuestion = Number(question.question_group) === 3
                     const statusClass = isTkpQuestion ? 'tkp' : (question.is_correct ? 'correct' : 'wrong')
                     const statusLabel = isTkpQuestion ? `Nilai ${question.score_obtained ?? 0}` : (question.is_correct ? 'Benar' : 'Salah')
-                    const isExpanded = expandedReviewIds.has(question.id)
-                    const pembahasanText = String(question.pembahasan || '').trim()
+                    const isExpanded = !isTkpQuestion && expandedReviewIds.has(question.id)
+                    const correctOptionIndex = question.options.findIndex((option) => option.id === question.correct_option_id)
+                    const correctOption = correctOptionIndex >= 0 ? question.options[correctOptionIndex] : null
+                    const correctOptionLetter = correctOptionIndex >= 0 ? String.fromCharCode(65 + correctOptionIndex) : null
 
                     return (
                       <div className={`user-tryout-review-item ${statusClass}${isExpanded ? ' expanded' : ''}`} key={question.id}>
@@ -7078,6 +7080,7 @@ function UserTryoutPage() {
                           type="button"
                           className="user-tryout-review-item-head"
                           aria-expanded={isExpanded}
+                          disabled={isTkpQuestion}
                           onClick={() => toggleReviewExpanded(question.id)}
                         >
                           <span>{index + 1}</span>
@@ -7090,7 +7093,7 @@ function UserTryoutPage() {
                             <p>{question.question_group_label}</p>
                           </div>
                           <em>{statusLabel}</em>
-                          <i className="user-tryout-review-chevron" aria-hidden="true">⌄</i>
+                          {isTkpQuestion ? null : <i className="user-tryout-review-chevron" aria-hidden="true">⌄</i>}
                         </button>
 
                         {isExpanded ? (
@@ -7101,8 +7104,19 @@ function UserTryoutPage() {
                                 <img className="user-tryout-review-image" src={question.image_url} alt={`Gambar soal ${index + 1}`} />
                               </div>
                             ) : null}
-                            <strong>Pembahasan</strong>
-                            <p>{pembahasanText || 'Belum ada pembahasan untuk soal ini.'}</p>
+                            <strong>Jawaban Benar</strong>
+                            {correctOption ? (
+                              !question.istext && correctOption.image_url ? (
+                                <div className="user-tryout-review-answer-image-wrap">
+                                  <span className="user-tryout-review-answer-letter">Opsi {correctOptionLetter}</span>
+                                  <img className="user-tryout-review-answer-image" src={correctOption.image_url} alt={`Gambar jawaban benar opsi ${correctOptionLetter}`} />
+                                </div>
+                              ) : (
+                                <p>{correctOptionLetter}. {correctOption.choise}</p>
+                              )
+                            ) : (
+                              <p>Jawaban benar tidak tersedia untuk soal ini.</p>
+                            )}
                           </div>
                         ) : null}
                       </div>

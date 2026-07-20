@@ -412,6 +412,7 @@ function mapTryoutQuestionRow(object $question, array $options, ?object $sheet =
         'is_correct' => $includeResult && !$isTkpGroup ? (
             $selectedOptionId !== null && (int) $selectedOptionId === (int) ($sheet->answer_id ?? 0)
         ) : null,
+        'correct_option_id' => $includeResult && !$isTkpGroup && !empty($sheet->answer_id) ? (int) $sheet->answer_id : null,
         'score_obtained' => $includeResult && $isTkpGroup ? (int) ($sheet->value ?? 0) : null,
     ];
 }

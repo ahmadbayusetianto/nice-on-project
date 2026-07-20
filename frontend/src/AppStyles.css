@@ -11107,6 +11107,11 @@ html {
   cursor: pointer;
 }
 
+.user-tryout-review-item-head:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .user-tryout-review-item span {
   width: 40px;
   height: 40px;
@@ -11191,6 +11196,36 @@ html {
   box-shadow: 0 12px 26px rgba(15, 32, 61, 0.1);
   background: #fff;
   padding: 8px;
+}
+
+.user-tryout-review-answer-image-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-tryout-review-answer-letter {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(45, 191, 117, 0.12);
+  color: #1f9d57;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.user-tryout-review-answer-image {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 191, 117, 0.3);
+  background: #fff;
+  padding: 6px;
 }
 
 @media (max-width: 1180px) {
