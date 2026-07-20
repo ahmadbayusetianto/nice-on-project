@@ -3001,6 +3001,7 @@ Route::get('/admin/packages', function (Request $request) {
             'tone' => strtoupper((string) $program) === 'PPPK' ? 'blue' : 'red',
             'program' => $program,
             'type' => $type,
+            'formasi' => $item->formasi ?: null,
             'typeClass' => strtoupper((string) $program) === 'PPPK' ? 'online' : 'tryout',
             'tipe_paket' => $item->tipe_paket ?: 'tunggal',
             'bundling_id' => $item->bundling_id !== null ? (int) $item->bundling_id : null,

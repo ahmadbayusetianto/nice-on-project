@@ -1731,7 +1731,7 @@ function AdminQuestionFormModal({
                     >
                       <option value="" disabled>Pilih bundling paket dahulu...</option>
                       {packages.map((pkg) => (
-                        <option key={pkg.pid} value={pkg.pid}>{pkg.name}</option>
+                        <option key={pkg.pid} value={pkg.pid}>{pkg.formasi ? `${pkg.name} - ${pkg.formasi}` : pkg.name}</option>
                       ))}
                     </select>
                   </label>
