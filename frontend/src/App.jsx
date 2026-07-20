@@ -1093,10 +1093,8 @@ function AdminLogoutModal({ open, onCancel, onConfirm, title = 'Keluar dari akun
   )
 }
 
-function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, packages = [], editingPid = null, loading, error, title = 'Tambah Paket', submitLabel = 'Simpan Paket', helpText = 'Isi data paket sesuai kolom yang tersedia di tabel paket.' }) {
+function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah Paket', submitLabel = 'Simpan Paket', helpText = 'Isi data paket sesuai kolom yang tersedia di tabel paket.' }) {
   if (!open) return null
-
-  const bundlingOptions = packages.filter((pkg) => pkg.tipe_paket === 'bundling' && String(pkg.pid) !== String(editingPid))
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
@@ -1110,37 +1108,6 @@ function AdminPackageFormModal({ open, onCancel, onSubmit, form, onFieldChange, 
           {error ? <div className="admin-package-form-error">{error}</div> : null}
 
           <div className="admin-package-form-grid">
-            <label className="admin-package-field admin-package-field-full">
-              <span>Tipe Paket</span>
-              <select
-                value={form.tipe_paket}
-                onChange={(event) => {
-                  onFieldChange('tipe_paket', event.target.value)
-                  if (event.target.value === 'bundling') onFieldChange('bundling_id', '')
-                }}
-                disabled={loading}
-              >
-                <option value="tunggal" disabled={!bundlingOptions.length}>Paket Tunggal</option>
-                <option value="bundling">Bundling Paket</option>
-              </select>
-              {!bundlingOptions.length ? (
-                <small className="admin-package-field-hint">Belum ada Bundling Paket. Buat Bundling Paket terlebih dahulu sebelum bisa menambahkan Paket Tunggal.</small>
-              ) : null}
-            </label>
-
-            {form.tipe_paket !== 'bundling' ? (
-              <label className="admin-package-field admin-package-field-full">
-                <span>Bundling Paket <sup>*</sup></span>
-                <select value={form.bundling_id} onChange={(event) => onFieldChange('bundling_id', event.target.value)} disabled={loading} required>
-                  <option value="" disabled>Pilih Bundling Paket...</option>
-                  {bundlingOptions.map((pkg) => (
-                    <option key={pkg.pid} value={pkg.pid}>{pkg.name}</option>
-                  ))}
-                </select>
-                <small className="admin-package-field-hint">Setiap Paket Tunggal wajib berada di bawah satu Bundling Paket.</small>
-              </label>
-            ) : null}
-
             <label className="admin-package-field">
               <span>Kategori</span>
                <select value={form.kategori} onChange={(event) => onFieldChange('kategori', event.target.value)} disabled={loading}>
@@ -1600,18 +1567,76 @@ function AdminQuestionFormModal({
   const [selectedBundlingId, setSelectedBundlingId] = useState('')
   const [groups, setGroups] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(false)
+  const [refPaketOptions, setRefPaketOptions] = useState([])
 
+  // Edit mode: `form.package_id` is a ref_paket pid, so the matching Bundling
+  // Paket (a tbl_paket row) can only be found by looking up that ref_paket
+  // row's nama_bundle and matching it by name. Pre-migration questions whose
+  // package_id doesn't resolve in ref_paket just leave both fields unset.
   useEffect(() => {
     if (!open) return
 
-    const currentPackage = packages.find((pkg) => String(pkg.pid) === String(form.package_id))
-    setSelectedBundlingId(currentPackage?.bundling_id !== undefined && currentPackage?.bundling_id !== null ? String(currentPackage.bundling_id) : '')
+    if (!form.package_id) {
+      setSelectedBundlingId('')
+      return
+    }
+
+    let cancelled = false
+
+    fetch(`${BACKEND_URL}/api/admin/ref-paket?pid=${encodeURIComponent(form.package_id)}`)
+      .then((response) => response.json().catch(() => null))
+      .then((payload) => {
+        if (cancelled) return
+        const row = payload?.data?.[0]
+        if (!row) {
+          setSelectedBundlingId('')
+          return
+        }
+        setRefPaketOptions((current) => (current.some((item) => item.pid === row.pid) ? current : [...current, row]))
+        const matchedBundle = packages.find((pkg) => pkg.name === row.type)
+        setSelectedBundlingId(matchedBundle ? String(matchedBundle.pid) : '')
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedBundlingId('')
+      })
+
+    return () => { cancelled = true }
   }, [open])
 
+  // Paket dropdown searches ref_paket, scoped to the selected Bundling
+  // Paket's name (ref_paket.nama_bundle is a plain text match, not an FK).
+  useEffect(() => {
+    if (!open || !selectedBundlingId) {
+      setRefPaketOptions([])
+      return
+    }
+
+    const bundleName = packages.find((pkg) => String(pkg.pid) === String(selectedBundlingId))?.name
+    if (!bundleName) {
+      setRefPaketOptions([])
+      return
+    }
+
+    let cancelled = false
+
+    fetch(`${BACKEND_URL}/api/admin/ref-paket?bundle=${encodeURIComponent(bundleName)}`)
+      .then((response) => response.json().catch(() => null))
+      .then((payload) => {
+        if (!cancelled) setRefPaketOptions(payload?.data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setRefPaketOptions([])
+      })
+
+    return () => { cancelled = true }
+  }, [open, selectedBundlingId])
+
   useEffect(() => {
     if (!open) return
 
-    if (form.question_type === 'SKB' && !form.package_id) {
+    // SKB packages always have exactly one implicit group, auto-resolved
+    // server-side — the admin never picks one, so there's nothing to fetch.
+    if (form.question_type === 'SKB') {
       setGroups([])
       return
     }
@@ -1620,7 +1645,6 @@ function AdminQuestionFormModal({
     setGroupsLoading(true)
 
     const params = new URLSearchParams({ type: form.question_type })
-    if (form.question_type === 'SKB') params.set('package_id', String(form.package_id))
 
     fetch(`${BACKEND_URL}/api/admin/question-groups?${params.toString()}`)
       .then((response) => response.json().catch(() => null).then((payload) => ({ ok: response.ok, payload })))
@@ -1636,7 +1660,7 @@ function AdminQuestionFormModal({
       })
 
     return () => { cancelled = true }
-  }, [open, form.question_type, form.package_id])
+  }, [open, form.question_type])
 
   useEffect(() => {
     if (!open || groupsLoading) return
@@ -1700,20 +1724,13 @@ function AdminQuestionFormModal({
                     <select
                       value={selectedBundlingId}
                       onChange={(event) => {
-                        const nextBundlingId = event.target.value
-                        setSelectedBundlingId(nextBundlingId)
-
-                        const currentPackage = packages.find((pkg) => String(pkg.pid) === String(form.package_id))
-                        const currentBundlingId = currentPackage?.bundling_id !== undefined && currentPackage?.bundling_id !== null ? String(currentPackage.bundling_id) : ''
-
-                        if (nextBundlingId !== currentBundlingId) {
-                          onFieldChange('package_id', '')
-                        }
+                        setSelectedBundlingId(event.target.value)
+                        onFieldChange('package_id', '')
                       }}
                       disabled={loading}
                     >
                       <option value="" disabled>Pilih bundling paket dahulu...</option>
-                      {packages.filter((pkg) => pkg.tipe_paket === 'bundling').map((pkg) => (
+                      {packages.map((pkg) => (
                         <option key={pkg.pid} value={pkg.pid}>{pkg.name}</option>
                       ))}
                     </select>
@@ -1723,10 +1740,15 @@ function AdminQuestionFormModal({
                     <span>Paket <sup>*</sup></span>
                     <PackageSearchSelect
                       value={form.package_id}
-                      onChange={(pid) => onFieldChange('package_id', pid)}
-                      packages={!selectedBundlingId ? [] : packages.filter((pkg) => (
-                        pkg.tipe_paket !== 'bundling' && String(pkg.bundling_id ?? '') === String(selectedBundlingId)
-                      ))}
+                      onChange={(pid) => {
+                        onFieldChange('package_id', pid)
+
+                        const matched = refPaketOptions.find((item) => String(item.pid) === String(pid))
+                        const nextType = matched?.program === 'SKB' ? 'SKB' : 'SKD'
+                        onFieldChange('question_type', nextType)
+                        onFieldChange('question_group', nextType === 'SKD' ? '' : null)
+                      }}
+                      packages={refPaketOptions}
                       disabled={loading || !selectedBundlingId}
                       placeholder={selectedBundlingId ? 'Cari nama paket...' : 'Pilih bundling paket dahulu...'}
                     />
@@ -1736,38 +1758,27 @@ function AdminQuestionFormModal({
                 <div className="admin-question-field-row">
                   <label className="admin-question-field">
                     <span>Tipe Soal <sup>*</sup></span>
-                    <select
-                      value={form.question_type}
-                      onChange={(event) => {
-                        const nextType = event.target.value
-                        onFieldChange('question_type', nextType)
-                        onFieldChange('question_group', nextType === 'SKB' ? '' : 1)
-                      }}
-                      disabled={loading}
-                    >
+                    <select value={form.question_type} onChange={() => {}} disabled>
                       <option value="SKD">SKD</option>
                       <option value="SKB">SKB</option>
                     </select>
                   </label>
 
-                  <label className="admin-question-field">
-                    <span>Grup Soal <sup>*</sup></span>
-                    <select
-                      value={form.question_group}
-                      onChange={(event) => onFieldChange('question_group', event.target.value ? Number(event.target.value) : '')}
-                      disabled={loading || groupsLoading || (form.question_type === 'SKB' && !form.package_id)}
-                    >
-                      <option value="" disabled>
-                        {form.question_type === 'SKB' && !form.package_id ? 'Pilih paket dahulu...' : 'Pilih grup...'}
-                      </option>
-                      {groups.map((group) => (
-                        <option key={group.id} value={group.id}>{group.name}</option>
-                      ))}
-                    </select>
-                    {form.question_type === 'SKB' && form.package_id && !groupsLoading && !groups.length ? (
-                      <p className="admin-question-group-hint">Belum ada grup untuk paket ini — kelola di tab "Grup Soal".</p>
-                    ) : null}
-                  </label>
+                  {form.question_type === 'SKD' ? (
+                    <label className="admin-question-field">
+                      <span>Grup Soal <sup>*</sup></span>
+                      <select
+                        value={form.question_group}
+                        onChange={(event) => onFieldChange('question_group', event.target.value ? Number(event.target.value) : '')}
+                        disabled={loading || groupsLoading}
+                      >
+                        <option value="" disabled>Pilih grup...</option>
+                        {groups.map((group) => (
+                          <option key={group.id} value={group.id}>{group.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                 </div>
 
                 <label className="admin-question-field admin-question-field-full">
@@ -2394,6 +2405,9 @@ function AdminQuestionManagementPage() {
   const [sandboxTryoutType, setSandboxTryoutType] = useState('SKD')
   const [startingSandboxPackageId, setStartingSandboxPackageId] = useState(null)
   const [sandboxStartError, setSandboxStartError] = useState(null)
+  const [sandboxPaketRows, setSandboxPaketRows] = useState([])
+  const [isLoadingSandboxPaket, setIsLoadingSandboxPaket] = useState(false)
+  const [sandboxPaketError, setSandboxPaketError] = useState(null)
   const questionSuccessTimerRef = useRef(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
@@ -2416,11 +2430,13 @@ function AdminQuestionManagementPage() {
     .format(new Date())
     .replace(/^./, (char) => char.toUpperCase())
 
-  const visibleSandboxPackages = packageRows.filter((row) => {
+  const visibleSandboxPackages = sandboxPaketRows.filter((row) => {
+    if (String(row.program || '').toUpperCase() !== sandboxTryoutType) return false
+
     const search = packageSearch.trim().toLowerCase()
     if (!search) return true
 
-    return [row.name, row.program, row.type, row.desc, row.status]
+    return [row.name, row.program, row.type]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(search))
   })
@@ -2443,9 +2459,9 @@ function AdminQuestionManagementPage() {
   ]
 
   const tryoutSummaryCards = [
-    { label: 'Total Paket', value: String(packageRows.length), delta: 'Siap sandbox', accent: 'blue', icon: '📦' },
-    { label: 'CPNS', value: String(packageRows.filter((row) => String(row.program || '').toUpperCase() === 'CPNS').length), delta: 'Program CPNS', accent: 'green', icon: '🇮🇩' },
-    { label: 'PPPK', value: String(packageRows.filter((row) => String(row.program || '').toUpperCase() === 'PPPK').length), delta: 'Program PPPK', accent: 'purple', icon: '🧾' },
+    { label: 'Total Paket', value: String(sandboxPaketRows.length), delta: 'Siap sandbox', accent: 'blue', icon: '📦' },
+    { label: 'SKD', value: String(sandboxPaketRows.filter((row) => String(row.program || '').toUpperCase() === 'SKD').length), delta: 'Tipe SKD', accent: 'green', icon: '🇮🇩' },
+    { label: 'SKB', value: String(sandboxPaketRows.filter((row) => String(row.program || '').toUpperCase() === 'SKB').length), delta: 'Tipe SKB', accent: 'purple', icon: '🧾' },
     { label: 'Draft Session', value: 'Sandbox', delta: 'Tidak masuk statistik', accent: 'orange', icon: '🧪' },
   ]
 
@@ -2535,6 +2551,49 @@ function AdminQuestionManagementPage() {
     let cancelled = false
 
     void loadSandboxPackages({ cancelled: () => cancelled, showLoading: true })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const loadSandboxPaket = async ({ cancelled = () => false, showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoadingSandboxPaket(true)
+    }
+
+    setSandboxPaketError(null)
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/ref-paket`)
+      const contentType = response.headers.get('content-type') || ''
+      const rawBody = await response.text()
+      const payload = contentType.includes('application/json') && rawBody ? JSON.parse(rawBody) : null
+
+      if (!response.ok) {
+        const message = payload?.message || rawBody?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Data paket sandbox gagal dimuat (HTTP ${response.status}).`
+        throw new Error(message)
+      }
+
+      if (!cancelled()) {
+        setSandboxPaketRows(Array.isArray(payload?.data) ? payload.data : [])
+      }
+    } catch (error) {
+      if (!cancelled()) {
+        const message = getFriendlyFetchError(error, 'Data paket sandbox gagal dimuat.')
+        setSandboxPaketError(message.includes('<!DOCTYPE') ? 'Backend mengembalikan halaman HTML, periksa koneksi database/server.' : message)
+      }
+    } finally {
+      if (showLoading && !cancelled()) {
+        setIsLoadingSandboxPaket(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadSandboxPaket({ cancelled: () => cancelled, showLoading: true })
 
     return () => {
       cancelled = true
@@ -2744,7 +2803,7 @@ function AdminQuestionManagementPage() {
       return
     }
 
-    if (!questionForm.question_group) {
+    if (questionForm.question_type !== 'SKB' && !questionForm.question_group) {
       setQuestionSubmitError('Grup Soal wajib dipilih.')
       return
     }
@@ -2956,7 +3015,7 @@ function AdminQuestionManagementPage() {
         body: JSON.stringify({
           user_id: user.pid,
           package_id: packageRow.pid,
-          jenis_tryout: sandboxTryoutType,
+          jenis_tryout: packageRow.program || sandboxTryoutType,
         }),
       })
 
@@ -3125,7 +3184,7 @@ function AdminQuestionManagementPage() {
                       <option value="SKB">SKB</option>
                     </select>
                   </label>
-                  <button type="button" className="admin-outline-action" aria-label="Muat ulang data paket" onClick={() => { void loadSandboxPackages({ cancelled: () => false, showLoading: true }) }}>↻</button>
+                  <button type="button" className="admin-outline-action" aria-label="Muat ulang data paket" onClick={() => { void loadSandboxPaket({ cancelled: () => false, showLoading: true }) }}>↻</button>
                 </>
               ) : null}
             </div>
@@ -3388,8 +3447,8 @@ function AdminQuestionManagementPage() {
 
               <section className="admin-card admin-question-tryout-card">
                 {sandboxStartError ? <div className="admin-user-message error">{sandboxStartError}</div> : null}
-                {packageError ? <div className="admin-user-message error">{packageError}</div> : null}
-                {isLoadingPackages ? <div className="admin-user-message">Memuat data paket tryout...</div> : null}
+                {sandboxPaketError ? <div className="admin-user-message error">{sandboxPaketError}</div> : null}
+                {isLoadingSandboxPaket ? <div className="admin-user-message">Memuat data paket tryout...</div> : null}
 
                 <div className="admin-question-tryout-intro">
                   <div>
@@ -3417,12 +3476,10 @@ function AdminQuestionManagementPage() {
                           <span className="admin-question-tryout-badge">{row.program || 'Paket'}</span>
                           <h4>{row.name}</h4>
                         </div>
-                        <strong>{row.price}</strong>
                       </div>
-                      <p>{row.desc || '-'}</p>
+                      <p>{row.type || '-'}</p>
                       <div className="admin-question-tryout-meta">
-                        <span>{row.type || '-'}</span>
-                        <span>{row.status || 'Aktif'}</span>
+                        <span>Aktif</span>
                       </div>
                       <div className="admin-question-tryout-actions">
                         <button type="button" className="admin-primary-action" onClick={() => { void startSandboxTryout(row) }} disabled={startingSandboxPackageId === row.pid}>
@@ -3433,7 +3490,7 @@ function AdminQuestionManagementPage() {
                   ))}
                 </div>
 
-                {!isLoadingPackages && !visibleSandboxPackages.length ? (
+                {!isLoadingSandboxPaket && !visibleSandboxPackages.length ? (
                   <div className="admin-question-tryout-empty">Tidak ada paket yang cocok dengan pencarian.</div>
                 ) : null}
               </section>
@@ -6880,9 +6937,13 @@ function UserTryoutPage() {
                   {currentQuestion ? (
                     <div className="user-tryout-question-body">
                       {currentQuestion.information ? <p className="user-tryout-question-info">{currentQuestion.information}</p> : null}
-                      <div className="user-tryout-question-text">{currentQuestion.question}</div>
+                      {!currentQuestion.istext && currentQuestion.image_url ? (
+                        <img className="user-tryout-question-image" src={currentQuestion.image_url} alt="Gambar soal" />
+                      ) : (
+                        <div className="user-tryout-question-text">{currentQuestion.question}</div>
+                      )}
 
-                      <div className="user-tryout-option-list">
+                      <div className={`user-tryout-option-list${!currentQuestion.istext ? ' image-mode' : ''}`}>
                         {currentQuestion.options.map((option, index) => {
                           const selected = String(answerMap[String(currentQuestion.id)] || '') === String(option.id)
                           return (
@@ -6896,7 +6957,11 @@ function UserTryoutPage() {
                               }}
                             >
                               <span className="user-tryout-option-badge">{String.fromCharCode(65 + index)}</span>
-                              <span className="user-tryout-option-text">{option.choise}</span>
+                              {!currentQuestion.istext && option.image_url ? (
+                                <img className="user-tryout-option-image" src={option.image_url} alt={`Gambar opsi ${String.fromCharCode(65 + index)}`} />
+                              ) : (
+                                <span className="user-tryout-option-text">{option.choise}</span>
+                              )}
                             </button>
                           )
                         })}
@@ -7017,7 +7082,11 @@ function UserTryoutPage() {
                         >
                           <span>{index + 1}</span>
                           <div>
-                            <strong>{question.question}</strong>
+                            <strong>
+                              {question.istext ? question.question : (
+                                <span className="user-tryout-review-image-chip">🖼 Soal Bergambar</span>
+                              )}
+                            </strong>
                             <p>{question.question_group_label}</p>
                           </div>
                           <em>{statusLabel}</em>
@@ -7026,6 +7095,12 @@ function UserTryoutPage() {
 
                         {isExpanded ? (
                           <div className="user-tryout-review-pembahasan">
+                            {!question.istext && question.image_url ? (
+                              <div className="user-tryout-review-image-wrap">
+                                <strong>Soal</strong>
+                                <img className="user-tryout-review-image" src={question.image_url} alt={`Gambar soal ${index + 1}`} />
+                              </div>
+                            ) : null}
                             <strong>Pembahasan</strong>
                             <p>{pembahasanText || 'Belum ada pembahasan untuk soal ini.'}</p>
                           </div>
@@ -8492,8 +8567,6 @@ function AdminPackageManagementPage() {
       packageSuccessTimerRef.current = null
     }
 
-    const hasBundlingOption = packageRows.some((row) => row.tipe_paket === 'bundling')
-
     setPackageModalMode('create')
     setEditingPackagePid(null)
     setPackageSubmitError(null)
@@ -8503,7 +8576,7 @@ function AdminPackageManagementPage() {
       formasi: '',
       jadwal: '',
       nama_paket: '',
-      tipe_paket: hasBundlingOption ? 'tunggal' : 'bundling',
+      tipe_paket: 'tunggal',
       bundling_id: '',
       harga: '',
       ket: '',
@@ -8577,11 +8650,6 @@ function AdminPackageManagementPage() {
 
     if (!packageForm.kategori.trim() || !packageForm.nama_paket.trim() || String(packageForm.harga).trim() === '') {
       setPackageSubmitError('Kategori, nama paket, dan harga wajib diisi.')
-      return
-    }
-
-    if (packageForm.tipe_paket !== 'bundling' && !packageForm.bundling_id) {
-      setPackageSubmitError('Pilih Bundling Paket terlebih dahulu. Setiap paket tunggal wajib memiliki Bundling Paket.')
       return
     }
 
@@ -8896,11 +8964,8 @@ function AdminPackageManagementPage() {
                             <span>{row.thumb}</span>
                           </div>
                           <div className="admin-package-name">
-                            <strong>
-                              {row.name}
-                              {row.tipe_paket === 'bundling' ? <span className="admin-package-bundling-badge">Bundling</span> : null}
-                            </strong>
-                            <span>{row.tipe_paket === 'tunggal' && row.bundling_nama ? `Bagian dari ${row.bundling_nama}` : row.desc}</span>
+                            <strong>{row.name}</strong>
+                            <span>{row.desc}</span>
                           </div>
                         </div>
                       </td>
@@ -8970,8 +9035,6 @@ function AdminPackageManagementPage() {
             onSubmit={handlePackageSubmit}
             form={packageForm}
             onFieldChange={handlePackageFieldChange}
-            packages={packageRows}
-            editingPid={editingPackagePid}
             loading={isSavingPackage}
             error={packageSubmitError}
             title={packageModalMode === 'edit' ? 'Edit Paket' : 'Tambah Paket'}

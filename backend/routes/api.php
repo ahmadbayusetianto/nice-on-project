@@ -157,6 +157,36 @@ function isTkpQuestionGroup(mixed $group, string $questionType = 'SKD'): bool
     return normalizeQuestionType($questionType) === 'SKD' && (int) $group === 3;
 }
 
+/**
+ * SKB packages (ref_paket rows) only ever need one question group, so the
+ * admin never picks/manages it — find the existing one or create it silently.
+ */
+function resolveSkbQuestionGroupId(int $refPaketId, string $paketName): int
+{
+    $existing = DB::table('tbl_question_groups')
+        ->where('package_id', $refPaketId)
+        ->where('question_type', 'SKB')
+        ->whereNull('deleted_at')
+        ->first();
+
+    if ($existing) {
+        return (int) $existing->id;
+    }
+
+    $now = now();
+
+    return DB::table('tbl_question_groups')->insertGetId([
+        'package_id' => $refPaketId,
+        'question_type' => 'SKB',
+        'name' => $paketName,
+        'sort_order' => 0,
+        'is_locked' => false,
+        'created_at' => $now,
+        'updated_at' => null,
+        'deleted_at' => null,
+    ]);
+}
+
 function normalizeQuestionType(string $type): string
 {
     $normalized = strtoupper(trim($type));
@@ -346,17 +376,19 @@ function parameterBoolValue(string $code, bool $default): bool
     return filter_var($value, FILTER_VALIDATE_BOOL);
 }
 
-function mapTryoutOptionRow(object $item): array
+function mapTryoutOptionRow(object $item, ?Request $request = null): array
 {
     return [
         'id' => (int) $item->id,
         'question_id' => (int) $item->question_id,
         'choise' => (string) $item->choise,
         'istext' => (int) ($item->istext ?? 1) === 1,
+        'image_path' => $item->image_path ?? null,
+        'image_url' => buildQuestionImageUrl($request, $item->image_path ?? null),
     ];
 }
 
-function mapTryoutQuestionRow(object $question, array $options, ?object $sheet = null, bool $includeResult = false, array $groupsById = []): array
+function mapTryoutQuestionRow(object $question, array $options, ?object $sheet = null, bool $includeResult = false, array $groupsById = [], ?Request $request = null): array
 {
     $type = normalizeQuestionType((string) ($question->question_type ?? 'SKD'));
     $group = (int) ($question->question_group ?? 0);
@@ -372,6 +404,8 @@ function mapTryoutQuestionRow(object $question, array $options, ?object $sheet =
         'istext' => (int) ($question->istext ?? 1) === 1,
         'information' => $question->information,
         'pembahasan' => $includeResult ? $question->pembahasan : null,
+        'image_path' => $question->image_path ?? null,
+        'image_url' => buildQuestionImageUrl($request, $question->image_path ?? null),
         'options' => $options,
         'selected_option_id' => $selectedOptionId ?: null,
         'answered' => $selectedOptionId ? true : false,
@@ -382,12 +416,23 @@ function mapTryoutQuestionRow(object $question, array $options, ?object $sheet =
     ];
 }
 
-function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?array
+function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false, ?Request $request = null): ?array
 {
     $hasDraftColumn = Schema::hasColumn('tbl_tryout_session', 'is_draft');
 
-    $session = DB::table('tbl_tryout_session as l')
-        ->leftJoin('tbl_paket as p', 'l.package_id', '=', 'p.pid')
+    // Draft (sandbox) sessions store a ref_paket pid in package_id, real
+    // sessions store a tbl_paket pid — join both and pick by is_draft so a
+    // sandbox session never accidentally displays a coincidentally-matching
+    // tbl_paket row's name/kategori/formasi/jadwal (ref_paket has none of
+    // those besides nama_paket).
+    $query = DB::table('tbl_tryout_session as l')
+        ->leftJoin('tbl_paket as p', 'l.package_id', '=', 'p.pid');
+
+    if ($hasDraftColumn) {
+        $query->leftJoin('ref_paket as rp', 'l.package_id', '=', 'rp.pid');
+    }
+
+    $session = $query
         ->where('l.id', $ljkId)
         ->select([
             'l.id',
@@ -402,12 +447,18 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
             'l.keterangan',
             'l.finish_at',
             'l.created_at',
-            'p.nama_paket',
-            'p.kategori',
-            'p.formasi',
-            'p.jadwal',
         ])
-        ->when($hasDraftColumn, fn ($query) => $query->addSelect('l.is_draft'))
+        ->when(
+            $hasDraftColumn,
+            fn ($query) => $query->addSelect([
+                'l.is_draft',
+                DB::raw('CASE WHEN l.is_draft = 1 THEN rp.nama_paket ELSE p.nama_paket END AS nama_paket'),
+                DB::raw('CASE WHEN l.is_draft = 1 THEN NULL ELSE p.kategori END AS kategori'),
+                DB::raw('CASE WHEN l.is_draft = 1 THEN NULL ELSE p.formasi END AS formasi'),
+                DB::raw('CASE WHEN l.is_draft = 1 THEN NULL ELSE p.jadwal END AS jadwal'),
+            ]),
+            fn ($query) => $query->addSelect(['p.nama_paket', 'p.kategori', 'p.formasi', 'p.jadwal'])
+        )
         ->first();
 
     if (!$session) {
@@ -451,6 +502,7 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
             'istext',
             'information',
             'pembahasan',
+            'image_path',
         ])
         ->whereIn('id', $questionIds)
         ->get()
@@ -462,6 +514,7 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
             'question_id',
             'choise',
             'istext',
+            'image_path',
         ])
         ->whereIn('question_id', $questionIds)
         ->whereNull('deleted_at')
@@ -471,18 +524,18 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false): ?ar
 
     $groupsById = questionGroupNamesByIds($questionsById->pluck('question_group')->all());
 
-    $questions = $sheetRows->map(function ($sheet) use ($questionsById, $optionsByQuestion, $includeResult, $groupsById) {
+    $questions = $sheetRows->map(function ($sheet) use ($questionsById, $optionsByQuestion, $includeResult, $groupsById, $request) {
         $question = $questionsById[(int) $sheet->question_id] ?? null;
         if (!$question) {
             return null;
         }
 
         $options = ($optionsByQuestion[(int) $sheet->question_id] ?? collect())
-            ->map(fn ($option) => mapTryoutOptionRow($option))
+            ->map(fn ($option) => mapTryoutOptionRow($option, $request))
             ->values()
             ->all();
 
-        return mapTryoutQuestionRow($question, $options, $sheet, $includeResult, $groupsById);
+        return mapTryoutQuestionRow($question, $options, $sheet, $includeResult, $groupsById, $request);
     })->filter()->values();
 
     return [
@@ -1781,7 +1834,7 @@ Route::get('/tryout/current', function (Request $request) {
         ], 404);
     }
 
-    $payload = buildTryoutSessionPayload((int) $session->id, false);
+    $payload = buildTryoutSessionPayload((int) $session->id, false, $request);
 
     if (!$payload) {
         return response()->json([
@@ -1900,7 +1953,7 @@ Route::post('/tryout/start', function (Request $request) {
         ['pid' => (int) $validated['user_id'], 'package_id' => (int) $validated['package_id'], 'jenis_tryout' => $tryoutType]
     );
 
-    $payload = buildTryoutSessionPayload($ljkId, false);
+    $payload = buildTryoutSessionPayload($ljkId, false, $request);
 
     return response()->json([
         'message' => 'Tryout berhasil dimulai.',
@@ -1917,7 +1970,7 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
 
     $validator = Validator::make($input, [
         'user_id' => ['required', 'integer', 'exists:tbl_user,pid'],
-        'package_id' => ['required', 'integer', 'exists:tbl_paket,pid'],
+        'package_id' => ['required', 'integer', 'exists:ref_paket,pid'],
         'jenis_tryout' => ['required', 'string', 'in:SKD,SKB,skd,skb'],
     ]);
 
@@ -1931,7 +1984,7 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
     $validated = $validator->validated();
     $tryoutType = normalizeTryoutType((string) $validated['jenis_tryout']);
 
-    $package = DB::table('tbl_paket')
+    $package = DB::table('ref_paket')
         ->where('pid', $validated['package_id'])
         ->whereNull('deleted_at')
         ->first();
@@ -1996,7 +2049,7 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
         return createTryoutSessionRecord($validated, $package, $selectedQuestions, $now, $tryoutType, true);
     });
 
-    $payload = buildTryoutSessionPayload($ljkId, false);
+    $payload = buildTryoutSessionPayload($ljkId, false, $request);
 
     return response()->json([
         'message' => 'Sandbox tryout berhasil dibuat.',
@@ -2014,7 +2067,7 @@ Route::get('/tryout/{ljkId}', function (Request $request, $ljkId) {
         return response()->json(['message' => 'Sesi tryout tidak ditemukan.'], 404);
     }
 
-    $payload = buildTryoutSessionPayload((int) $session->id, (int) ($session->status ?? 0) === 1);
+    $payload = buildTryoutSessionPayload((int) $session->id, (int) ($session->status ?? 0) === 1, $request);
 
     if (!$payload) {
         return response()->json(['message' => 'Sesi tryout tidak ditemukan.'], 404);
@@ -2112,7 +2165,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
     }
 
     if ((int) ($session->status ?? 0) === 1) {
-        $payload = buildTryoutSessionPayload((int) $session->id, true);
+        $payload = buildTryoutSessionPayload((int) $session->id, true, $request);
         return response()->json([
             'message' => 'Sesi tryout sudah selesai.',
             'data' => $payload,
@@ -2177,7 +2230,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
             ]);
     });
 
-    $payload = buildTryoutSessionPayload((int) $ljkId, true);
+    $payload = buildTryoutSessionPayload((int) $ljkId, true, $request);
 
     $user = DB::table('tbl_user')->where('pid', $userId)->first();
     if ((int) ($session->is_draft ?? 0) !== 1) {
@@ -2204,7 +2257,7 @@ Route::get('/admin/questions', function (Request $request) {
     $includeTrashed = filter_var($request->query('include_trashed', false), FILTER_VALIDATE_BOOL);
 
     $query = DB::table('tbl_questions as q')
-        ->leftJoin('tbl_paket as p', 'q.package_id', '=', 'p.pid')
+        ->leftJoin('ref_paket as p', 'q.package_id', '=', 'p.pid')
         ->select([
             'q.id',
             'q.question',
@@ -2298,7 +2351,7 @@ Route::get('/admin/questions', function (Request $request) {
 
 Route::get('/admin/questions/{id}', function (Request $request, $id) {
     $question = DB::table('tbl_questions as q')
-        ->leftJoin('tbl_paket as p', 'q.package_id', '=', 'p.pid')
+        ->leftJoin('ref_paket as p', 'q.package_id', '=', 'p.pid')
         ->select([
             'q.id',
             'q.question',
@@ -2356,8 +2409,10 @@ Route::post('/admin/questions', function (Request $request) {
 
     $rules = [
         'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
-        'question_group' => ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
-        'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
+        'question_group' => $questionTypeInput === 'SKB'
+            ? ['nullable', 'integer']
+            : ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
+        'package_id' => ['required', 'integer', Rule::exists('ref_paket', 'pid')->whereNull('deleted_at')],
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
@@ -2397,6 +2452,12 @@ Route::post('/admin/questions', function (Request $request) {
 
     $validated = $validator->validated();
     $questionType = normalizeQuestionType((string) $validated['question_type']);
+
+    if ($questionType === 'SKB') {
+        $paketName = DB::table('ref_paket')->where('pid', $validated['package_id'])->value('nama_paket') ?? '';
+        $validated['question_group'] = resolveSkbQuestionGroupId((int) $validated['package_id'], $paketName);
+    }
+
     $isTkpGroup = isTkpQuestionGroup($validated['question_group'], $questionType);
 
     $questionImagePath = $isText ? null : storeUploadedQuestionImage($request->file('question_image'), 'questions');
@@ -2476,8 +2537,10 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     $rules = [
         'question_type' => ['required', 'string', 'in:SKD,SKB,single,skd,skb'],
-        'question_group' => ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
-        'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
+        'question_group' => $questionTypeInput === 'SKB'
+            ? ['nullable', 'integer']
+            : ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
+        'package_id' => ['required', 'integer', Rule::exists('ref_paket', 'pid')->whereNull('deleted_at')],
         'istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
@@ -2522,6 +2585,12 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     $validated = $validator->validated();
     $questionType = normalizeQuestionType((string) $validated['question_type']);
+
+    if ($questionType === 'SKB') {
+        $paketName = DB::table('ref_paket')->where('pid', $validated['package_id'])->value('nama_paket') ?? '';
+        $validated['question_group'] = resolveSkbQuestionGroupId((int) $validated['package_id'], $paketName);
+    }
+
     $isTkpGroup = isTkpQuestionGroup($validated['question_group'], $questionType);
 
     $questionImagePath = null;
@@ -2958,6 +3027,44 @@ Route::get('/admin/packages', function (Request $request) {
     ]);
 });
 
+Route::get('/admin/ref-paket', function (Request $request) {
+    $bundle = trim((string) $request->query('bundle', ''));
+    $search = trim((string) $request->query('search', ''));
+    $tipe = trim((string) $request->query('tipe', ''));
+    $pid = $request->query('pid');
+
+    $query = DB::table('ref_paket')->whereNull('deleted_at');
+
+    // With no pid/bundle given, list everything (optionally narrowed by
+    // search/tipe) — used by pickers that browse the whole table (e.g.
+    // Sandbox Tryout) rather than ones scoped to a single bundle.
+    if ($pid !== null && $pid !== '') {
+        $query->where('pid', $pid);
+    } elseif ($bundle !== '') {
+        $query->where('nama_bundle', $bundle);
+    }
+
+    if ($search !== '') {
+        $query->where('nama_paket', 'like', "%{$search}%");
+    }
+
+    if ($tipe !== '') {
+        $query->where('tipe', $tipe);
+    }
+
+    $rows = $query->orderBy('nama_paket')->get()->map(fn ($row) => [
+        'pid' => (int) $row->pid,
+        'name' => $row->nama_paket,
+        'program' => $row->tipe,
+        'type' => $row->nama_bundle,
+    ])->values();
+
+    return response()->json([
+        'message' => 'Paket referensi berhasil dimuat.',
+        'data' => $rows,
+    ]);
+});
+
 Route::post('/admin/packages', function (Request $request) {
     $request->merge(['tipe_paket' => $request->input('tipe_paket') ?: 'tunggal']);
 
@@ -2968,15 +3075,12 @@ Route::post('/admin/packages', function (Request $request) {
         'nama_paket' => ['required', 'string', 'max:150'],
         'tipe_paket' => ['required', 'in:tunggal,bundling'],
         'bundling_id' => [
-            'required_if:tipe_paket,tunggal',
             'nullable',
             'integer',
             Rule::exists('tbl_paket', 'pid')->where('tipe_paket', 'bundling')->whereNull('deleted_at'),
         ],
         'harga' => ['required', 'numeric', 'min:0'],
         'ket' => ['nullable', 'string'],
-    ], [
-        'bundling_id.required_if' => 'Setiap paket tunggal wajib memiliki Bundling Paket. Buat Bundling Paket terlebih dahulu jika belum tersedia.',
     ]);
 
     if ($validator->fails()) {
@@ -3072,15 +3176,12 @@ Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
         'nama_paket' => ['required', 'string', 'max:150'],
         'tipe_paket' => ['required', 'in:tunggal,bundling'],
         'bundling_id' => [
-            'required_if:tipe_paket,tunggal',
             'nullable',
             'integer',
             Rule::exists('tbl_paket', 'pid')->where('tipe_paket', 'bundling')->whereNull('deleted_at'),
         ],
         'harga' => ['required', 'numeric', 'min:0'],
         'ket' => ['nullable', 'string'],
-    ], [
-        'bundling_id.required_if' => 'Setiap paket tunggal wajib memiliki Bundling Paket. Buat Bundling Paket terlebih dahulu jika belum tersedia.',
     ]);
 
     if ($validator->fails()) {
