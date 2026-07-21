@@ -342,6 +342,27 @@ export default function AdminPackageManagementPage() {
     storeAdminSidebarState(isSidebarCollapsed)
   }, [isSidebarCollapsed])
 
+  const handleExportPackages = () => {
+    if (!visiblePackageRows.length) return
+
+    const headers = ['Paket', 'Program', 'Tipe', 'Harga', 'Diskon', 'Harga Akhir', 'Status', 'Terjual']
+    const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csvRows = visiblePackageRows.map((row) => [row.name, row.program, row.type, row.price, row.discount, row.finalPrice, row.status, row.sold]
+      .map(escapeCsvValue)
+      .join(','))
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...csvRows].join('\r\n')
+
+    const blob = new Blob([String.fromCharCode(0xfeff), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `data-paket-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="admin-dashboard-page admin-package-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -396,7 +417,7 @@ export default function AdminPackageManagementPage() {
             </div>
 
             <div className="admin-package-actions">
-              <button type="button" className="admin-outline-action">⬇ Ekspor Data</button>
+              <button type="button" className="admin-outline-action" onClick={handleExportPackages} disabled={!visiblePackageRows.length}>⬇ Ekspor Data</button>
               <button type="button" className="admin-primary-action" onClick={openAddPackageModal}>＋ Tambah Paket</button>
             </div>
           </section>
