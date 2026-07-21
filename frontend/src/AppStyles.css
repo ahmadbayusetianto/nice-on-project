@@ -8605,6 +8605,7 @@ html {
   box-shadow: inset 0 0 0 4px #fff;
 }
 
+.admin-question-panel-left,
 .admin-question-panel-right {
   align-content: start;
 }
