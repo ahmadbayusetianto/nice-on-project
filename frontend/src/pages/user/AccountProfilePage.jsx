@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { fetchAccountProfile } from '../../api/accountProfileApi'
+import { fetchAccountProfile, fetchUserActivityLog } from '../../api/accountProfileApi'
 import AdminBrandBlock from '../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../components/layout/AdminQuestionMenu'
@@ -8,7 +8,7 @@ import AdminSystemMenu from '../../components/layout/AdminSystemMenu'
 import AdminUserMenu from '../../components/layout/AdminUserMenu'
 import DashboardNotificationMenu from '../../components/layout/DashboardNotificationMenu'
 import UserSidebar from '../../components/layout/UserSidebar'
-import { formatProfileJoinDate, formatReferenceDisplay } from '../../utils/format'
+import { formatAdminDate, formatProfileJoinDate, formatReferenceDisplay } from '../../utils/format'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
 import AccountProfileEditModal from './AccountProfileEditModal'
 
@@ -25,6 +25,8 @@ export default function AccountProfilePage() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(Boolean(user))
   const [profileError, setProfileError] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [activityLog, setActivityLog] = useState([])
+  const [isLoadingActivity, setIsLoadingActivity] = useState(Boolean(user))
 
   useEffect(() => {
     const handleDocumentPointerDown = (event) => {
@@ -82,6 +84,41 @@ export default function AccountProfilePage() {
     }
 
     void loadProfile()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?.pid])
+
+  useEffect(() => {
+    if (!user?.pid) {
+      setIsLoadingActivity(false)
+      return
+    }
+
+    let isMounted = true
+
+    const loadActivityLog = async () => {
+      setIsLoadingActivity(true)
+
+      try {
+        const payload = await fetchUserActivityLog(user.pid)
+
+        if (isMounted) {
+          setActivityLog(Array.isArray(payload.data) ? payload.data : [])
+        }
+      } catch {
+        if (isMounted) {
+          setActivityLog([])
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingActivity(false)
+        }
+      }
+    }
+
+    void loadActivityLog()
 
     return () => {
       isMounted = false
@@ -376,11 +413,30 @@ export default function AccountProfilePage() {
                     <h2>Riwayat Aktivitas</h2>
                   </div>
                 </div>
-                <div className="account-profile-empty-state account-profile-history-empty">
-                  <div className="account-profile-empty-icon account-profile-history-icon" aria-hidden="true">🧾</div>
-                  <strong>Tidak ada riwayat aktivitas</strong>
-                  <p>Riwayat aktivitas akan tampil setelah aktivitas tersedia.</p>
-                </div>
+                {isLoadingActivity ? (
+                  <div className="account-profile-empty-state account-profile-history-empty">
+                    <p>Memuat riwayat aktivitas...</p>
+                  </div>
+                ) : activityLog.length > 0 ? (
+                  <ul className="account-profile-history-list">
+                    {activityLog.map((activity) => (
+                      <li key={activity.id} className="account-profile-history-item">
+                        <span className="account-profile-history-item-icon" aria-hidden="true">{activity.icon || '🕘'}</span>
+                        <div className="account-profile-history-item-content">
+                          <strong>{activity.title}</strong>
+                          {activity.description ? <p>{activity.description}</p> : null}
+                          <time>{formatAdminDate(activity.created_at)}</time>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="account-profile-empty-state account-profile-history-empty">
+                    <div className="account-profile-empty-icon account-profile-history-icon" aria-hidden="true">🧾</div>
+                    <strong>Tidak ada riwayat aktivitas</strong>
+                    <p>Riwayat aktivitas akan tampil setelah aktivitas tersedia.</p>
+                  </div>
+                )}
               </article>
             </section>
 

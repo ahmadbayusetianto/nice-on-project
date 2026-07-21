@@ -4279,6 +4279,63 @@ html {
   min-height: 280px;
 }
 
+.account-profile-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-profile-history-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(22, 47, 91, 0.06);
+}
+
+.account-profile-history-item:last-child {
+  border-bottom: none;
+}
+
+.account-profile-history-item-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(46, 201, 142, 0.12), rgba(74, 222, 128, 0.16));
+  font-size: 17px;
+}
+
+.account-profile-history-item-content {
+  min-width: 0;
+}
+
+.account-profile-history-item-content strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #17315f;
+}
+
+.account-profile-history-item-content p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #65728b;
+  line-height: 1.5;
+}
+
+.account-profile-history-item-content time {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #98a2b3;
+}
+
 .account-profile-job-empty,
 .account-profile-bio-empty {
   gap: 12px;

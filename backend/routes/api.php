@@ -359,6 +359,19 @@ function notifyAdminUsers(string $type, string $title, string $message, ?string 
     Notification::send($adminUsers, new AdminActivityNotification($payload));
 }
 
+function logUserActivity(int $pidUser, string $type, string $title, ?string $description = null, ?string $icon = null, array $meta = []): void
+{
+    DB::table('tbl_activity_log')->insert([
+        'pid_user' => $pidUser,
+        'type' => $type,
+        'title' => $title,
+        'description' => $description,
+        'icon' => $icon,
+        'meta' => json_encode($meta),
+        'created_at' => now(),
+    ]);
+}
+
 function mapAdminNotification(object $notification): array
 {
     $rawData = $notification->data ?? [];
@@ -2283,6 +2296,15 @@ Route::post('/tryout/start', function (Request $request) {
         ['pid' => (int) $validated['user_id'], 'package_id' => (int) $validated['package_id'], 'jenis_tryout' => $tryoutType]
     );
 
+    logUserActivity(
+        (int) $validated['user_id'],
+        'tryout.started',
+        'Tryout dimulai',
+        'Anda memulai tryout ' . $package->nama_paket . '.',
+        '📝',
+        ['package_id' => (int) $validated['package_id'], 'jenis_tryout' => $tryoutType]
+    );
+
     $payload = buildTryoutSessionPayload($ljkId, false, $request);
 
     return response()->json([
@@ -2571,6 +2593,15 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
             '/dashboard-admin/transactions',
             ['icon' => '🏁'],
             ['pid' => $userId, 'session_id' => (int) $ljkId, 'score_total' => $scoreTwk + $scoreTiu + $scoreTkp + $scoreOther]
+        );
+
+        logUserActivity(
+            (int) $userId,
+            'tryout.finished',
+            'Tryout selesai',
+            'Anda menyelesaikan tryout dengan skor ' . ($scoreTwk + $scoreTiu + $scoreTkp + $scoreOther) . '.',
+            '🏁',
+            ['session_id' => (int) $ljkId, 'score_total' => $scoreTwk + $scoreTiu + $scoreTkp + $scoreOther]
         );
     }
 
@@ -4128,6 +4159,15 @@ Route::get('/materials/{pid}/view', function (Request $request, $pid) {
         ['pid' => $userId, 'material_id' => (int) $material->pid, 'package_id' => (int) $material->package_id]
     );
 
+    logUserActivity(
+        (int) $userId,
+        'material.viewed',
+        'Membuka materi',
+        'Anda membuka materi ' . $material->judul . '.',
+        '📄',
+        ['material_id' => (int) $material->pid, 'package_id' => (int) $material->package_id]
+    );
+
     return response()->stream(function () use ($stream) {
         fpassthru($stream);
 
@@ -4430,6 +4470,33 @@ Route::get('/account-profile/{pid}', function ($pid) {
     ]);
 });
 
+Route::get('/users/{pid}/activity-log', function (Request $request, $pid) {
+    $limit = (int) $request->query('limit', 10);
+    $limit = max(1, min($limit, 50));
+
+    $activities = DB::table('tbl_activity_log')
+        ->where('pid_user', $pid)
+        ->orderByDesc('created_at')
+        ->limit($limit)
+        ->get()
+        ->map(function ($activity) {
+            return [
+                'id' => (int) $activity->id,
+                'type' => $activity->type,
+                'title' => $activity->title,
+                'description' => $activity->description,
+                'icon' => $activity->icon,
+                'meta' => $activity->meta ? json_decode($activity->meta, true) : [],
+                'created_at' => $activity->created_at,
+            ];
+        });
+
+    return response()->json([
+        'message' => 'Riwayat aktivitas berhasil dimuat.',
+        'data' => $activities,
+    ]);
+});
+
 Route::get('/captcha', function () {
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     $code = '';
@@ -4538,6 +4605,14 @@ Route::post('/register', function (Request $request) {
         ['pid' => $userId, 'email' => $input['email']]
     );
 
+    logUserActivity(
+        (int) $userId,
+        'user.registered',
+        'Akun berhasil dibuat',
+        'Selamat datang! Akun Anda telah berhasil didaftarkan.',
+        '🆕'
+    );
+
     return response()->json([
         'message' => 'Akun berhasil dibuat.',
         'data' => [
@@ -4601,6 +4676,14 @@ Route::post('/login', function (Request $request) {
         '/dashboard-admin/users',
         ['icon' => '🔐'],
         ['pid' => (int) $user->pid, 'email' => (string) $user->email]
+    );
+
+    logUserActivity(
+        (int) $user->pid,
+        'user.login',
+        'Login berhasil',
+        'Anda berhasil masuk ke akun.',
+        '🔐'
     );
 
     return response()->json([
@@ -4702,6 +4785,14 @@ Route::post('/complete-profile', function (Request $request) {
         '/dashboard-admin/users',
         ['icon' => '👤'],
         ['pid' => (int) $input['pid_user'], 'email' => $profileUser->email ?? null]
+    );
+
+    logUserActivity(
+        (int) $input['pid_user'],
+        'user.profile_completed',
+        'Profil dilengkapi',
+        'Anda melengkapi informasi profil.',
+        '👤'
     );
 
     return response()->json([
