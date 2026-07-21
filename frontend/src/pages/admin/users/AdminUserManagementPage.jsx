@@ -324,6 +324,27 @@ export default function AdminUserManagementPage() {
     storeAdminSidebarState(isSidebarCollapsed)
   }, [isSidebarCollapsed])
 
+  const handleExportUsers = () => {
+    if (!visibleUserRows.length) return
+
+    const headers = ['Kode', 'Nama', 'Email', 'No HP', 'Peran', 'Status', 'Bergabung']
+    const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csvRows = visibleUserRows.map((row) => [row.code, row.name, row.email, row.phone, row.role, row.status, row.joined]
+      .map(escapeCsvValue)
+      .join(','))
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...csvRows].join('\r\n')
+
+    const blob = new Blob([String.fromCharCode(0xfeff), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `data-user-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="admin-dashboard-page admin-user-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -379,7 +400,7 @@ export default function AdminUserManagementPage() {
             </div>
 
             <div className="admin-package-actions admin-user-actions">
-              <button type="button" className="admin-outline-action">⬇ Export</button>
+              <button type="button" className="admin-outline-action" onClick={handleExportUsers} disabled={!visibleUserRows.length}>⬇ Export</button>
               <button type="button" className="admin-primary-action" onClick={openAddUserModal}>＋ Tambah User</button>
             </div>
           </section>
