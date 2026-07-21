@@ -8,6 +8,7 @@ export default function AdminUserDetailModal({ open, user, loading = false, erro
   const joinedLabel = user?.joined || formatAdminDate(user?.created_at, { hour: false })
   const name = detail.nama || user?.name || '-'
   const isActive = String(user?.status || '').toLowerCase() === 'aktif'
+  const genderLabel = detail.gender === 'L' ? 'Laki-laki' : detail.gender === 'P' ? 'Perempuan' : '-'
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
@@ -79,7 +80,7 @@ export default function AdminUserDetailModal({ open, user, loading = false, erro
               <span className="admin-user-detail-inline-icon" aria-hidden="true">🧑</span>
               <div>
                 <span>Jenis Kelamin</span>
-                <strong>{detail.gender || '-'}</strong>
+                <strong>{genderLabel}</strong>
               </div>
             </div>
           </div>
