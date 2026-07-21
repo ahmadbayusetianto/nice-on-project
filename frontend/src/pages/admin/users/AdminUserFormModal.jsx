@@ -75,8 +75,8 @@ export default function AdminUserFormModal({ open, mode = 'edit', title = 'Edit 
               <span><i className="admin-user-field-icon" aria-hidden="true">⚧</i>Jenis Kelamin</span>
               <select value={form.gender} onChange={(event) => onFieldChange('gender', event.target.value)} disabled={loading}>
                 <option value="">-</option>
-                <option value="L">L</option>
-                <option value="P">P</option>
+                <option value="L">Laki-laki</option>
+                <option value="P">Perempuan</option>
               </select>
             </label>
 
