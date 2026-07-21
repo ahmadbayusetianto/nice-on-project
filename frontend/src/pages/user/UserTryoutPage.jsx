@@ -555,11 +555,12 @@ export default function UserTryoutPage() {
                   {currentQuestion ? (
                     <div className="user-tryout-question-body">
                       {currentQuestion.information ? <p className="user-tryout-question-info">{currentQuestion.information}</p> : null}
-                      {!currentQuestion.istext && currentQuestion.image_url ? (
+                      {currentQuestion.image_url ? (
                         <img className="user-tryout-question-image" src={currentQuestion.image_url} alt="Gambar soal" />
-                      ) : (
+                      ) : null}
+                      {currentQuestion.istext ? (
                         <div className="user-tryout-question-text">{currentQuestion.question}</div>
-                      )}
+                      ) : null}
 
                       <div className={`user-tryout-option-list${!currentQuestion.istext ? ' image-mode' : ''}`}>
                         {currentQuestion.options.map((option, index) => {
@@ -716,7 +717,7 @@ export default function UserTryoutPage() {
 
                         {isExpanded ? (
                           <div className="user-tryout-review-pembahasan">
-                            {!question.istext && question.image_url ? (
+                            {question.image_url ? (
                               <div className="user-tryout-review-image-wrap">
                                 <strong>Soal</strong>
                                 <img className="user-tryout-review-image" src={question.image_url} alt={`Gambar soal ${index + 1}`} />

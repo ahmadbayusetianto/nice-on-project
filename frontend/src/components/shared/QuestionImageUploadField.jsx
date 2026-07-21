@@ -1,8 +1,15 @@
-import { useRef } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 
-export default function QuestionImageUploadField({ label, required, preview, existingImageUrl, onSelectFile, onClear, disabled }) {
+const QuestionImageUploadField = forwardRef(function QuestionImageUploadField(
+  { label, required, preview, existingImageUrl, onSelectFile, onClear, disabled, hideTrigger },
+  ref,
+) {
   const inputRef = useRef(null)
   const displayUrl = preview || existingImageUrl
+
+  useImperativeHandle(ref, () => ({
+    openPicker: () => inputRef.current?.click(),
+  }))
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] ?? null
@@ -20,7 +27,7 @@ export default function QuestionImageUploadField({ label, required, preview, exi
             <button type="button" className="admin-question-option-remove" onClick={onClear} disabled={disabled} title="Hapus gambar" aria-label="Hapus gambar">🗑</button>
           </div>
         </div>
-      ) : (
+      ) : hideTrigger ? null : (
         <button
           type="button"
           className="admin-question-upload-box admin-question-upload-box-interactive"
@@ -42,4 +49,6 @@ export default function QuestionImageUploadField({ label, required, preview, exi
       />
     </div>
   )
-}
+})
+
+export default QuestionImageUploadField

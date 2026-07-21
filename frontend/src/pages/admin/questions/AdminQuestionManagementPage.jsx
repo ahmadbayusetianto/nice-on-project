@@ -545,12 +545,10 @@ export default function AdminQuestionManagementPage() {
       formData.append('information', questionForm.information.trim())
       formData.append('pembahasan', questionForm.pembahasan.trim())
 
-      if (!isText) {
-        if (questionForm.question_image) {
-          formData.append('question_image', questionForm.question_image)
-        } else if (questionForm.existing_question_image_path) {
-          formData.append('existing_question_image_path', questionForm.existing_question_image_path)
-        }
+      if (questionForm.question_image) {
+        formData.append('question_image', questionForm.question_image)
+      } else if (questionForm.existing_question_image_path) {
+        formData.append('existing_question_image_path', questionForm.existing_question_image_path)
       }
 
       activeOptions.forEach((option, index) => {

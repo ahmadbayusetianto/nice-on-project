@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchQuestionGroups, fetchRefPaketByBundle, fetchRefPaketByPid } from '../../../api/adminQuestionsApi'
 import QuestionImageUploadField from '../../../components/shared/QuestionImageUploadField'
 import PackageSearchSelect from './PackageSearchSelect'
@@ -28,6 +28,7 @@ export default function AdminQuestionFormModal({
   const [selectedBundlingId, setSelectedBundlingId] = useState('')
   const [groups, setGroups] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(false)
+  const questionImageFieldRef = useRef(null)
   const [refPaketOptions, setRefPaketOptions] = useState([])
 
   // Edit mode: `form.package_id` is a ref_paket pid, so the matching Bundling
@@ -142,6 +143,7 @@ export default function AdminQuestionFormModal({
   const questionCount = String(form.question || '').length
   const informationCount = String(form.information || '').length
   const pembahasanCount = String(form.pembahasan || '').length
+  const hasQuestionImage = Boolean(form.question_image_preview || form.existing_question_image_url)
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
@@ -265,15 +267,24 @@ export default function AdminQuestionFormModal({
                   <label className="admin-question-field admin-question-field-full">
                     <span>Tulis pertanyaan <sup>*</sup></span>
                     <div className="admin-question-editor-shell">
-                      <div className="admin-question-editor-toolbar" aria-hidden="true">
-                        <span>B</span>
-                        <span>I</span>
-                        <span>U</span>
-                        <span>≡</span>
-                        <span>≣</span>
-                        <span>↗</span>
-                        <span>▢</span>
-                        <span>Tx</span>
+                      <div className="admin-question-editor-toolbar">
+                        <span aria-hidden="true">B</span>
+                        <span aria-hidden="true">I</span>
+                        <span aria-hidden="true">U</span>
+                        <span aria-hidden="true">≡</span>
+                        <span aria-hidden="true">≣</span>
+                        <span aria-hidden="true">↗</span>
+                        <button
+                          type="button"
+                          className="admin-question-editor-toolbar-action"
+                          onClick={() => questionImageFieldRef.current?.openPicker()}
+                          disabled={loading}
+                          title="Tambah gambar (opsional)"
+                          aria-label="Tambah gambar (opsional)"
+                        >
+                          ▢
+                        </button>
+                        <span aria-hidden="true">Tx</span>
                       </div>
                       <textarea
                         value={form.question}
@@ -283,6 +294,31 @@ export default function AdminQuestionFormModal({
                         rows={7}
                       />
                       <div className="admin-question-counter">{questionCount}/2000</div>
+                      {hasQuestionImage ? (
+                        <div className="admin-question-editor-image-slot">
+                          <QuestionImageUploadField
+                            ref={questionImageFieldRef}
+                            label="Tambah gambar (opsional)"
+                            preview={form.question_image_preview}
+                            existingImageUrl={form.existing_question_image_url}
+                            onSelectFile={onQuestionImageChange}
+                            onClear={onQuestionImageClear}
+                            disabled={loading}
+                            hideTrigger
+                          />
+                        </div>
+                      ) : (
+                        <QuestionImageUploadField
+                          ref={questionImageFieldRef}
+                          label="Tambah gambar (opsional)"
+                          preview={form.question_image_preview}
+                          existingImageUrl={form.existing_question_image_url}
+                          onSelectFile={onQuestionImageChange}
+                          onClear={onQuestionImageClear}
+                          disabled={loading}
+                          hideTrigger
+                        />
+                      )}
                     </div>
                   </label>
                 ) : (
@@ -311,30 +347,6 @@ export default function AdminQuestionFormModal({
                       rows={4}
                     />
                     <div className="admin-question-counter">{informationCount}/500</div>
-                  </div>
-                </label>
-
-                <label className="admin-question-field admin-question-field-full">
-                  <span>Pembahasan (Opsional)</span>
-                  <div className="admin-question-editor-shell">
-                    <div className="admin-question-editor-toolbar" aria-hidden="true">
-                      <span>B</span>
-                      <span>I</span>
-                      <span>U</span>
-                      <span>≡</span>
-                      <span>≣</span>
-                      <span>↗</span>
-                      <span>▢</span>
-                      <span>&lt;/&gt;</span>
-                    </div>
-                    <textarea
-                      value={form.pembahasan}
-                      onChange={(event) => onFieldChange('pembahasan', event.target.value)}
-                      placeholder="Tulis pembahasan soal..."
-                      disabled={loading}
-                      rows={7}
-                    />
-                    <div className="admin-question-counter">{pembahasanCount}/2000</div>
                   </div>
                 </label>
 
@@ -445,13 +457,29 @@ export default function AdminQuestionFormModal({
                 ))}
               </div>
 
-              {form.istext ? (
-                <div className="admin-question-upload-box" aria-label="Tambah gambar opsional">
-                  <div className="admin-question-upload-icon" aria-hidden="true">☁</div>
-                  <strong>Tambah gambar (opsional)</strong>
-                  <p>Format: JPG, PNG. Maks 2MB</p>
+              <label className="admin-question-field admin-question-field-full">
+                <span>Pembahasan (Opsional)</span>
+                <div className="admin-question-editor-shell compact">
+                  <div className="admin-question-editor-toolbar" aria-hidden="true">
+                    <span>B</span>
+                    <span>I</span>
+                    <span>U</span>
+                    <span>≡</span>
+                    <span>≣</span>
+                    <span>↗</span>
+                    <span>▢</span>
+                    <span>&lt;/&gt;</span>
+                  </div>
+                  <textarea
+                    value={form.pembahasan}
+                    onChange={(event) => onFieldChange('pembahasan', event.target.value)}
+                    placeholder="Tulis pembahasan soal..."
+                    disabled={loading}
+                    rows={4}
+                  />
+                  <div className="admin-question-counter">{pembahasanCount}/2000</div>
                 </div>
-              ) : null}
+              </label>
             </section>
           </div>
 

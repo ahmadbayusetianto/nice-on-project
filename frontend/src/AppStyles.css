@@ -8465,7 +8465,8 @@ html {
 }
 
 .admin-question-editor-toolbar span,
-.admin-question-option-toolbar span {
+.admin-question-option-toolbar span,
+.admin-question-editor-toolbar-action {
   min-width: 28px;
   height: 28px;
   display: grid;
@@ -8475,6 +8476,22 @@ html {
   color: #203c74;
   font-size: 12px;
   font-weight: 800;
+}
+
+.admin-question-editor-toolbar-action {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-question-editor-toolbar-action:hover:not(:disabled) {
+  background: #dde6ff;
+}
+
+.admin-question-editor-toolbar-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .admin-question-editor-shell textarea,
@@ -8493,6 +8510,11 @@ html {
   text-align: right;
   color: #8b97b1;
   font-size: 12px;
+}
+
+.admin-question-editor-image-slot {
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(22, 47, 91, 0.08);
 }
 
 .admin-question-jenis-toggle {

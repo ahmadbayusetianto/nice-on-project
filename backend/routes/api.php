@@ -2752,12 +2752,16 @@ Route::post('/admin/questions', function (Request $request) {
         'options.*.nilai_tkp' => ['nullable', 'integer', 'min:1', 'max:5', 'required_if:question_group,3'],
     ];
 
+    $rules['question_image'] = [
+        $isText ? 'nullable' : 'required',
+        'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb(),
+    ];
+
     if ($isText) {
         $rules['question'] = ['required', 'string'];
         $rules['options.*.choise'] = ['required', 'string'];
     } else {
         $rules['question'] = ['nullable', 'string'];
-        $rules['question_image'] = ['required', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
         $rules['options.*.choise'] = ['nullable', 'string'];
         $rules['options.*.image'] = ['required', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
     }
@@ -2790,7 +2794,9 @@ Route::post('/admin/questions', function (Request $request) {
 
     $isTkpGroup = isTkpQuestionGroup($validated['question_group'], $questionType);
 
-    $questionImagePath = $isText ? null : storeUploadedQuestionImage($request->file('question_image'), 'questions');
+    $questionImagePath = $request->hasFile('question_image')
+        ? storeUploadedQuestionImage($request->file('question_image'), 'questions')
+        : null;
 
     $normalizedOptions = collect($validated['options'])
         ->values()
@@ -2881,13 +2887,14 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         'options.*.existing_image_path' => ['nullable', 'string'],
     ];
 
+    $rules['question_image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+    $rules['existing_question_image_path'] = ['nullable', 'string'];
+
     if ($isText) {
         $rules['question'] = ['required', 'string'];
         $rules['options.*.choise'] = ['required', 'string'];
     } else {
         $rules['question'] = ['nullable', 'string'];
-        $rules['question_image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
-        $rules['existing_question_image_path'] = ['nullable', 'string'];
         $rules['options.*.choise'] = ['nullable', 'string'];
         $rules['options.*.image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
     }
@@ -2923,18 +2930,15 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     $isTkpGroup = isTkpQuestionGroup($validated['question_group'], $questionType);
 
-    $questionImagePath = null;
-    if (!$isText) {
-        $uploadedQuestionImage = $request->file('question_image');
-        $questionImagePath = $uploadedQuestionImage
-            ? storeUploadedQuestionImage($uploadedQuestionImage, 'questions')
-            : ($validated['existing_question_image_path'] ?? null);
+    $uploadedQuestionImage = $request->file('question_image');
+    $questionImagePath = $uploadedQuestionImage
+        ? storeUploadedQuestionImage($uploadedQuestionImage, 'questions')
+        : ($validated['existing_question_image_path'] ?? null);
 
-        if (empty($questionImagePath)) {
-            return response()->json([
-                'message' => 'Gambar soal wajib diunggah.',
-            ], 422);
-        }
+    if (!$isText && empty($questionImagePath)) {
+        return response()->json([
+            'message' => 'Gambar soal wajib diunggah.',
+        ], 422);
     }
 
     $normalizedOptions = collect($validated['options'])
