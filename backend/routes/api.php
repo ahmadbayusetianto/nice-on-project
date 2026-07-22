@@ -2055,6 +2055,7 @@ Route::put('/admin/users/{pid}', function (Request $request, $pid) {
 
 Route::get('/packages', function (Request $request) {
     $kategori = trim((string) $request->query('kategori', ''));
+    $purchasedOnlyUserId = (int) $request->query('user_id', 0);
 
     $query = DB::table('tbl_paket')
         ->whereNull('deleted_at')
@@ -2073,6 +2074,10 @@ Route::get('/packages', function (Request $request) {
 
     if ($kategori !== '' && strtoupper($kategori) !== 'ALL') {
         $query->whereRaw('UPPER(kategori) = ?', [strtoupper($kategori)]);
+    }
+
+    if ($purchasedOnlyUserId > 0) {
+        $query->whereIn('pid', userPurchasedPackageIds($purchasedOnlyUserId));
     }
 
     $packages = $query->get()->map(function ($item) {

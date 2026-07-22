@@ -9,6 +9,7 @@ import AdminSystemMenu from '../../components/layout/AdminSystemMenu'
 import AdminUserMenu from '../../components/layout/AdminUserMenu'
 import DashboardNotificationMenu from '../../components/layout/DashboardNotificationMenu'
 import UserSidebar from '../../components/layout/UserSidebar'
+import MaterialEmptyState from '../../components/shared/MaterialEmptyState'
 import { getFriendlyFetchError } from '../../utils/fetchError'
 import { formatCurrency, formatTryoutCountdown } from '../../utils/format'
 import { clearAuthUser, readStoredSandboxAdminMode, readStoredUser } from '../../utils/storage'
@@ -89,7 +90,7 @@ export default function UserTryoutPage() {
       setPackageError(null)
 
       try {
-        const payload = await fetchPackages()
+        const payload = await fetchPackages(isSandboxAdminMode ? {} : { userId: user?.pid })
 
         if (!cancelled) {
           setPackageRows(Array.isArray(payload.data) ? payload.data : [])
@@ -110,7 +111,7 @@ export default function UserTryoutPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user?.pid, isSandboxAdminMode])
 
   useEffect(() => {
     if (!user?.pid) {
@@ -856,8 +857,21 @@ export default function UserTryoutPage() {
                 </div>
               </section>
 
+              {!packageLoading && packageRows.length === 0 ? (
+                <MaterialEmptyState
+                  title="Belum ada paket tryout yang bisa diakses"
+                  description="Tryout akan muncul di sini setelah kamu membeli dan pembayaran paketnya berhasil dikonfirmasi."
+                  actionLabel="Kembali ke Dashboard"
+                  onAction={() => navigate('/dashboard-user', { state: { user } })}
+                  accent="blue"
+                />
+              ) : null}
+
               <section className={`user-tryout-package-grid${packageLayout === 'list' ? ' list-view' : ''}`}>
                 {packageLoading ? <div className="dashboard-alert">Memuat paket tryout...</div> : null}
+                {!packageLoading && packageRows.length > 0 && filteredPackages.length === 0 ? (
+                  <div className="dashboard-alert">Tidak ada paket yang cocok dengan pencarian/filter saat ini.</div>
+                ) : null}
                 {filteredPackages.map((item) => (
                   <article className="user-tryout-package-card" key={item.pid}>
                     <div className="user-tryout-package-card-head">
