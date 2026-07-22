@@ -1,8 +1,21 @@
+import { useState } from 'react'
 import { formatAdminDate } from '../../../utils/format'
 import { formatQuestionTypeLabel } from '../../../utils/questionLabels'
 
 export default function AdminQuestionDetailModal({ open, question, onCancel, onEdit, onDelete, onRestore }) {
+  const [lightboxImage, setLightboxImage] = useState(null)
+
   if (!open || !question) return null
+
+  const openImageLightbox = (src, alt) => (event) => {
+    event.stopPropagation()
+    setLightboxImage({ src, alt })
+  }
+
+  const closeImageLightbox = (event) => {
+    event.stopPropagation()
+    setLightboxImage(null)
+  }
 
   const isTrashed = Boolean(question.deleted_at)
   const isTkpQuestion = Number(question.question_group) === 3
@@ -66,11 +79,22 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                 <span className="admin-question-detail-section-icon question" aria-hidden="true">?</span>
                 <h4>Pertanyaan</h4>
               </div>
-              {!question.istext && question.image_url ? (
-                <img className="admin-question-detail-image" src={question.image_url} alt="Gambar soal" />
-              ) : (
+              {question.image_url ? (
+                <button
+                  type="button"
+                  className="admin-question-detail-image-trigger"
+                  onClick={openImageLightbox(question.image_url, 'Gambar soal')}
+                  title="Klik untuk memperbesar"
+                >
+                  <img className="admin-question-detail-image" src={question.image_url} alt="Gambar soal" />
+                </button>
+              ) : null}
+              {question.istext ? (
                 <p className="admin-question-detail-question">{question.question}</p>
-              )}
+              ) : null}
+              {!question.istext && !question.image_url ? (
+                <p className="admin-question-detail-question">Gambar soal belum diunggah.</p>
+              ) : null}
             </section>
 
             <section className="admin-question-detail-section explanation-card">
@@ -100,11 +124,19 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                     >
                       <span className="admin-question-detail-option-badge">{letter}</span>
                       <div className="admin-question-detail-option-copy wide">
-                        {!question.istext && option?.image_url ? (
-                          <img className="admin-question-detail-option-image" src={option.image_url} alt={`Gambar opsi ${letter}`} />
-                        ) : (
+                        {option?.image_url ? (
+                          <button
+                            type="button"
+                            className="admin-question-detail-option-image-trigger"
+                            onClick={openImageLightbox(option.image_url, `Gambar opsi ${letter}`)}
+                            title="Klik untuk memperbesar"
+                          >
+                            <img className="admin-question-detail-option-image" src={option.image_url} alt={`Gambar opsi ${letter}`} />
+                          </button>
+                        ) : null}
+                        {!option || question.istext ? (
                           <strong>{option?.choise || 'Belum ada opsi.'}</strong>
-                        )}
+                        ) : null}
                       </div>
                       {isTkpQuestion ? (
                         option ? (
@@ -139,6 +171,13 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
           <button type="button" className="admin-modal-button secondary" onClick={onCancel}>Tutup</button>
         </div>
       </div>
+
+      {lightboxImage ? (
+        <div className="admin-image-lightbox-backdrop" role="presentation" onClick={closeImageLightbox}>
+          <button type="button" className="admin-image-lightbox-close" aria-label="Tutup pratinjau gambar" onClick={closeImageLightbox}>×</button>
+          <img className="admin-image-lightbox-image" src={lightboxImage.src} alt={lightboxImage.alt} onClick={(event) => event.stopPropagation()} />
+        </div>
+      ) : null}
     </div>
   )
 }
