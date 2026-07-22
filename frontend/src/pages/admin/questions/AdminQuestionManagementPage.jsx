@@ -748,6 +748,55 @@ export default function AdminQuestionManagementPage() {
     storeAdminSidebarState(isSidebarCollapsed)
   }, [isSidebarCollapsed])
 
+  const formatQuestionAnswerSummary = (row) => {
+    const options = Array.isArray(row.options) ? row.options : []
+    if (!options.length) return '-'
+
+    if (Number(row.question_group) === 3) {
+      return options
+        .map((option, index) => `${String.fromCharCode(65 + index)}=${option.nilai_tkp ?? '-'}`)
+        .join(', ')
+    }
+
+    const correctIndex = options.findIndex((option) => option.answer)
+    if (correctIndex < 0) return '-'
+
+    const correctOption = options[correctIndex]
+    const letter = String.fromCharCode(65 + correctIndex)
+    return correctOption.istext ? `${letter}. ${correctOption.choise}` : `${letter} (Gambar)`
+  }
+
+  const handleExportQuestions = () => {
+    if (!visibleQuestionRows.length) return
+
+    const headers = ['No', 'Soal', 'Grup', 'Tipe', 'Jenis', 'Paket', 'Jumlah Opsi', 'Jawaban Benar / Nilai TKP', 'Status', 'Informasi Tambahan', 'Pembahasan']
+    const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csvRows = visibleQuestionRows.map((row, index) => [
+      index + 1,
+      row.istext ? row.question : 'Soal bergambar',
+      row.question_group_label,
+      formatQuestionTypeLabel(row.question_type),
+      row.istext ? 'Teks' : 'Gambar',
+      row.package_name || '-',
+      row.options_count || 0,
+      formatQuestionAnswerSummary(row),
+      row.deleted_at ? 'Terhapus' : 'Aktif',
+      row.information || '-',
+      row.pembahasan || '-',
+    ].map(escapeCsvValue).join(','))
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...csvRows].join('\r\n')
+
+    const blob = new Blob([String.fromCharCode(0xfeff), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `data-soal-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="admin-dashboard-page admin-question-page">
       <div className={`admin-dashboard-shell${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -804,7 +853,7 @@ export default function AdminQuestionManagementPage() {
             <div className="admin-package-actions admin-question-actions">
               {activeAdminTab === 'questions' ? (
                 <>
-                  <button type="button" className="admin-outline-action">⬆ Export Soal</button>
+                  <button type="button" className="admin-outline-action" onClick={handleExportQuestions} disabled={!visibleQuestionRows.length}>⬆ Export Soal</button>
                   <button type="button" className="admin-outline-action" aria-label="Muat ulang data soal" onClick={() => { void loadQuestions({ cancelled: () => false, showLoading: true }) }}>↻</button>
                   <button type="button" className="admin-primary-action" onClick={openAddQuestionModal}>＋ Tambah Soal</button>
                 </>
