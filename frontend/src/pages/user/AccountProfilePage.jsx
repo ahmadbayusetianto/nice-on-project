@@ -151,6 +151,8 @@ export default function AccountProfilePage() {
   const isAdminProfile = Number(activeProfile?.is_admin ?? user?.is_admin ?? 0) === 1
   const profileJoinedAt = formatProfileJoinDate(activeProfile?.created_at ?? user?.created_at)
   const roleLabel = isAdminProfile ? 'Super Admin' : 'User'
+  const accountStatusLabel = String(activeProfile?.status ?? user?.status ?? '') === 'active' ? 'Aktif' : 'Nonaktif'
+  const adminCode = `#USR-${String(activeProfile?.pid ?? user?.pid ?? '').padStart(4, '0')}`
   const bioText = String(detail.alamat ?? '').trim()
   const personalInfoItems = [
     ['Nama Lengkap', displayName],
@@ -158,7 +160,7 @@ export default function AccountProfilePage() {
     ['Jenis Kelamin', genderLabel],
     ['No. HP', detail.nohp || '-'],
     ['Alamat', detail.alamat || '-'],
-    ['Referensi', formatReferenceDisplay(detail)],
+    ...(isAdminProfile ? [] : [['Referensi', formatReferenceDisplay(detail)]]),
   ]
 
   const handleLogout = () => {
@@ -388,23 +390,34 @@ export default function AccountProfilePage() {
                 </div>
               </article>
 
-              <article className="account-profile-card account-profile-empty-card">
-                <div className="account-profile-card-head">
-                  <div className="account-profile-card-title">
-                    <span className="account-profile-card-icon" aria-hidden="true">💼</span>
-                    <h2>Job Roles</h2>
+              {isAdminProfile ? (
+                <article className="account-profile-card">
+                  <div className="account-profile-card-head">
+                    <div className="account-profile-card-title">
+                      <span className="account-profile-card-icon" aria-hidden="true">🛡️</span>
+                      <h2>Info Akses & Peran</h2>
+                    </div>
                   </div>
-                </div>
-                <div className="account-profile-empty-state account-profile-job-empty">
-                  <div className="account-profile-empty-icon" aria-hidden="true">💼</div>
-                  <strong>Belum ada job role</strong>
-                  <p>Mohon pilih minimal satu job role untuk akun ini.</p>
-                  <button type="button" className="account-profile-empty-action">
-                    <span aria-hidden="true">⚙</span>
-                    Kelola Job Role
-                  </button>
-                </div>
-              </article>
+                  <div className="account-profile-card-body">
+                    <div className="account-profile-row">
+                      <span className="account-profile-row-label">Peran</span>
+                      <strong className="account-profile-row-value">{roleLabel}</strong>
+                    </div>
+                    <div className="account-profile-row">
+                      <span className="account-profile-row-label">Status Akun</span>
+                      <strong className="account-profile-row-value">{accountStatusLabel}</strong>
+                    </div>
+                    <div className="account-profile-row">
+                      <span className="account-profile-row-label">Kode Admin</span>
+                      <strong className="account-profile-row-value">{adminCode}</strong>
+                    </div>
+                    <div className="account-profile-row">
+                      <span className="account-profile-row-label">Hak Akses</span>
+                      <strong className="account-profile-row-value">Akses penuh ke seluruh modul admin (Paket, Soal, User, Transaksi, dll.)</strong>
+                    </div>
+                  </div>
+                </article>
+              ) : null}
 
               <article className="account-profile-card account-profile-empty-card">
                 <div className="account-profile-card-head">
