@@ -10,6 +10,7 @@ import AdminUserMenu from '../../../components/layout/AdminUserMenu'
 import { getFriendlyFetchError } from '../../../utils/fetchError'
 import { formatCurrency, PAGE_SIZE_OPTIONS, parseCurrencyToNumber } from '../../../utils/format'
 import { clearAuthUser, readStoredAdminSidebarState, readStoredUser, storeAdminSidebarState } from '../../../utils/storage'
+import AdminPackageDetailModal from './AdminPackageDetailModal'
 import AdminPackageFormModal from './AdminPackageFormModal'
 
 function createPackageFormFromDetail(detail = {}) {
@@ -44,6 +45,10 @@ export default function AdminPackageManagementPage() {
   const [packageSubmitSuccess, setPackageSubmitSuccess] = useState(null)
   const [packageModalMode, setPackageModalMode] = useState('create')
   const [editingPackagePid, setEditingPackagePid] = useState(null)
+  const [showPackageDetailModal, setShowPackageDetailModal] = useState(false)
+  const [packageDetail, setPackageDetail] = useState(null)
+  const [isLoadingPackageDetail, setIsLoadingPackageDetail] = useState(false)
+  const [packageDetailError, setPackageDetailError] = useState(null)
   const [packageForm, setPackageForm] = useState({
     kategori: 'CPNS',
     formasi: '',
@@ -153,6 +158,28 @@ export default function AdminPackageManagementPage() {
       ket: '',
     })
     setShowAddPackageModal(true)
+  }
+
+  const openPackageDetailModal = async (row) => {
+    setShowPackageDetailModal(true)
+    setPackageDetail(row ?? null)
+    setPackageDetailError(null)
+    setIsLoadingPackageDetail(true)
+
+    try {
+      const payload = await fetchAdminPackageDetail(row?.pid)
+      setPackageDetail(payload?.data ?? row ?? null)
+    } catch (error) {
+      setPackageDetailError(error instanceof Error ? error.message : 'Detail paket gagal dimuat.')
+    } finally {
+      setIsLoadingPackageDetail(false)
+    }
+  }
+
+  const closePackageDetailModal = () => {
+    setShowPackageDetailModal(false)
+    setPackageDetail(null)
+    setPackageDetailError(null)
   }
 
   const openEditPackageModal = async (row) => {
@@ -532,7 +559,17 @@ export default function AdminPackageManagementPage() {
                       <td>{row.sold}</td>
                       <td>
                         <div className="admin-row-actions admin-package-row-actions">
-                          <button type="button" className="admin-row-action" title="Lihat paket" aria-label={`Lihat paket ${row.name}`}>👁</button>
+                          <button
+                            type="button"
+                            className="admin-row-action"
+                            title="Lihat paket"
+                            aria-label={`Lihat paket ${row.name}`}
+                            onClick={() => {
+                              void openPackageDetailModal(row)
+                            }}
+                          >
+                            👁
+                          </button>
                           <button
                             type="button"
                             className="admin-row-action admin-row-action-edit"
@@ -582,6 +619,18 @@ export default function AdminPackageManagementPage() {
               </div>
             </div>
           </section>
+
+          <AdminPackageDetailModal
+            open={showPackageDetailModal}
+            pkg={packageDetail}
+            loading={isLoadingPackageDetail}
+            error={packageDetailError}
+            onCancel={closePackageDetailModal}
+            onEdit={() => {
+              closePackageDetailModal()
+              void openEditPackageModal(packageDetail)
+            }}
+          />
 
           <AdminPackageFormModal
             open={showAddPackageModal}
