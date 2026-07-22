@@ -1,0 +1,13 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Serve existing files and directories directly (JS/CSS/images/etc.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Everything else is a client-side route (React Router) — fall back to
+    # index.html so refreshing or deep-linking any /dashboard-* URL works.
+    RewriteRule ^ /index.html [L]
+</IfModule>
