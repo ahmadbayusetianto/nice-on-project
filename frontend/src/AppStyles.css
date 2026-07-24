@@ -5591,13 +5591,6 @@ html {
   gap: 12px;
 }
 
-.admin-sidebar-avatar-admin {
-  background: linear-gradient(135deg, #6ea8ff, #4f6fff);
-  color: #fff;
-  font-weight: 800;
-  font-size: 16px;
-}
-
 .admin-sidebar-user-copy {
   min-width: 0;
 }
@@ -5608,10 +5601,21 @@ html {
   border-radius: 999px;
   object-fit: cover;
   background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.admin-sidebar-avatar-admin {
+  background: linear-gradient(135deg, #6ea8ff, #4f6fff);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
 }
 
 .admin-sidebar-user strong,
-.admin-sidebar-user span {
+.admin-sidebar-user-copy > span:not(.admin-sidebar-user-status) {
   display: block;
 }
 
