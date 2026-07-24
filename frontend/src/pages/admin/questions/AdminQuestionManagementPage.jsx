@@ -880,14 +880,7 @@ export default function AdminQuestionManagementPage() {
               <span aria-hidden="true">📝</span>
               <span>Manajemen Soal</span>
             </button>
-            <button
-              type="button"
-              className={`admin-question-tab${activeAdminTab === 'groups' ? ' active' : ''}`}
-              onClick={() => switchAdminQuestionTab('groups')}
-            >
-              <span aria-hidden="true">📁</span>
-              <span>Grup Soal</span>
-            </button>
+            {/* Grup Soal tab sementara disembunyikan agar tidak membingungkan user */}
             <button
               type="button"
               className={`admin-question-tab${activeAdminTab === 'tryout' ? ' active' : ''}`}
