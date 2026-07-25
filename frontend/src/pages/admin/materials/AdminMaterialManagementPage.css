@@ -1,0 +1,57 @@
+.admin-material-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-material-file-note {
+  display: block;
+  margin-top: 8px;
+  color: #6c7b95;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-material-page .admin-material-table td {
+  vertical-align: top;
+}
+
+.admin-material-page .material-empty-state {
+  align-content: center;
+  min-height: 320px;
+}
+
+.admin-material-page .material-empty-state .material-empty-icon {
+  width: 86px;
+  height: 86px;
+  border-radius: 26px;
+  font-size: 40px;
+}
+
+.admin-material-page .material-empty-state .material-empty-copy strong {
+  font-size: 24px;
+}
+
+.admin-material-page .material-empty-state .material-empty-copy p {
+  font-size: 15px;
+}
+
+.admin-material-empty-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-material-empty-card .material-empty-state {
+  min-height: 420px;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.admin-material-empty-card .material-empty-state .material-empty-action {
+  align-self: flex-start;
+}
+
+@media (max-width: 768px) {
+  .admin-material-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

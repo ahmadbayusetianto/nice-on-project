@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
+import { createCheckout } from '../../api/checkoutApi'
 import { fetchFaqs, fetchPackages } from '../../api/homeApi'
 import { getFriendlyFetchError } from '../../utils/fetchError'
 import { formatCurrency } from '../../utils/format'
 import { renderSocialBrandIcon } from '../../utils/icons'
+import { loadMidtransSnap } from '../../utils/loadMidtransSnap'
 import { stripFaqHtml } from '../../utils/sanitizeHtml'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
-import MaintenanceModal from './MaintenanceModal'
+import './Home.css'
 import PackageInfoModal from './PackageInfoModal'
 
 const DEFAULT_FAQ_ITEMS = [
@@ -31,7 +33,8 @@ export default function HomePage() {
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
   const [activePackageInfo, setActivePackageInfo] = useState(null)
-  const [activeMaintenance, setActiveMaintenance] = useState(false)
+  const [checkoutPendingKey, setCheckoutPendingKey] = useState(null)
+  const [checkoutMessage, setCheckoutMessage] = useState(null)
   const [faqRows, setFaqRows] = useState([])
   const [faqLoading, setFaqLoading] = useState(true)
   const isLoggedIn = Boolean(storedUser)
@@ -45,6 +48,32 @@ export default function HomePage() {
   const handleHomeLogout = () => {
     clearAuthUser()
     setStoredUser(null)
+  }
+
+  const handleBuyClick = async (card) => {
+    if (!isLoggedIn) {
+      navigate('/login', { state: { from: '/#paket' } })
+      return
+    }
+
+    setCheckoutMessage(null)
+    setCheckoutPendingKey(card.key)
+
+    try {
+      const snap = await loadMidtransSnap()
+      const { data } = await createCheckout({ pidUser: storedUser.pid, pidPaket: card.source.pid })
+
+      snap.pay(data.snap_token, {
+        onSuccess: () => setCheckoutMessage({ type: 'success', text: 'Pembayaran berhasil. Paket akan segera aktif di akunmu.' }),
+        onPending: () => setCheckoutMessage({ type: 'info', text: 'Menunggu pembayaran. Selesaikan pembayaran untuk mengaktifkan paket.' }),
+        onError: () => setCheckoutMessage({ type: 'error', text: 'Pembayaran gagal, silakan coba lagi.' }),
+        onClose: () => {},
+      })
+    } catch (error) {
+      setCheckoutMessage({ type: 'error', text: getFriendlyFetchError(error, 'Checkout gagal dimulai.') })
+    } finally {
+      setCheckoutPendingKey(null)
+    }
   }
 
   useEffect(() => {
@@ -681,6 +710,7 @@ export default function HomePage() {
 
         {packageError ? <div className="package-status package-status-error">{packageError}</div> : null}
         {packageLoading ? <div className="package-status">Memuat paket belajar...</div> : null}
+        {checkoutMessage ? <div className={`package-status package-status-${checkoutMessage.type}`}>{checkoutMessage.text}</div> : null}
 
         {!packageLoading && !packageError && packageCards.length === 0 ? (
           <div className="package-status">Belum ada paket untuk program ini.</div>
@@ -715,12 +745,13 @@ export default function HomePage() {
                       className="course-cart-button"
                       onClick={(event) => {
                         event.preventDefault()
-                        setActiveMaintenance(true)
+                        if (checkoutPendingKey) return
+                        handleBuyClick(card)
                       }}
-                      aria-label={`Buka paket ${card.title}`}
-                      title="#"
+                      aria-label={`Beli paket ${card.title}`}
+                      title="Beli"
                     >
-                      <span aria-hidden="true">🛒</span>
+                      <span aria-hidden="true">{checkoutPendingKey === card.key ? '⏳' : '🛒'}</span>
                     </a>
                   </div>
                 </div>
@@ -738,11 +769,6 @@ export default function HomePage() {
         open={Boolean(activePackageInfo)}
         packageData={activePackageInfo}
         onCancel={() => setActivePackageInfo(null)}
-      />
-
-      <MaintenanceModal
-        open={activeMaintenance}
-        onCancel={() => setActiveMaintenance(false)}
       />
 
       <section className="faq-wrap" id="faq" data-nav-section>

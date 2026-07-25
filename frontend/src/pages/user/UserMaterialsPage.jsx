@@ -9,6 +9,7 @@ import MaterialEmptyState from '../../components/shared/MaterialEmptyState'
 import { getFriendlyFetchError } from '../../utils/fetchError'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
 import UserMaterialViewerModal from './UserMaterialViewerModal'
+import './UserMaterialsPage.css'
 
 export default function UserMaterialsPage() {
   const location = useLocation()

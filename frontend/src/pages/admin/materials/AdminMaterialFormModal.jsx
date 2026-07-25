@@ -1,3 +1,5 @@
+import './AdminMaterialManagementPage.css'
+
 export default function AdminMaterialFormModal({ open, onCancel, onSubmit, form, packages, onFieldChange, onFileChange, loading, error, title = 'Upload Materi', submitLabel = 'Simpan Materi', helpText = 'Unggah PDF per paket dan atur status publikasi materi.' }) {
   if (!open) return null
 

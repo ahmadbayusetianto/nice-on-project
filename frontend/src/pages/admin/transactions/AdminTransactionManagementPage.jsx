@@ -10,6 +10,7 @@ import AdminUserMenu from '../../../components/layout/AdminUserMenu'
 import { getFriendlyFetchError } from '../../../utils/fetchError'
 import { formatAdminDate, formatCurrency, PAGE_SIZE_OPTIONS } from '../../../utils/format'
 import { clearAuthUser, readStoredAdminSidebarState, readStoredUser, storeAdminSidebarState } from '../../../utils/storage'
+import './AdminTransactionManagementPage.css'
 
 export default function AdminTransactionManagementPage() {
   const location = useLocation()

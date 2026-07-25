@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import './AdminFaqFormModal.css'
 
 export default function AdminFaqFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah FAQ', submitLabel = 'Simpan FAQ', helpText = 'Kelola pertanyaan dan jawaban yang tampil di landing page.' }) {
   const editorRef = useRef(null)

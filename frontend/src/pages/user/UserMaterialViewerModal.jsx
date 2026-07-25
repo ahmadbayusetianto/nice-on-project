@@ -1,3 +1,5 @@
+import './UserMaterialsPage.css'
+
 export default function UserMaterialViewerModal({ open, material, src, onClose }) {
   if (!open || !material) return null
 

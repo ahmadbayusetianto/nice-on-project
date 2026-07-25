@@ -1,3 +1,5 @@
+import './MaterialEmptyState.css'
+
 export default function MaterialEmptyState({ title, description, actionLabel, onAction, accent = 'blue' }) {
   return (
     <div className={`material-empty-state ${accent}`}>

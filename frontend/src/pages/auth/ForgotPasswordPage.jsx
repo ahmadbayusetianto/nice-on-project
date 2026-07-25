@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
+import './ForgotPasswordPage.css'
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()

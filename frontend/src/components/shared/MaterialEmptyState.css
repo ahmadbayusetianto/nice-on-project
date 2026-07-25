@@ -1,0 +1,61 @@
+.material-empty-state {
+  display: grid;
+  gap: 16px;
+  align-items: center;
+  justify-items: start;
+  padding: 28px;
+  width: 100%;
+  min-height: 240px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(74, 92, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(22, 47, 91, 0.08);
+  box-shadow: 0 18px 36px rgba(18, 34, 65, 0.06);
+}
+
+.material-empty-state.green {
+  background: linear-gradient(180deg, #f8fffb 0%, #f2fff7 100%);
+}
+
+.material-empty-state.blue {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9ff 100%);
+}
+
+.material-empty-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  background: rgba(74, 92, 255, 0.1);
+  color: #4a5cff;
+}
+
+.material-empty-state.green .material-empty-icon {
+  background: rgba(45, 191, 117, 0.12);
+  color: #2dbf75;
+}
+
+.material-empty-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 680px;
+}
+
+.material-empty-copy strong {
+  color: #17315f;
+  font-size: 22px;
+}
+
+.material-empty-copy p {
+  margin: 0;
+  color: #667489;
+  line-height: 1.65;
+}
+
+.material-empty-action {
+  justify-content: center;
+  min-width: 190px;
+}

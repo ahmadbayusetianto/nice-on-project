@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
 import { completeProfile } from '../../api/authApi'
+import './CompleteProfilePage.css'
 
 export default function CompleteProfilePage() {
   const navigate = useNavigate()

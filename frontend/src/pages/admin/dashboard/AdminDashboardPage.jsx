@@ -8,6 +8,7 @@ import AdminSystemMenu from '../../../components/layout/AdminSystemMenu'
 import AdminTopbar from '../../../components/layout/AdminTopbar'
 import AdminUserMenu from '../../../components/layout/AdminUserMenu'
 import { formatCurrency } from '../../../utils/format'
+import './AdminDashboardPage.css'
 import { clearAuthUser, readStoredAdminSidebarState, readStoredUser, storeAdminSidebarState } from '../../../utils/storage'
 
 export default function AdminDashboardPage() {

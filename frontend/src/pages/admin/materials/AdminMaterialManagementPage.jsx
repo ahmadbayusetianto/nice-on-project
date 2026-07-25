@@ -11,6 +11,7 @@ import MaterialEmptyState from '../../../components/shared/MaterialEmptyState'
 import { getFriendlyFetchError } from '../../../utils/fetchError'
 import { clearAuthUser, readStoredAdminSidebarState, readStoredUser, storeAdminSidebarState } from '../../../utils/storage'
 import AdminMaterialFormModal from './AdminMaterialFormModal'
+import './AdminMaterialManagementPage.css'
 
 function createMaterialFormFromDetail(detail = {}) {
   return {

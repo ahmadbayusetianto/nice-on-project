@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Models\User;
 use App\Notifications\AdminActivityNotification;
+use App\Services\MidtransService;
 
 function formatReferenceDisplay(?string $reference, ?string $referenceOther = null): string
 {
@@ -2097,6 +2098,148 @@ Route::get('/packages', function (Request $request) {
         'message' => 'Data paket berhasil dimuat.',
         'data' => $packages,
     ]);
+});
+
+Route::post('/checkout', function (Request $request) {
+    $validator = Validator::make($request->all(), [
+        'pid_user' => ['required', 'integer', Rule::exists('tbl_user', 'pid')],
+        'pid_paket' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi checkout gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $validated = $validator->validated();
+    $pidUser = (int) $validated['pid_user'];
+    $pidPaket = (int) $validated['pid_paket'];
+
+    $paket = DB::table('tbl_paket')->where('pid', $pidPaket)->whereNull('deleted_at')->first();
+    if (!$paket) {
+        return response()->json(['message' => 'Paket tidak ditemukan.'], 404);
+    }
+
+    $user = DB::table('tbl_user')->where('pid', $pidUser)->first();
+    $detail = DB::table('tbl_detail_user')->where('pid_user', $pidUser)->first();
+
+    // Server-computed amount — never trust a client-supplied amount.
+    $grossAmount = (float) $paket->harga;
+    $now = now();
+    $orderId = 'NICEON-' . $pidPaket . '-' . $pidUser . '-' . $now->format('YmdHis') . '-' . Str::random(6);
+
+    $transaksiId = DB::table('tbl_transaksi')->insertGetId([
+        'pid_user' => $pidUser,
+        'pid_paket' => $pidPaket,
+        'status_transaksi' => 'pending',
+        'midtrans_order_id' => $orderId,
+        'gross_amount' => $grossAmount,
+        'created_at' => $now,
+        'created_by' => $pidUser,
+        'updated_at' => null,
+        'updated_by' => null,
+    ]);
+
+    $midtrans = new MidtransService();
+
+    try {
+        $snap = $midtrans->createSnapTransaction([
+            'transaction_details' => [
+                'order_id' => $orderId,
+                'gross_amount' => (int) round($grossAmount),
+            ],
+            'item_details' => [[
+                'id' => (string) $paket->pid,
+                'price' => (int) round($grossAmount),
+                'quantity' => 1,
+                'name' => Str::limit((string) $paket->nama_paket, 50, ''),
+            ]],
+            'customer_details' => [
+                'first_name' => $detail->nama ?? 'User',
+                'email' => $user->email ?? null,
+                'phone' => $detail->nohp ?? null,
+            ],
+        ]);
+    } catch (\Throwable $e) {
+        DB::table('tbl_transaksi')->where('pid', $transaksiId)->update([
+            'status_transaksi' => 'cancelled',
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Gagal membuat transaksi pembayaran.'], 502);
+    }
+
+    DB::table('tbl_transaksi')->where('pid', $transaksiId)->update([
+        'snap_token' => $snap['token'] ?? null,
+        'snap_redirect_url' => $snap['redirect_url'] ?? null,
+        'updated_at' => now(),
+    ]);
+
+    logUserActivity($pidUser, 'checkout', 'Checkout dimulai', "Memulai pembayaran paket {$paket->nama_paket}");
+
+    return response()->json([
+        'message' => 'Transaksi berhasil dibuat.',
+        'data' => [
+            'pid_transaksi' => $transaksiId,
+            'order_id' => $orderId,
+            'snap_token' => $snap['token'] ?? null,
+            'gross_amount' => $grossAmount,
+        ],
+    ], 201);
+});
+
+Route::post('/midtrans/notification', function (Request $request) {
+    $notification = $request->all();
+    $midtrans = new MidtransService();
+
+    if (!$midtrans->verifySignature($notification)) {
+        return response()->json(['message' => 'Invalid signature.'], 403);
+    }
+
+    $orderId = $notification['order_id'] ?? null;
+    if (!$orderId) {
+        return response()->json(['message' => 'order_id missing.'], 422);
+    }
+
+    $transaksi = DB::table('tbl_transaksi')->where('midtrans_order_id', $orderId)->first();
+    if (!$transaksi) {
+        // Midtrans expects a 2xx/4xx (not 5xx) response even for orders this
+        // app never created, otherwise it keeps retrying indefinitely.
+        return response()->json(['message' => 'Transaction not found.'], 404);
+    }
+
+    $newStatus = $midtrans->mapNotificationToStatus($notification);
+    $rawStatus = (string) ($notification['transaction_status'] ?? '');
+    $paymentType = $notification['payment_type'] ?? null;
+    $wasPaid = $transaksi->status_transaksi === 'paid';
+
+    $updates = [
+        'status_transaksi' => $newStatus,
+        'midtrans_transaction_status' => $rawStatus,
+        'payment_type' => $paymentType,
+        'raw_notification' => json_encode($notification),
+        'updated_at' => now(),
+    ];
+
+    // Idempotency: Midtrans can resend the same notification, so only stamp
+    // paid_date the first time this row transitions into 'paid'.
+    if ($newStatus === 'paid' && !$wasPaid) {
+        $updates['paid_date'] = now();
+    }
+
+    DB::table('tbl_transaksi')->where('pid', $transaksi->pid)->update($updates);
+
+    // Side effects gated on a NEW paid transition, not merely "status is
+    // paid", so a duplicate notification doesn't fire duplicate side effects.
+    if ($newStatus === 'paid' && !$wasPaid) {
+        $paket = DB::table('tbl_paket')->where('pid', $transaksi->pid_paket)->first();
+        logUserActivity((int) $transaksi->pid_user, 'payment', 'Pembayaran berhasil', $paket->nama_paket ?? null);
+        notifyAdminUsers('payment', 'Pembayaran diterima', "Transaksi #{$transaksi->pid} berhasil dibayar.", '/admin/transactions');
+    }
+
+    return response()->json(['message' => 'OK']);
 });
 
 Route::get('/faqs', function () {

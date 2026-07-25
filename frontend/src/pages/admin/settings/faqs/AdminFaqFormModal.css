@@ -1,0 +1,172 @@
+.admin-faq-modal {
+  width: min(980px, 100%);
+  text-align: left;
+  padding: 24px 26px 22px;
+}
+
+.admin-faq-modal .admin-package-form {
+  margin-top: 18px;
+}
+
+.admin-faq-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-faq-modal-header h3 {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.admin-faq-modal-header p {
+  max-width: 560px;
+}
+
+.admin-faq-close {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: #eef3ff;
+  color: #17305b;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.admin-faq-close:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-faq-modal .admin-package-form-grid {
+  gap: 16px;
+}
+
+.admin-faq-editor-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-faq-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f9fbff, #f2f6ff);
+}
+
+.admin-faq-toolbar button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(22, 47, 91, 0.1);
+  background: #fff;
+  color: #17305b;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-faq-toolbar button:hover {
+  background: #eef3ff;
+}
+
+.admin-faq-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(22, 47, 91, 0.12);
+  margin: 0 2px;
+}
+
+.admin-faq-editor {
+  min-height: 240px;
+  padding: 16px 16px 18px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  border-radius: 18px;
+  background: #fff;
+  color: #17305b;
+  line-height: 1.7;
+  font-size: 15px;
+  outline: none;
+  overflow: auto;
+}
+
+.admin-faq-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #8d9abb;
+}
+
+.admin-faq-editor p {
+  margin: 0 0 12px;
+}
+
+.admin-faq-editor ul,
+.admin-faq-editor ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.admin-faq-editor a {
+  color: #3958ff;
+  text-decoration: underline;
+}
+
+.admin-faq-editor strong,
+.admin-faq-editor b {
+  font-weight: 800;
+}
+
+.admin-faq-editor em,
+.admin-faq-editor i {
+  font-style: italic;
+}
+
+.admin-faq-editor u {
+  text-underline-offset: 2px;
+}
+
+.admin-faq-editor blockquote {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 4px solid #9bb3ff;
+  background: #f7f9ff;
+  color: #4d5f85;
+}
+
+@media (max-width: 900px) {
+  .admin-faq-modal {
+    width: min(100%, 860px);
+  }
+
+  .admin-faq-modal-header {
+    flex-direction: column;
+  }
+
+  .admin-faq-close {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-faq-modal {
+    padding: 20px 16px 18px;
+  }
+
+  .admin-faq-modal-header h3 {
+    font-size: 24px;
+  }
+
+  .admin-faq-toolbar {
+    gap: 6px;
+  }
+
+  .admin-faq-toolbar button {
+    padding: 0 10px;
+  }
+}
