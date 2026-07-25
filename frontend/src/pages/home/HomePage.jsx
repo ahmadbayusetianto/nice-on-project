@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
 import { createCheckout } from '../../api/checkoutApi'
 import { fetchFaqs, fetchPackages } from '../../api/homeApi'
+import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import { getFriendlyFetchError } from '../../utils/fetchError'
 import { formatCurrency } from '../../utils/format'
 import { renderSocialBrandIcon } from '../../utils/icons'
@@ -35,6 +36,7 @@ export default function HomePage() {
   const [packageError, setPackageError] = useState(null)
   const [activePackageInfo, setActivePackageInfo] = useState(null)
   const [authPromptOpen, setAuthPromptOpen] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [checkoutPendingKey, setCheckoutPendingKey] = useState(null)
   const [checkoutMessage, setCheckoutMessage] = useState(null)
   const [faqRows, setFaqRows] = useState([])
@@ -48,8 +50,13 @@ export default function HomePage() {
   const currentYear = new Date().getFullYear()
 
   const handleHomeLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmHomeLogout = () => {
     clearAuthUser()
     setStoredUser(null)
+    setShowLogoutConfirm(false)
   }
 
   const handleBuyClick = async (card) => {
@@ -778,6 +785,12 @@ export default function HomePage() {
         onCancel={() => setAuthPromptOpen(false)}
         onLogin={() => navigate('/login', { state: { from: '/#paket' } })}
         onRegister={() => navigate('/register', { state: { from: '/#paket' } })}
+      />
+
+      <AdminLogoutModal
+        open={showLogoutConfirm}
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmHomeLogout}
       />
 
       <section className="faq-wrap" id="faq" data-nav-section>
