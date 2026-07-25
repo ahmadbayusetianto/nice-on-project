@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
 import { login } from '../../api/authApi'
 import { storeAuthUser } from '../../utils/storage'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -45,7 +46,7 @@ export default function LoginPage() {
         return
       }
 
-      navigate('/dashboard-user', {
+      navigate(location.state?.from || '/', {
         replace: true,
         state: {
           user: payload.data ?? null,

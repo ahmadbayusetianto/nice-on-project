@@ -10,6 +10,7 @@ import { loadMidtransSnap } from '../../utils/loadMidtransSnap'
 import { stripFaqHtml } from '../../utils/sanitizeHtml'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
 import './Home.css'
+import AuthRequiredModal from './AuthRequiredModal'
 import PackageInfoModal from './PackageInfoModal'
 
 const DEFAULT_FAQ_ITEMS = [
@@ -33,6 +34,7 @@ export default function HomePage() {
   const [packageLoading, setPackageLoading] = useState(true)
   const [packageError, setPackageError] = useState(null)
   const [activePackageInfo, setActivePackageInfo] = useState(null)
+  const [authPromptOpen, setAuthPromptOpen] = useState(false)
   const [checkoutPendingKey, setCheckoutPendingKey] = useState(null)
   const [checkoutMessage, setCheckoutMessage] = useState(null)
   const [faqRows, setFaqRows] = useState([])
@@ -52,7 +54,7 @@ export default function HomePage() {
 
   const handleBuyClick = async (card) => {
     if (!isLoggedIn) {
-      navigate('/login', { state: { from: '/#paket' } })
+      setAuthPromptOpen(true)
       return
     }
 
@@ -769,6 +771,13 @@ export default function HomePage() {
         open={Boolean(activePackageInfo)}
         packageData={activePackageInfo}
         onCancel={() => setActivePackageInfo(null)}
+      />
+
+      <AuthRequiredModal
+        open={authPromptOpen}
+        onCancel={() => setAuthPromptOpen(false)}
+        onLogin={() => navigate('/login', { state: { from: '/#paket' } })}
+        onRegister={() => navigate('/register', { state: { from: '/#paket' } })}
       />
 
       <section className="faq-wrap" id="faq" data-nav-section>
