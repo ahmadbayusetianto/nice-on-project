@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import faviconImage from '../../favicon.png'
 import './AppStyles.css'
+import { readStoredUser } from './utils/storage'
 import HomePage from './pages/home/HomePage'
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
@@ -20,6 +21,27 @@ import AdminTransactionManagementPage from './pages/admin/transactions/AdminTran
 import AdminSettingsParameterPage from './pages/admin/settings/parameters/AdminSettingsParameterPage'
 import AdminSettingsFaqPage from './pages/admin/settings/faqs/AdminSettingsFaqPage'
 import AdminSettingsTestimoniPage from './pages/admin/settings/testimonials/AdminSettingsTestimoniPage'
+
+function RequireRole({ role, children }) {
+  const location = useLocation()
+  const user = location.state?.user ?? readStoredUser()
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+  }
+
+  const isAdmin = Number(user?.is_admin ?? 0) === 1
+
+  if (role === 'admin' && !isAdmin) {
+    return <Navigate to="/dashboard-user" replace />
+  }
+
+  if (role === 'user' && isAdmin) {
+    return <Navigate to="/dashboard-admin" replace />
+  }
+
+  return children
+}
 
 function App() {
   useEffect(() => {
@@ -61,39 +83,39 @@ function App() {
       />
       <Route
         path="/dashboard-user"
-        element={<DashboardUserPageV2 />}
+        element={<RequireRole role="user"><DashboardUserPageV2 /></RequireRole>}
       />
       <Route
         path="/dashboard-user/tryout"
-        element={<UserTryoutPage />}
+        element={<RequireRole role="user"><UserTryoutPage /></RequireRole>}
       />
       <Route
         path="/dashboard-user/materials"
-        element={<UserMaterialsPage />}
+        element={<RequireRole role="user"><UserMaterialsPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin"
-        element={<AdminDashboardPage />}
+        element={<RequireRole role="admin"><AdminDashboardPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/users"
-        element={<AdminUserManagementPage />}
+        element={<RequireRole role="admin"><AdminUserManagementPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/packages"
-        element={<AdminPackageManagementPage />}
+        element={<RequireRole role="admin"><AdminPackageManagementPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/materials"
-        element={<AdminMaterialManagementPage />}
+        element={<RequireRole role="admin"><AdminMaterialManagementPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/questions"
-        element={<AdminQuestionManagementPage />}
+        element={<RequireRole role="admin"><AdminQuestionManagementPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/transactions"
-        element={<AdminTransactionManagementPage />}
+        element={<RequireRole role="admin"><AdminTransactionManagementPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/settings"
@@ -101,15 +123,15 @@ function App() {
       />
       <Route
         path="/dashboard-admin/settings/parameters"
-        element={<AdminSettingsParameterPage />}
+        element={<RequireRole role="admin"><AdminSettingsParameterPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/settings/faqs"
-        element={<AdminSettingsFaqPage />}
+        element={<RequireRole role="admin"><AdminSettingsFaqPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin/settings/testimonials"
-        element={<AdminSettingsTestimoniPage />}
+        element={<RequireRole role="admin"><AdminSettingsTestimoniPage /></RequireRole>}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
