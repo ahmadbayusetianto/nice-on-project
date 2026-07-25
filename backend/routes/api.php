@@ -2125,6 +2125,10 @@ Route::post('/checkout', function (Request $request) {
     $user = DB::table('tbl_user')->where('pid', $pidUser)->first();
     $detail = DB::table('tbl_detail_user')->where('pid_user', $pidUser)->first();
 
+    if ((int) ($user->is_admin ?? 0) === 1) {
+        return response()->json(['message' => 'Akun admin tidak dapat membeli paket.'], 403);
+    }
+
     // Server-computed amount — never trust a client-supplied amount.
     $grossAmount = (float) $paket->harga;
     $now = now();

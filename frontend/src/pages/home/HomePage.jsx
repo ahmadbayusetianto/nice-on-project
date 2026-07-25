@@ -13,6 +13,7 @@ import { clearAuthUser, readStoredUser } from '../../utils/storage'
 import './Home.css'
 import AuthRequiredModal from './AuthRequiredModal'
 import PackageInfoModal from './PackageInfoModal'
+import PurchaseBlockedModal from './PurchaseBlockedModal'
 
 const DEFAULT_FAQ_ITEMS = [
   { icon: '❓', label: 'Lorem ipsum dolor sit amet consectetur?', answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer hendrerit, tortor et feugiat mattis.' },
@@ -37,16 +38,18 @@ export default function HomePage() {
   const [activePackageInfo, setActivePackageInfo] = useState(null)
   const [authPromptOpen, setAuthPromptOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [purchaseBlockedOpen, setPurchaseBlockedOpen] = useState(false)
   const [checkoutPendingKey, setCheckoutPendingKey] = useState(null)
   const [checkoutMessage, setCheckoutMessage] = useState(null)
   const [faqRows, setFaqRows] = useState([])
   const [faqLoading, setFaqLoading] = useState(true)
   const isLoggedIn = Boolean(storedUser)
+  const isAdmin = Number(storedUser?.is_admin ?? 0) === 1
   const displayName = storedUser?.nama || storedUser?.name || storedUser?.email?.split('@')?.[0] || 'User'
-  const authLabel = Number(storedUser?.is_admin ?? 0) === 1 ? 'Admin' : 'User'
-  const dashboardPath = Number(storedUser?.is_admin ?? 0) === 1 ? '/dashboard-admin' : '/dashboard-user'
-  const dashboardCtaLabel = Number(storedUser?.is_admin ?? 0) === 1 ? 'Masuk ke Dashboard Admin' : 'Masuk ke Dashboard User'
-  const dashboardCtaClass = Number(storedUser?.is_admin ?? 0) === 1 ? 'pill main home-dashboard-cta admin' : 'pill main home-dashboard-cta user'
+  const authLabel = isAdmin ? 'Admin' : 'User'
+  const dashboardPath = isAdmin ? '/dashboard-admin' : '/dashboard-user'
+  const dashboardCtaLabel = isAdmin ? 'Masuk ke Dashboard Admin' : 'Masuk ke Dashboard User'
+  const dashboardCtaClass = isAdmin ? 'pill main home-dashboard-cta admin' : 'pill main home-dashboard-cta user'
   const currentYear = new Date().getFullYear()
 
   const handleHomeLogout = () => {
@@ -62,6 +65,11 @@ export default function HomePage() {
   const handleBuyClick = async (card) => {
     if (!isLoggedIn) {
       setAuthPromptOpen(true)
+      return
+    }
+
+    if (isAdmin) {
+      setPurchaseBlockedOpen(true)
       return
     }
 
@@ -791,6 +799,11 @@ export default function HomePage() {
         open={showLogoutConfirm}
         onCancel={() => setShowLogoutConfirm(false)}
         onConfirm={confirmHomeLogout}
+      />
+
+      <PurchaseBlockedModal
+        open={purchaseBlockedOpen}
+        onClose={() => setPurchaseBlockedOpen(false)}
       />
 
       <section className="faq-wrap" id="faq" data-nav-section>
