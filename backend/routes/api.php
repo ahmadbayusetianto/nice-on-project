@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -4849,6 +4850,66 @@ Route::post('/login', function (Request $request) {
             'next_step' => $detailUser ? 'Masuk ke beranda.' : 'Lengkapi profil terlebih dahulu.',
         ],
     ]);
+});
+
+Route::post('/forgot-password', function (Request $request) {
+    $validator = Validator::make($request->only('email'), [
+        'email' => ['required', 'email'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    Password::sendResetLink($request->only('email'));
+
+    // Pesan selalu generik — tidak membedakan email terdaftar/tidak, untuk mencegah user enumeration.
+    return response()->json([
+        'message' => 'Jika email terdaftar, tautan reset password akan dikirim ke email tersebut.',
+    ]);
+})->middleware('throttle:5,1');
+
+Route::post('/reset-password', function (Request $request) {
+    $input = [
+        'token' => $request->input('token'),
+        'email' => $request->input('email'),
+        'password' => $request->input('password'),
+        'password_confirmation' => $request->input('password_confirmation', $request->input('confirmPassword')),
+    ];
+
+    $validator = Validator::make($input, [
+        'token' => ['required', 'string'],
+        'email' => ['required', 'email'],
+        'password' => ['required', 'string', 'min:8', 'confirmed'],
+    ], [
+        'password.confirmed' => 'Konfirmasi password tidak cocok.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $status = Password::reset($input, function ($user, $password) {
+        $user->forceFill(['password' => $password])->save();
+    });
+
+    if ($status === Password::PASSWORD_RESET) {
+        return response()->json([
+            'message' => 'Password berhasil direset. Silakan login dengan password baru.',
+        ]);
+    }
+
+    // Semua kegagalan (token salah, kedaluwarsa, email tak cocok) pakai pesan generik yang sama
+    // — membedakan pesan akan jadi oracle untuk menebak apakah reset pernah diminta untuk email itu.
+    return response()->json([
+        'message' => 'Tautan reset password tidak valid atau sudah kedaluwarsa.',
+    ], 400);
 });
 
 Route::post('/complete-profile', function (Request $request) {

@@ -42,4 +42,13 @@ class User extends Authenticatable
     {
         return $this->hasMany(Ljk::class, 'user_id');
     }
+
+    public function sendPasswordResetNotification($token)
+    {
+        $url = rtrim(config('app.frontend_url'), '/')
+            . '/reset-password?token=' . $token
+            . '&email=' . urlencode($this->email);
+
+        $this->notify(new \App\Notifications\ResetPasswordNotification($url));
+    }
 }

@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
+import { forgotPassword } from '../../api/authApi'
 import './ForgotPasswordPage.css'
 
 export default function ForgotPasswordPage() {
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState(null)
@@ -16,11 +16,15 @@ export default function ForgotPasswordPage() {
     setSubmitMessage(null)
 
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 700))
-      setSubmitMessage({ type: 'success', text: 'Jika email terdaftar, tautan reset password akan dikirim ke email tersebut.' })
+      const payload = await forgotPassword({ email })
+      setSubmitMessage({ type: 'success', text: payload.message ?? 'Jika email terdaftar, tautan reset password akan dikirim ke email tersebut.' })
       setEmail('')
-    } catch {
-      setSubmitMessage({ type: 'error', text: 'Tidak bisa memproses permintaan saat ini.' })
+    } catch (error) {
+      if (error.status) {
+        setSubmitMessage({ type: 'error', text: error.message ?? 'Tidak bisa memproses permintaan saat ini.' })
+      } else {
+        setSubmitMessage({ type: 'error', text: 'Tidak bisa terhubung ke server.' })
+      }
     } finally {
       setIsSubmitting(false)
     }

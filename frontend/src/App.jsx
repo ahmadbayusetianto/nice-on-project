@@ -7,6 +7,7 @@ import HomePage from './pages/home/HomePage'
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import CompleteProfilePage from './pages/auth/CompleteProfilePage'
 import AccountProfilePage from './pages/user/AccountProfilePage'
 import DashboardUserPageV2 from './pages/user/DashboardUserPageV2'
@@ -68,6 +69,10 @@ function App() {
       <Route
         path="/forgot-password"
         element={<ForgotPasswordPage />}
+      />
+      <Route
+        path="/reset-password"
+        element={<ResetPasswordPage />}
       />
       <Route
         path="/register"
