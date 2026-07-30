@@ -72,6 +72,7 @@ function createQuestionFormFromDetail(detail = {}) {
     question_group: detail.question_group ? Number(detail.question_group) : '',
     package_id: detail.package_id ?? '',
     istext: detail.istext !== undefined ? Boolean(detail.istext) : true,
+    options_istext: options.length ? Boolean(options[0].istext) : true,
     information: detail.information ?? '',
     pembahasan: detail.pembahasan ?? '',
     question_image: null,
@@ -485,6 +486,7 @@ export default function AdminQuestionManagementPage() {
     const shouldKeepOpenForAddMore = submitMode === 'save-add' && !isEditMode
     const isTkpGroup = Number(questionForm.question_group) === 3
     const isText = Boolean(questionForm.istext)
+    const optionsIsText = Boolean(questionForm.options_istext)
 
     if (!questionForm.package_id) {
       setQuestionSubmitError('Paket wajib dipilih.')
@@ -506,7 +508,7 @@ export default function AdminQuestionManagementPage() {
       return
     }
 
-    const activeOptions = isText
+    const activeOptions = optionsIsText
       ? questionForm.options.filter((option) => option.choise.trim() !== '')
       : questionForm.options
 
@@ -515,7 +517,7 @@ export default function AdminQuestionManagementPage() {
       return
     }
 
-    if (!isText && activeOptions.some((option) => !option.image && !option.existing_image_url)) {
+    if (!optionsIsText && activeOptions.some((option) => !option.image && !option.existing_image_url)) {
       setQuestionSubmitError('Gambar wajib diunggah untuk setiap opsi jawaban.')
       return
     }
@@ -542,6 +544,7 @@ export default function AdminQuestionManagementPage() {
       formData.append('question_group', String(Number(questionForm.question_group)))
       formData.append('package_id', String(Number(questionForm.package_id)))
       formData.append('istext', isText ? '1' : '0')
+      formData.append('options_istext', optionsIsText ? '1' : '0')
       formData.append('information', questionForm.information.trim())
       formData.append('pembahasan', questionForm.pembahasan.trim())
 
@@ -553,13 +556,13 @@ export default function AdminQuestionManagementPage() {
 
       activeOptions.forEach((option, index) => {
         formData.append(`options[${index}][answer]`, option.answer ? '1' : '0')
-        formData.append(`options[${index}][istext]`, isText ? '1' : '0')
+        formData.append(`options[${index}][istext]`, optionsIsText ? '1' : '0')
 
         if (isTkpGroup && option.nilai_tkp !== '') {
           formData.append(`options[${index}][nilai_tkp]`, String(Number(option.nilai_tkp)))
         }
 
-        if (isText) {
+        if (optionsIsText) {
           formData.append(`options[${index}][choise]`, option.choise.trim())
         } else if (option.image) {
           formData.append(`options[${index}][image]`, option.image)

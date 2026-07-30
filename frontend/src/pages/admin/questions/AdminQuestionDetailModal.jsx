@@ -134,7 +134,7 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                             <img className="admin-question-detail-option-image" src={option.image_url} alt={`Gambar opsi ${letter}`} />
                           </button>
                         ) : null}
-                        {!option || question.istext ? (
+                        {!option || option.istext ? (
                           <strong>{option?.choise || 'Belum ada opsi.'}</strong>
                         ) : null}
                       </div>

@@ -563,7 +563,7 @@ export default function UserTryoutPage() {
                         <div className="user-tryout-question-text">{currentQuestion.question}</div>
                       ) : null}
 
-                      <div className={`user-tryout-option-list${!currentQuestion.istext ? ' image-mode' : ''}`}>
+                      <div className={`user-tryout-option-list${currentQuestion.options?.length && !currentQuestion.options[0].istext ? ' image-mode' : ''}`}>
                         {currentQuestion.options.map((option, index) => {
                           const selected = String(answerMap[String(currentQuestion.id)] || '') === String(option.id)
                           return (
@@ -577,7 +577,7 @@ export default function UserTryoutPage() {
                               }}
                             >
                               <span className="user-tryout-option-badge">{String.fromCharCode(65 + index)}</span>
-                              {!currentQuestion.istext && option.image_url ? (
+                              {!option.istext && option.image_url ? (
                                 <img className="user-tryout-option-image" src={option.image_url} alt={`Gambar opsi ${String.fromCharCode(65 + index)}`} />
                               ) : (
                                 <span className="user-tryout-option-text">{option.choise}</span>
@@ -726,7 +726,7 @@ export default function UserTryoutPage() {
                             ) : null}
                             <strong>Jawaban Benar</strong>
                             {correctOption ? (
-                              !question.istext && correctOption.image_url ? (
+                              !correctOption.istext && correctOption.image_url ? (
                                 <div className="user-tryout-review-answer-image-wrap">
                                   <span className="user-tryout-review-answer-letter">Opsi {correctOptionLetter}</span>
                                   <img className="user-tryout-review-answer-image" src={correctOption.image_url} alt={`Gambar jawaban benar opsi ${correctOptionLetter}`} />

@@ -2919,6 +2919,7 @@ Route::get('/admin/questions/{id}', function (Request $request, $id) {
 
 Route::post('/admin/questions', function (Request $request) {
     $isText = $request->boolean('istext');
+    $optionsIsText = $request->boolean('options_istext');
     $questionTypeInput = normalizeQuestionType((string) $request->input('question_type', 'SKD'));
 
     $rules = [
@@ -2928,6 +2929,7 @@ Route::post('/admin/questions', function (Request $request) {
             : ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
         'package_id' => ['required', 'integer', Rule::exists('ref_paket', 'pid')->whereNull('deleted_at')],
         'istext' => ['required', 'boolean'],
+        'options_istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
         'options' => ['required', 'array', 'min:1'],
@@ -2941,13 +2943,17 @@ Route::post('/admin/questions', function (Request $request) {
         'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb(),
     ];
 
-    if ($isText) {
-        $rules['question'] = ['required', 'string'];
+    if ($optionsIsText) {
         $rules['options.*.choise'] = ['required', 'string'];
     } else {
-        $rules['question'] = ['nullable', 'string'];
         $rules['options.*.choise'] = ['nullable', 'string'];
         $rules['options.*.image'] = ['required', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+    }
+
+    if ($isText) {
+        $rules['question'] = ['required', 'string'];
+    } else {
+        $rules['question'] = ['nullable', 'string'];
     }
 
     $validator = Validator::make($request->all(), $rules, [
@@ -2984,19 +2990,19 @@ Route::post('/admin/questions', function (Request $request) {
 
     $normalizedOptions = collect($validated['options'])
         ->values()
-        ->map(function ($option, $index) use ($isTkpGroup, $isText, $request) {
+        ->map(function ($option, $index) use ($isTkpGroup, $optionsIsText, $request) {
             return [
-                'choise' => $isText ? trim((string) ($option['choise'] ?? '')) : '',
+                'choise' => $optionsIsText ? trim((string) ($option['choise'] ?? '')) : '',
                 'answer' => (int) filter_var($option['answer'] ?? false, FILTER_VALIDATE_BOOL) === 1,
-                'istext' => $isText,
+                'istext' => $optionsIsText,
                 'nilai_tkp' => $isTkpGroup && ($option['nilai_tkp'] ?? null) !== null && $option['nilai_tkp'] !== ''
                     ? (int) $option['nilai_tkp']
                     : null,
-                'image_path' => $isText ? null : storeUploadedQuestionImage($request->file("options.$index.image"), 'question-options'),
+                'image_path' => $optionsIsText ? null : storeUploadedQuestionImage($request->file("options.$index.image"), 'question-options'),
             ];
         });
 
-    if ($isText) {
+    if ($optionsIsText) {
         $normalizedOptions = $normalizedOptions->filter(fn ($option) => $option['choise'] !== '')->values();
     }
 
@@ -3053,6 +3059,7 @@ Route::post('/admin/questions', function (Request $request) {
 
 Route::put('/admin/questions/{id}', function (Request $request, $id) {
     $isText = $request->boolean('istext');
+    $optionsIsText = $request->boolean('options_istext');
     $questionTypeInput = normalizeQuestionType((string) $request->input('question_type', 'SKD'));
 
     $rules = [
@@ -3062,6 +3069,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
             : ['required', 'integer', questionGroupValidationRule($questionTypeInput, $request->input('package_id'))],
         'package_id' => ['required', 'integer', Rule::exists('ref_paket', 'pid')->whereNull('deleted_at')],
         'istext' => ['required', 'boolean'],
+        'options_istext' => ['required', 'boolean'],
         'information' => ['nullable', 'string'],
         'pembahasan' => ['nullable', 'string'],
         'options' => ['required', 'array', 'min:1'],
@@ -3076,9 +3084,13 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     if ($isText) {
         $rules['question'] = ['required', 'string'];
-        $rules['options.*.choise'] = ['required', 'string'];
     } else {
         $rules['question'] = ['nullable', 'string'];
+    }
+
+    if ($optionsIsText) {
+        $rules['options.*.choise'] = ['required', 'string'];
+    } else {
         $rules['options.*.choise'] = ['nullable', 'string'];
         $rules['options.*.image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
     }
@@ -3127,9 +3139,9 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     $normalizedOptions = collect($validated['options'])
         ->values()
-        ->map(function ($option, $index) use ($isTkpGroup, $isText, $request) {
+        ->map(function ($option, $index) use ($isTkpGroup, $optionsIsText, $request) {
             $imagePath = null;
-            if (!$isText) {
+            if (!$optionsIsText) {
                 $uploaded = $request->file("options.$index.image");
                 $imagePath = $uploaded
                     ? storeUploadedQuestionImage($uploaded, 'question-options')
@@ -3137,9 +3149,9 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
             }
 
             return [
-                'choise' => $isText ? trim((string) ($option['choise'] ?? '')) : '',
+                'choise' => $optionsIsText ? trim((string) ($option['choise'] ?? '')) : '',
                 'answer' => (int) filter_var($option['answer'] ?? false, FILTER_VALIDATE_BOOL) === 1,
-                'istext' => $isText,
+                'istext' => $optionsIsText,
                 'nilai_tkp' => $isTkpGroup && ($option['nilai_tkp'] ?? null) !== null && $option['nilai_tkp'] !== ''
                     ? (int) $option['nilai_tkp']
                     : null,
@@ -3147,7 +3159,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
             ];
         });
 
-    if ($isText) {
+    if ($optionsIsText) {
         $normalizedOptions = $normalizedOptions->filter(fn ($option) => $option['choise'] !== '')->values();
     } elseif ($normalizedOptions->contains(fn ($option) => empty($option['image_path']))) {
         return response()->json([

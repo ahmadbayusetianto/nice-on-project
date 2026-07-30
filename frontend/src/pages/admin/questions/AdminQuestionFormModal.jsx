@@ -263,6 +263,30 @@ export default function AdminQuestionFormModal({
                   </div>
                 </label>
 
+                <label className="admin-question-field admin-question-field-full">
+                  <span>Tipe Jawaban <sup>*</sup></span>
+                  <div className="admin-question-jenis-toggle">
+                    <button
+                      type="button"
+                      className={`admin-question-jenis-option${form.options_istext ? ' active' : ''}`}
+                      onClick={() => onFieldChange('options_istext', true)}
+                      disabled={loading}
+                    >
+                      <span aria-hidden="true">T</span>
+                      <strong>Teks</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className={`admin-question-jenis-option${!form.options_istext ? ' active' : ''}`}
+                      onClick={() => onFieldChange('options_istext', false)}
+                      disabled={loading}
+                    >
+                      <span aria-hidden="true">◫</span>
+                      <strong>Gambar</strong>
+                    </button>
+                  </div>
+                </label>
+
                 {form.istext ? (
                   <label className="admin-question-field admin-question-field-full">
                     <span>Tulis pertanyaan <sup>*</sup></span>
@@ -392,10 +416,10 @@ export default function AdminQuestionFormModal({
 
               <div className="admin-question-options-list">
                 {form.options.map((option, index) => (
-                  <div className={`admin-question-option-row${form.istext ? ' rich' : ' image'}`} key={option.key}>
+                  <div className={`admin-question-option-row${form.options_istext ? ' rich' : ' image'}`} key={option.key}>
                     <div className="admin-question-option-badge">{optionLabels[index] || index + 1}</div>
 
-                    {form.istext ? (
+                    {form.options_istext ? (
                       <div className="admin-question-option-editor">
                         <div className="admin-question-option-toolbar" aria-hidden="true">
                           <span>B</span>
