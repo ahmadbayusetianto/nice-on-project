@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import faviconImage from '../../favicon.png'
 import './AppStyles.css'
-import { readStoredUser } from './utils/storage'
+import { readStoredSandboxAdminMode, readStoredUser } from './utils/storage'
 import HomePage from './pages/home/HomePage'
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
@@ -32,12 +32,16 @@ function RequireRole({ role, children }) {
   }
 
   const isAdmin = Number(user?.is_admin ?? 0) === 1
+  const searchParams = new URLSearchParams(location.search)
+  const isSandboxAdmin = searchParams.get('sandbox_admin') === '1'
+    || location.state?.sandboxAdmin === true
+    || readStoredSandboxAdminMode()
 
   if (role === 'admin' && !isAdmin) {
     return <Navigate to="/dashboard-user" replace />
   }
 
-  if (role === 'user' && isAdmin) {
+  if (role === 'user' && isAdmin && !isSandboxAdmin) {
     return <Navigate to="/dashboard-admin" replace />
   }
 
