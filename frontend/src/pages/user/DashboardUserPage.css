@@ -1,0 +1,143 @@
+.dashboard-brand {
+  display: inline-flex;
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(191, 233, 255, 0.16);
+  border: 1px solid rgba(191, 233, 255, 0.20);
+  color: #dff5ff;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-sidebar-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-sidebar-heading h1 {
+  margin: 0;
+  font-size: clamp(26px, 2.6vw, 36px);
+  line-height: 1.05;
+  word-break: break-word;
+}
+
+.dashboard-user-name {
+  margin: 0;
+  color: #d9ecff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.dashboard-status-card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(10, 59, 120, 0.38);
+  border: 1px solid rgba(184, 227, 255, 0.14);
+  display: grid;
+  gap: 6px;
+}
+
+.dashboard-status-card span {
+  color: #9fe7ff;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-hero-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.dashboard-hero-meta {
+  color: #bfe9ff;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.dashboard-metric {
+  padding: 20px;
+  color: #fff;
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-metric span {
+  color: #a6e8ff;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-metric strong {
+  font-size: 26px;
+}
+
+.dashboard-metric p {
+  margin: 0;
+  color: #d7ebff;
+}
+
+.dashboard-lower-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 18px;
+}
+
+.dashboard-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 12px;
+  color: #d7ebff;
+  line-height: 1.55;
+}
+
+.dashboard-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-quick-button {
+  padding: 16px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(191, 233, 255, 0.16);
+}
+
+@media (max-width: 980px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-lower-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-quick-actions {
+    grid-template-columns: 1fr;
+  }
+}

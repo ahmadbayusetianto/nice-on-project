@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import './AdminQuestionManagementPage.css'
 import { fetchAdminPackages } from '../../../api/adminPackagesApi'
 import {
   deleteQuestion,

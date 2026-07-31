@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchQuestionGroups, fetchRefPaketByBundle, fetchRefPaketByPid } from '../../../api/adminQuestionsApi'
 import QuestionImageUploadField from '../../../components/shared/QuestionImageUploadField'
+import { applyFormat } from '../../../utils/richTextFormatting'
 import PackageSearchSelect from './PackageSearchSelect'
 
 export default function AdminQuestionFormModal({
@@ -29,6 +30,9 @@ export default function AdminQuestionFormModal({
   const [groups, setGroups] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(false)
   const questionImageFieldRef = useRef(null)
+  const questionTextareaRef = useRef(null)
+  const pembahasanTextareaRef = useRef(null)
+  const optionTextareaRefs = useRef({})
   const [refPaketOptions, setRefPaketOptions] = useState([])
 
   // Edit mode: `form.package_id` is a ref_paket pid, so the matching Bundling
@@ -288,14 +292,14 @@ export default function AdminQuestionFormModal({
                 </label>
 
                 {form.istext ? (
-                  <label className="admin-question-field admin-question-field-full">
+                  <label className="admin-question-field admin-question-field-full" htmlFor="admin-question-text">
                     <span>Tulis pertanyaan <sup>*</sup></span>
                     <div className="admin-question-editor-shell">
                       <div className="admin-question-editor-toolbar">
-                        <span aria-hidden="true">B</span>
-                        <span aria-hidden="true">I</span>
-                        <span aria-hidden="true">U</span>
-                        <span aria-hidden="true">≡</span>
+                        <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(questionTextareaRef.current, form.question, (value) => onFieldChange('question', value), 'bold')} disabled={loading} title="Tebal" aria-label="Tebal">B</button>
+                        <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(questionTextareaRef.current, form.question, (value) => onFieldChange('question', value), 'italic')} disabled={loading} title="Miring" aria-label="Miring">I</button>
+                        <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(questionTextareaRef.current, form.question, (value) => onFieldChange('question', value), 'underline')} disabled={loading} title="Garis bawah" aria-label="Garis bawah">U</button>
+                        <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(questionTextareaRef.current, form.question, (value) => onFieldChange('question', value), 'strikethrough')} disabled={loading} title="Coret" aria-label="Coret">≡</button>
                         <span aria-hidden="true">≣</span>
                         <span aria-hidden="true">↗</span>
                         <button
@@ -308,9 +312,11 @@ export default function AdminQuestionFormModal({
                         >
                           ▢
                         </button>
-                        <span aria-hidden="true">Tx</span>
+                        <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(questionTextareaRef.current, form.question, (value) => onFieldChange('question', value), 'clear')} disabled={loading} title="Hapus format" aria-label="Hapus format">Tx</button>
                       </div>
                       <textarea
+                        id="admin-question-text"
+                        ref={questionTextareaRef}
                         value={form.question}
                         onChange={(event) => onFieldChange('question', event.target.value)}
                         placeholder="Ketik atau tempel pertanyaan di sini..."
@@ -421,14 +427,15 @@ export default function AdminQuestionFormModal({
 
                     {form.options_istext ? (
                       <div className="admin-question-option-editor">
-                        <div className="admin-question-option-toolbar" aria-hidden="true">
-                          <span>B</span>
-                          <span>I</span>
-                          <span>U</span>
-                          <span>≡</span>
-                          <span>≣</span>
+                        <div className="admin-question-option-toolbar">
+                          <button type="button" className="admin-question-option-toolbar-action" onClick={() => applyFormat(optionTextareaRefs.current[option.key], option.choise, (value) => onOptionChange(index, 'choise', value), 'bold')} disabled={loading} title="Tebal" aria-label="Tebal">B</button>
+                          <button type="button" className="admin-question-option-toolbar-action" onClick={() => applyFormat(optionTextareaRefs.current[option.key], option.choise, (value) => onOptionChange(index, 'choise', value), 'italic')} disabled={loading} title="Miring" aria-label="Miring">I</button>
+                          <button type="button" className="admin-question-option-toolbar-action" onClick={() => applyFormat(optionTextareaRefs.current[option.key], option.choise, (value) => onOptionChange(index, 'choise', value), 'underline')} disabled={loading} title="Garis bawah" aria-label="Garis bawah">U</button>
+                          <button type="button" className="admin-question-option-toolbar-action" onClick={() => applyFormat(optionTextareaRefs.current[option.key], option.choise, (value) => onOptionChange(index, 'choise', value), 'strikethrough')} disabled={loading} title="Coret" aria-label="Coret">≡</button>
+                          <span aria-hidden="true">≣</span>
                         </div>
                         <textarea
+                          ref={(el) => { optionTextareaRefs.current[option.key] = el }}
                           value={option.choise}
                           onChange={(event) => onOptionChange(index, 'choise', event.target.value)}
                           placeholder={`Tulis opsi jawaban ${optionLabels[index] || index + 1}`}
@@ -484,17 +491,18 @@ export default function AdminQuestionFormModal({
               <label className="admin-question-field admin-question-field-full">
                 <span>Pembahasan (Opsional)</span>
                 <div className="admin-question-editor-shell compact">
-                  <div className="admin-question-editor-toolbar" aria-hidden="true">
-                    <span>B</span>
-                    <span>I</span>
-                    <span>U</span>
-                    <span>≡</span>
-                    <span>≣</span>
-                    <span>↗</span>
-                    <span>▢</span>
-                    <span>&lt;/&gt;</span>
+                  <div className="admin-question-editor-toolbar">
+                    <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(pembahasanTextareaRef.current, form.pembahasan, (value) => onFieldChange('pembahasan', value), 'bold')} disabled={loading} title="Tebal" aria-label="Tebal">B</button>
+                    <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(pembahasanTextareaRef.current, form.pembahasan, (value) => onFieldChange('pembahasan', value), 'italic')} disabled={loading} title="Miring" aria-label="Miring">I</button>
+                    <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(pembahasanTextareaRef.current, form.pembahasan, (value) => onFieldChange('pembahasan', value), 'underline')} disabled={loading} title="Garis bawah" aria-label="Garis bawah">U</button>
+                    <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(pembahasanTextareaRef.current, form.pembahasan, (value) => onFieldChange('pembahasan', value), 'strikethrough')} disabled={loading} title="Coret" aria-label="Coret">≡</button>
+                    <span aria-hidden="true">≣</span>
+                    <span aria-hidden="true">↗</span>
+                    <span aria-hidden="true">▢</span>
+                    <span aria-hidden="true">&lt;/&gt;</span>
                   </div>
                   <textarea
+                    ref={pembahasanTextareaRef}
                     value={form.pembahasan}
                     onChange={(event) => onFieldChange('pembahasan', event.target.value)}
                     placeholder="Tulis pembahasan soal..."

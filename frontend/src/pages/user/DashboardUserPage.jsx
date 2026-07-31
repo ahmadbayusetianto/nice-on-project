@@ -3,6 +3,7 @@
 // verify with the team before deleting.
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import './DashboardUserPage.css'
 import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
 

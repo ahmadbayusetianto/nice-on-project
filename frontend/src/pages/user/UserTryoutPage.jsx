@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import './UserTryoutPage.css'
 import { fetchPackages } from '../../api/homeApi'
 import { fetchCurrentTryout, finishTryout as finishTryoutRequest, saveTryoutAnswer, startTryout as startTryoutRequest } from '../../api/tryoutApi'
 import AdminBrandBlock from '../../components/layout/AdminBrandBlock'
@@ -10,6 +11,7 @@ import AdminUserMenu from '../../components/layout/AdminUserMenu'
 import DashboardNotificationMenu from '../../components/layout/DashboardNotificationMenu'
 import UserSidebar from '../../components/layout/UserSidebar'
 import MaterialEmptyState from '../../components/shared/MaterialEmptyState'
+import RichText from '../../components/shared/RichText'
 import { getFriendlyFetchError } from '../../utils/fetchError'
 import { formatCurrency, formatTryoutCountdown } from '../../utils/format'
 import { clearAuthUser, readStoredSandboxAdminMode, readStoredUser } from '../../utils/storage'
@@ -560,7 +562,7 @@ export default function UserTryoutPage() {
                         <img className="user-tryout-question-image" src={currentQuestion.image_url} alt="Gambar soal" />
                       ) : null}
                       {currentQuestion.istext ? (
-                        <div className="user-tryout-question-text">{currentQuestion.question}</div>
+                        <div className="user-tryout-question-text"><RichText text={currentQuestion.question} /></div>
                       ) : null}
 
                       <div className={`user-tryout-option-list${currentQuestion.options?.length && !currentQuestion.options[0].istext ? ' image-mode' : ''}`}>
@@ -580,7 +582,7 @@ export default function UserTryoutPage() {
                               {!option.istext && option.image_url ? (
                                 <img className="user-tryout-option-image" src={option.image_url} alt={`Gambar opsi ${String.fromCharCode(65 + index)}`} />
                               ) : (
-                                <span className="user-tryout-option-text">{option.choise}</span>
+                                <span className="user-tryout-option-text"><RichText text={option.choise} /></span>
                               )}
                             </button>
                           )
@@ -706,7 +708,7 @@ export default function UserTryoutPage() {
                           <span>{index + 1}</span>
                           <div>
                             <strong>
-                              {question.istext ? question.question : (
+                              {question.istext ? <RichText text={question.question} /> : (
                                 <span className="user-tryout-review-image-chip">🖼 Soal Bergambar</span>
                               )}
                             </strong>
@@ -732,7 +734,7 @@ export default function UserTryoutPage() {
                                   <img className="user-tryout-review-answer-image" src={correctOption.image_url} alt={`Gambar jawaban benar opsi ${correctOptionLetter}`} />
                                 </div>
                               ) : (
-                                <p>{correctOptionLetter}. {correctOption.choise}</p>
+                                <p>{correctOptionLetter}. <RichText text={correctOption.choise} /></p>
                               )
                             ) : (
                               <p>Jawaban benar tidak tersedia untuk soal ini.</p>

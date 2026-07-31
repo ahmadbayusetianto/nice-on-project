@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import RichText from '../../../components/shared/RichText'
 import { formatAdminDate } from '../../../utils/format'
 import { formatQuestionTypeLabel } from '../../../utils/questionLabels'
 
@@ -90,7 +91,7 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                 </button>
               ) : null}
               {question.istext ? (
-                <p className="admin-question-detail-question">{question.question}</p>
+                <p className="admin-question-detail-question"><RichText text={question.question} /></p>
               ) : null}
               {!question.istext && !question.image_url ? (
                 <p className="admin-question-detail-question">Gambar soal belum diunggah.</p>
@@ -102,7 +103,7 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                 <span className="admin-question-detail-section-icon explanation" aria-hidden="true">📖</span>
                 <h4>Pembahasan</h4>
               </div>
-              <p>{question.pembahasan || 'Tidak ada pembahasan.'}</p>
+              <p><RichText text={question.pembahasan || 'Tidak ada pembahasan.'} /></p>
             </section>
           </div>
 
@@ -135,7 +136,7 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                           </button>
                         ) : null}
                         {!option || option.istext ? (
-                          <strong>{option?.choise || 'Belum ada opsi.'}</strong>
+                          <strong><RichText text={option?.choise || 'Belum ada opsi.'} /></strong>
                         ) : null}
                       </div>
                       {isTkpQuestion ? (
