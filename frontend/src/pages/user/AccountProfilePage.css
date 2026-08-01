@@ -652,7 +652,9 @@
   font-weight: 600;
 }
 
-.account-profile-field input {
+.account-profile-field input,
+.account-profile-field select,
+.account-profile-field textarea {
   width: 100%;
   border: 1px solid #d0d5dd;
   border-radius: 12px;
@@ -660,6 +662,31 @@
   background: #f9fafb;
   color: #344054;
   font: inherit;
+}
+
+.account-profile-field textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.account-profile-field-full {
+  grid-column: 1 / -1;
+}
+
+.account-profile-field-error {
+  color: #d92d20;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.account-profile-modal-error {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef3f2;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .account-profile-modal-actions {

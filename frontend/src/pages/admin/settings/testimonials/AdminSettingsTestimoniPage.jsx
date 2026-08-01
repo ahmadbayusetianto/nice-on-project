@@ -387,7 +387,6 @@ export default function AdminSettingsTestimoniPage() {
                   ))}
                 </select>
 
-                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
                 <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
                   <select
                     className="admin-page-size-select"

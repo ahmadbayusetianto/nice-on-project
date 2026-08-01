@@ -8,7 +8,6 @@ export default function AdminSystemMenu({ currentPath, navigate }) {
     { label: 'FAQ', href: '/dashboard-admin/settings/faqs' },
     { label: 'Testimoni', href: '/dashboard-admin/settings/testimonials' },
     { label: 'Kategori', href: '#' },
-    { label: 'Metode Pembayaran', href: '#' },
     { label: 'Notifikasi', href: '#' },
   ]
 

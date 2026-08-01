@@ -209,7 +209,6 @@ export default function UserMaterialsPage() {
                   ))}
                 </select>
 
-                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
                 <button type="button" className="admin-package-reset" onClick={() => { setMaterialSearch(''); setSelectedMaterialPackage('ALL') }}>Reset</button>
               </div>
             </div>

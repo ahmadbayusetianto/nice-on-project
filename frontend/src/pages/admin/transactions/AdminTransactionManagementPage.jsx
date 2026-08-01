@@ -10,6 +10,7 @@ import AdminUserMenu from '../../../components/layout/AdminUserMenu'
 import { getFriendlyFetchError } from '../../../utils/fetchError'
 import { formatAdminDate, formatCurrency, PAGE_SIZE_OPTIONS } from '../../../utils/format'
 import { clearAuthUser, readStoredAdminSidebarState, readStoredUser, storeAdminSidebarState } from '../../../utils/storage'
+import AdminTransactionDetailModal from './AdminTransactionDetailModal'
 import './AdminTransactionManagementPage.css'
 
 export default function AdminTransactionManagementPage() {
@@ -17,6 +18,8 @@ export default function AdminTransactionManagementPage() {
   const navigate = useNavigate()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [showTransactionDetailModal, setShowTransactionDetailModal] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState(null)
   const [transactionRows, setTransactionRows] = useState([])
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true)
   const [transactionError, setTransactionError] = useState(null)
@@ -156,6 +159,48 @@ export default function AdminTransactionManagementPage() {
     return `${formatAdminDate(dates[0], { hour: false })} - ${formatAdminDate(dates[dates.length - 1], { hour: false })}`
   })()
 
+  const handleExportTransactions = () => {
+    if (!visibleTransactionRows.length) return
+
+    const headers = ['Invoice', 'Pelanggan', 'Email', 'No. HP', 'Paket', 'Tipe Paket', 'Program', 'Tgl Transaksi', 'Total', 'Status']
+    const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csvRows = visibleTransactionRows.map((row) => [
+      row.invoice,
+      row.customerName,
+      row.customerEmail,
+      row.customerPhone,
+      row.packageName,
+      row.packageType,
+      row.program,
+      row.transactionDate,
+      row.totalLabel,
+      row.status,
+    ]
+      .map(escapeCsvValue)
+      .join(','))
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...csvRows].join('\r\n')
+
+    const blob = new Blob([String.fromCharCode(0xfeff), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `data-transaksi-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const openTransactionDetail = (row) => {
+    setSelectedTransaction(row)
+    setShowTransactionDetailModal(true)
+  }
+
+  const closeTransactionDetail = () => {
+    setShowTransactionDetailModal(false)
+    setSelectedTransaction(null)
+  }
+
   const handleLogout = () => {
     setShowLogoutConfirm(true)
   }
@@ -222,7 +267,7 @@ export default function AdminTransactionManagementPage() {
             </div>
 
             <div className="admin-transaction-actions">
-              <button type="button" className="admin-outline-action">Export Excel</button>
+              <button type="button" className="admin-outline-action" onClick={handleExportTransactions} disabled={!visibleTransactionRows.length}>Export Excel</button>
               <button type="button" className="admin-outline-action">Export PDF</button>
             </div>
           </section>
@@ -268,7 +313,6 @@ export default function AdminTransactionManagementPage() {
                   ))}
                 </select>
 
-                <button type="button" className="admin-user-filter-button admin-transaction-filter-button">Filter</button>
                 <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
                   <select
                     className="admin-page-size-select"
@@ -345,7 +389,7 @@ export default function AdminTransactionManagementPage() {
                       <td><span className={`admin-transaction-status ${row.statusClass}`}>{row.status}</span></td>
                       <td>
                         <div className="admin-row-actions admin-transaction-row-actions">
-                          <button type="button" className="admin-row-action">👁</button>
+                          <button type="button" className="admin-row-action" title="Lihat detail transaksi" aria-label={`Lihat detail ${row.invoice}`} onClick={() => openTransactionDetail(row)}>👁</button>
                           <button type="button" className="admin-row-action">🖨</button>
                           <button type="button" className="admin-row-action danger">⋮</button>
                         </div>
@@ -380,6 +424,12 @@ export default function AdminTransactionManagementPage() {
             open={showLogoutConfirm}
             onCancel={() => setShowLogoutConfirm(false)}
             onConfirm={confirmLogout}
+          />
+
+          <AdminTransactionDetailModal
+            open={showTransactionDetailModal}
+            transaction={selectedTransaction}
+            onCancel={closeTransactionDetail}
           />
         </main>
       </div>

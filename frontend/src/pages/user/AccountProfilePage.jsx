@@ -468,6 +468,12 @@ export default function AccountProfilePage() {
         open={showEditModal}
         onClose={() => setShowEditModal(false)}
         profile={activeProfile}
+        isAdminProfile={isAdminProfile}
+        onSaved={(nextData) => {
+          if (nextData) {
+            setProfile((current) => ({ ...current, ...nextData, detail: nextData.detail ?? null }))
+          }
+        }}
       />
 
       <AdminLogoutModal

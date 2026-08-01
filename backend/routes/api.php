@@ -4662,6 +4662,133 @@ Route::get('/account-profile/{pid}', function ($pid) {
     ]);
 });
 
+Route::put('/account-profile/{pid}', function (Request $request, $pid) {
+    $user = DB::table('tbl_user')->where('pid', $pid)->first();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'Data profil tidak ditemukan.',
+        ], 404);
+    }
+
+    $input = [
+        'nama' => $request->input('nama'),
+        'ttl' => $request->input('ttl'),
+        'gender' => $request->input('gender'),
+        'nohp' => $request->input('nohp'),
+        'alamat' => $request->input('alamat'),
+        'refference' => $request->input('refference'),
+        'reference_other' => $request->input('reference_other'),
+    ];
+
+    $validator = Validator::make($input, [
+        'nama' => ['required', 'string', 'max:150'],
+        'ttl' => ['nullable', 'string', 'max:150'],
+        'gender' => ['nullable', 'in:L,P'],
+        'nohp' => ['nullable', 'string', 'max:30', 'regex:/^\+?[0-9]+$/'],
+        'alamat' => ['nullable', 'string'],
+        'refference' => ['nullable', 'string', 'max:150'],
+        'reference_other' => ['nullable', 'string', 'max:150', 'required_if:refference,Lainnya'],
+    ], [
+        'nama.required' => 'Nama wajib diisi.',
+        'gender.in' => 'Jenis kelamin harus L atau P.',
+        'nohp.regex' => 'No. HP hanya boleh berisi angka.',
+        'reference_other.required_if' => 'Isi referensi lainnya jika memilih Lainnya.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi profil gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    $validated = $validator->validated();
+
+    DB::transaction(function () use ($pid, $validated) {
+        $now = now();
+
+        $detailPayload = [
+            'nama' => $validated['nama'],
+            'ttl' => $validated['ttl'] ?: null,
+            'gender' => $validated['gender'] ?: null,
+            'nohp' => $validated['nohp'] ?: null,
+            'alamat' => $validated['alamat'] ?: null,
+            'refference' => $validated['refference'] ?: null,
+            'reference_other' => $validated['refference'] === 'Lainnya' ? ($validated['reference_other'] ?: null) : null,
+            'updated_at' => $now,
+            'updated_by' => null,
+        ];
+
+        $existingDetail = DB::table('tbl_detail_user')->where('pid_user', $pid)->first();
+
+        if ($existingDetail) {
+            DB::table('tbl_detail_user')
+                ->where('pid_user', $pid)
+                ->update($detailPayload);
+        } else {
+            DB::table('tbl_detail_user')->insert([
+                'pid_user' => $pid,
+                'nama' => $detailPayload['nama'],
+                'ttl' => $detailPayload['ttl'],
+                'gender' => $detailPayload['gender'],
+                'nohp' => $detailPayload['nohp'],
+                'alamat' => $detailPayload['alamat'],
+                'refference' => $detailPayload['refference'],
+                'reference_other' => $detailPayload['reference_other'],
+                'created_at' => $now,
+                'created_by' => null,
+                'updated_at' => null,
+                'updated_by' => null,
+            ]);
+        }
+    });
+
+    logUserActivity((int) $pid, 'profile.updated', 'Profil diperbarui', 'Anda memperbarui data profil.', '✏️');
+
+    $updatedUser = DB::table('tbl_user')
+        ->leftJoin('tbl_detail_user', 'tbl_user.pid', '=', 'tbl_detail_user.pid_user')
+        ->where('tbl_user.pid', $pid)
+        ->select([
+            'tbl_user.pid as pid',
+            'tbl_user.email as email',
+            'tbl_user.status as status',
+            'tbl_user.is_admin as is_admin',
+            'tbl_user.created_at as created_at',
+            'tbl_detail_user.pid as detail_pid',
+            'tbl_detail_user.nama as nama',
+            'tbl_detail_user.ttl as ttl',
+            'tbl_detail_user.gender as gender',
+            'tbl_detail_user.nohp as nohp',
+            'tbl_detail_user.alamat as alamat',
+            'tbl_detail_user.refference as refference',
+            'tbl_detail_user.reference_other as reference_other',
+        ])
+        ->first();
+
+    return response()->json([
+        'message' => 'Profil berhasil diperbarui.',
+        'data' => [
+            'pid' => (int) $updatedUser->pid,
+            'email' => $updatedUser->email,
+            'status' => $updatedUser->status,
+            'is_admin' => (int) $updatedUser->is_admin,
+            'created_at' => $updatedUser->created_at,
+            'profile_completed' => $updatedUser->detail_pid !== null,
+            'detail' => [
+                'pid' => $updatedUser->detail_pid ? (int) $updatedUser->detail_pid : null,
+                'nama' => $updatedUser->nama,
+                'ttl' => $updatedUser->ttl,
+                'gender' => $updatedUser->gender,
+                'nohp' => $updatedUser->nohp,
+                'alamat' => $updatedUser->alamat,
+                'refference' => $updatedUser->refference,
+                'reference_other' => $updatedUser->reference_other,
+            ],
+        ],
+    ]);
+});
+
 Route::get('/users/{pid}/activity-log', function (Request $request, $pid) {
     $limit = (int) $request->query('limit', 10);
     $limit = max(1, min($limit, 50));

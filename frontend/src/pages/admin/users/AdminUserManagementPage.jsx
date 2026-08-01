@@ -450,14 +450,6 @@ export default function AdminUserManagementPage() {
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  className="admin-user-filter-button"
-                  onClick={() => { void loadUsers({ cancelled: () => false, showLoading: true }) }}
-                  title="Muat ulang data user dari server dengan filter yang aktif"
-                >
-                  Filter
-                </button>
                 <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
                   <select
                     className="admin-page-size-select"
