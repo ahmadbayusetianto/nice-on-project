@@ -1,0 +1,13 @@
+.admin-package-main {
+  gap: 18px;
+}
+
+.admin-package-discount-pill {
+  background: #e8f8ef;
+  color: #16a34a;
+}
+
+.admin-package-final-price {
+  color: #17305b;
+  font-size: 16px;
+}

@@ -1,0 +1,51 @@
+.admin-user-detail-avatar-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.admin-user-detail-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #cfdcff, #8fb1ff);
+  color: #17305b;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.admin-user-detail-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.admin-user-detail-status-pill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.admin-user-detail-status-pill.active {
+  background: rgba(45, 191, 117, 0.12);
+  border-color: rgba(45, 191, 117, 0.24);
+  color: #19a35d;
+}
+
+.admin-user-detail-status-pill.active i { background: #19a35d; }
+
+.admin-user-detail-status-pill.inactive {
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #64748b;
+}
+
+.admin-user-detail-status-pill.inactive i { background: #94a3b8; }

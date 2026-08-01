@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import './AdminPackageManagementPage.css'
 import { deleteAdminPackage, fetchAdminPackageDetail, fetchAdminPackages, saveAdminPackage } from '../../../api/adminPackagesApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../../components/layout/AdminLogoutModal'

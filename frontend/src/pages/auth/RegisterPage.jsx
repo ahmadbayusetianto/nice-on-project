@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import './RegisterPage.css'
 import niceonImage from '../../../../niceon.png'
 import { fetchCaptcha, register } from '../../api/authApi'
 

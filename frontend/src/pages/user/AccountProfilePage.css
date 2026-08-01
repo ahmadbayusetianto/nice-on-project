@@ -21,6 +21,86 @@
   padding: 4px 4px 14px;
 }
 
+@media (max-width: 1280px) {
+  .account-profile-shell {
+    max-width: none;
+  }
+
+  .account-profile-topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .account-profile-topbar-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .account-profile-topbar-search {
+    min-width: 0;
+    width: min(100%, 420px);
+  }
+
+  .account-profile-hero-content {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 18px 20px 20px 24px;
+  }
+
+  .account-profile-hero-edit {
+    align-self: flex-end;
+  }
+
+  .account-profile-avatar-frame {
+    left: 22px;
+  }
+}
+
+@media (max-width: 900px) {
+  .account-profile-grid-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .account-profile-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .account-profile-cover {
+    height: 126px;
+  }
+
+  .account-profile-avatar-frame {
+    width: 96px;
+    height: 96px;
+    bottom: -48px;
+  }
+
+  .account-profile-avatar-circle {
+    font-size: 34px;
+  }
+
+  .account-profile-title-line {
+    align-items: flex-start;
+  }
+
+  .account-profile-topbar-right {
+    flex-wrap: wrap;
+  }
+
+  .account-profile-topbar-search {
+    width: 100%;
+  }
+
+  .account-profile-footer-actions {
+    justify-content: stretch;
+  }
+
+  .account-profile-footer-actions .dashboard-secondary-action {
+    width: 100%;
+  }
+}
+
 .account-profile-topbar-left {
   min-width: 0;
 }

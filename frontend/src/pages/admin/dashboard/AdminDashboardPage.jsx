@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { fetchDashboardSummary } from '../../../api/notificationsApi'
+import { fetchSystemHealth } from '../../../api/systemApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../../components/layout/AdminQuestionMenu'
@@ -23,6 +24,7 @@ export default function AdminDashboardPage() {
     total_pendapatan: 0,
     total_paket: 0,
   })
+  const [systemStatus, setSystemStatus] = useState({ backend: 'checking', database: 'checking', mail: 'checking', storage: 'checking' })
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
@@ -60,12 +62,11 @@ export default function AdminDashboardPage() {
     ['Paket Tryout Premium', '32 transaksi'],
     ['Paket Belajar Mandiri', '28 transaksi'],
   ]
-  const systemStatus = [
-    ['Server', 'Online'],
-    ['Database', 'Online'],
-    ['Mail Service', 'Online'],
-    ['Storage', 'Online'],
-    ['Backup', 'Aktif'],
+  const systemStatusItems = [
+    ['Backend', systemStatus.backend],
+    ['Database', systemStatus.database],
+    ['Mail Service', systemStatus.mail],
+    ['Storage', systemStatus.storage],
   ]
   const currentDateLabel = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
@@ -123,6 +124,35 @@ export default function AdminDashboardPage() {
     }
 
     void loadSummary()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const checkHealth = async () => {
+      try {
+        const payload = await fetchSystemHealth()
+
+        if (!cancelled) {
+          setSystemStatus({
+            backend: payload?.status === 'ok' ? 'online' : 'offline',
+            database: payload?.database === 'ok' ? 'online' : 'offline',
+            mail: payload?.mail === 'ok' ? 'online' : 'offline',
+            storage: typeof payload?.storage === 'number' ? payload.storage : 'offline',
+          })
+        }
+      } catch {
+        if (!cancelled) {
+          setSystemStatus({ backend: 'offline', database: 'offline', mail: 'offline', storage: 'offline' })
+        }
+      }
+    }
+
+    void checkHealth()
 
     return () => {
       cancelled = true
@@ -314,12 +344,30 @@ export default function AdminDashboardPage() {
             <article className="admin-card admin-status-card">
               <h3>Status Sistem</h3>
               <div className="admin-status-list">
-                {systemStatus.map(([name, status]) => (
-                  <div className="admin-status-item" key={name}>
-                    <div className="admin-status-name">{name}</div>
-                    <span className="admin-status-pill">{status}</span>
-                  </div>
-                ))}
+                {systemStatusItems.map(([name, status]) => {
+                  const isPercent = typeof status === 'number'
+                  const tone = isPercent
+                    ? status >= 90
+                      ? 'status-offline'
+                      : status >= 70
+                        ? 'status-warning'
+                        : 'status-online'
+                    : `status-${status}`
+                  const label = isPercent
+                    ? `${status}% terpakai`
+                    : status === 'checking'
+                      ? 'Mengecek...'
+                      : status === 'online'
+                        ? 'Online'
+                        : 'Offline'
+
+                  return (
+                    <div className="admin-status-item" key={name}>
+                      <div className="admin-status-name">{name}</div>
+                      <span className={`admin-status-pill ${tone}`}>{label}</span>
+                    </div>
+                  )
+                })}
               </div>
             </article>
           </section>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import './AuthPage.css'
 
 export default function AuthPage({ title, cta, secondary, secondaryLink }) {
   return (

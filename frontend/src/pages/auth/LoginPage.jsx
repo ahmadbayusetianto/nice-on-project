@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import './LoginPage.css'
 import niceonImage from '../../../../niceon.png'
 import { login } from '../../api/authApi'
 import { storeAuthUser } from '../../utils/storage'

@@ -1,3 +1,5 @@
+import './AdminUserFormModal.css'
+
 export default function AdminUserFormModal({ open, mode = 'edit', title = 'Edit User', submitLabel = 'Simpan', helpText = 'Perbarui data akun dan profil user.', form, loading = false, error = null, onCancel, onSubmit, onFieldChange }) {
   if (!open) return null
 

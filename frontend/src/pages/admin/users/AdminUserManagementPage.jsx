@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import './AdminUserManagementPage.css'
 import { fetchUserDetail, fetchUsers, saveUser, toggleUserRole } from '../../../api/adminUsersApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../../components/layout/AdminLogoutModal'

@@ -1,0 +1,32 @@
+.admin-parameter-page .admin-parameter-hero {
+  margin-top: 6px;
+}
+
+.admin-parameter-page .admin-parameter-actions {
+  gap: 12px;
+}
+
+.admin-parameter-page .admin-parameter-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-parameter-filter-group {
+  flex-wrap: wrap;
+}
+
+.admin-parameter-table th:nth-child(1),
+.admin-parameter-table td:nth-child(1) {
+  width: 30%;
+}
+
+.admin-parameter-code {
+  font-size: 13px;
+  color: #36508b;
+  background: rgba(72, 105, 255, 0.08);
+  border-radius: 999px;
+  padding: 6px 10px;
+}
+
+.admin-parameter-page .admin-sidebar-footer-card {
+  margin-top: auto;
+}

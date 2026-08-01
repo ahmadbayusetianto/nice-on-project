@@ -1,3 +1,4 @@
+import './AdminUserDetailModal.css'
 import { formatAdminDate } from '../../../utils/format'
 import { getUserInitials } from '../../../utils/icons'
 

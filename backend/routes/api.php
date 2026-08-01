@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -777,9 +778,35 @@ function materialStoredPath(string $filename): string
 }
 
 Route::get('/health', function () {
+    try {
+        DB::connection()->getPdo();
+        $databaseStatus = 'ok';
+    } catch (\Throwable $e) {
+        $databaseStatus = 'error';
+    }
+
+    try {
+        $transport = Mail::mailer()->getSymfonyTransport();
+        if (method_exists($transport, 'start')) {
+            $transport->start();
+        }
+        $mailStatus = 'ok';
+    } catch (\Throwable $e) {
+        $mailStatus = 'error';
+    }
+
+    $totalSpace = @disk_total_space(base_path());
+    $freeSpace = @disk_free_space(base_path());
+    $storageUsedPercent = ($totalSpace && $freeSpace !== false)
+        ? round((($totalSpace - $freeSpace) / $totalSpace) * 100, 1)
+        : null;
+
     return response()->json([
         'status' => 'ok',
         'service' => 'backend-api',
+        'database' => $databaseStatus,
+        'mail' => $mailStatus,
+        'storage' => $storageUsedPercent,
     ]);
 });
 

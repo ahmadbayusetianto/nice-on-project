@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import './AdminSettingsParameterPage.css'
 import { fetchParameterDetail, fetchParameters, saveParameter } from '../../../../api/parametersApi'
 import AdminBrandBlock from '../../../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../../../components/layout/AdminLogoutModal'

@@ -1,0 +1,86 @@
+.admin-user-form {
+  margin-top: 18px;
+  padding: 0 24px 20px;
+}
+
+.admin-user-form .admin-package-form-grid {
+  margin-top: 0;
+}
+
+.admin-user-form-avatar-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.admin-user-form-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #4a6bff, #3958ff);
+  color: #fff;
+  font-size: 24px;
+}
+
+.admin-user-form-avatar-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #3958ff;
+  font-size: 11px;
+  border: 2px solid #eef3ff;
+  box-shadow: 0 4px 10px rgba(20, 34, 58, 0.12);
+}
+
+.admin-user-form .admin-package-field span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-user-field-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: rgba(57, 88, 255, 0.1);
+  color: #3958ff;
+  font-size: 12px;
+  font-style: normal;
+  flex: 0 0 auto;
+}
+
+.admin-user-status-select-wrap {
+  position: relative;
+}
+
+.admin-user-status-select-wrap select {
+  padding-left: 32px;
+}
+
+.admin-user-status-dot {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.admin-user-status-dot.active {
+  background: #2dbf75;
+}
+
+.admin-user-status-dot.inactive {
+  background: #94a3b8;
+}

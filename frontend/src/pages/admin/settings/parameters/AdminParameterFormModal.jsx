@@ -1,3 +1,5 @@
+import './AdminParameterFormModal.css'
+
 export default function AdminParameterFormModal({ open, onCancel, onSubmit, form, onFieldChange, loading, error, title = 'Tambah Parameter', submitLabel = 'Simpan Parameter', helpText = 'Atur nilai parameter aplikasi yang dipakai oleh sistem.' }) {
   if (!open) return null
 
