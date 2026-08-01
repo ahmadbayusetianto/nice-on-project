@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { BACKEND_URL } from '../../../api/client'
 import { deleteMaterial, fetchAdminMaterialDetail, fetchAdminMaterials, saveMaterial } from '../../../api/materialsApi'
+import { fetchParameters } from '../../../api/parametersApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../../components/layout/AdminQuestionMenu'
@@ -9,6 +11,7 @@ import AdminTopbar from '../../../components/layout/AdminTopbar'
 import AdminUserMenu from '../../../components/layout/AdminUserMenu'
 import MaterialEmptyState from '../../../components/shared/MaterialEmptyState'
 import { getFriendlyFetchError } from '../../../utils/fetchError'
+import { formatAdminDate, formatFileSize, PAGE_SIZE_OPTIONS } from '../../../utils/format'
 import { clearAuthUser, readStoredAdminSidebarState, readStoredUser, storeAdminSidebarState } from '../../../utils/storage'
 import AdminMaterialFormModal from './AdminMaterialFormModal'
 import './AdminMaterialManagementPage.css'
@@ -21,7 +24,8 @@ function createMaterialFormFromDetail(detail = {}) {
     sort_order: detail.sort_order !== undefined && detail.sort_order !== null ? String(detail.sort_order) : '0',
     is_published: Boolean(detail.status_key ? detail.status_key === 'published' : detail.is_published !== false),
     file: null,
-    file_label: detail.original_name ?? '',
+    original_file_label: detail.original_name ?? '',
+    original_file_size_label: detail.file_size_label ?? '',
   }
 }
 
@@ -38,6 +42,9 @@ export default function AdminMaterialManagementPage() {
   const [materialSearch, setMaterialSearch] = useState('')
   const [selectedMaterialPackage, setSelectedMaterialPackage] = useState('ALL')
   const [selectedMaterialStatus, setSelectedMaterialStatus] = useState('ALL')
+  const [materialCurrentPage, setMaterialCurrentPage] = useState(1)
+  const [materialPageSize, setMaterialPageSize] = useState(PAGE_SIZE_OPTIONS[0])
+  const materialSearchInputRef = useRef(null)
   const [showMaterialModal, setShowMaterialModal] = useState(false)
   const [materialModalMode, setMaterialModalMode] = useState('create')
   const [editingMaterialPid, setEditingMaterialPid] = useState(null)
@@ -45,6 +52,7 @@ export default function AdminMaterialManagementPage() {
   const [materialSubmitError, setMaterialSubmitError] = useState(null)
   const [materialSubmitSuccess, setMaterialSubmitSuccess] = useState(null)
   const [materialForm, setMaterialForm] = useState(() => createMaterialFormFromDetail())
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(5)
   const materialSuccessTimerRef = useRef(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
@@ -72,10 +80,13 @@ export default function AdminMaterialManagementPage() {
     { label: 'Laporan', href: '#' },
   ]
 
+  const totalMaterialSizeBytes = materialRows.reduce((sum, row) => sum + (Number(row.file_size) || 0), 0)
+
   const materialSummaryCards = [
     { label: 'Total Materi', value: String(materialSummary.total_materi ?? 0), delta: 'Semua materi', accent: 'blue', icon: '📄' },
     { label: 'Terbit', value: String(materialSummary.materi_terbit ?? 0), delta: 'Siap diakses user', accent: 'green', icon: '✅' },
     { label: 'Draft', value: String(materialSummary.materi_draft ?? 0), delta: 'Belum dipublikasikan', accent: 'orange', icon: '📝' },
+    { label: 'Total Ukuran', value: formatFileSize(totalMaterialSizeBytes), delta: `Dari ${materialRows.length} file`, accent: 'purple', icon: '💾' },
   ]
 
   const loadMaterials = async ({ cancelled = () => false, showLoading = true } = {}) => {
@@ -111,11 +122,51 @@ export default function AdminMaterialManagementPage() {
   }, [materialSearch, selectedMaterialPackage, selectedMaterialStatus])
 
   useEffect(() => {
+    setMaterialCurrentPage(1)
+  }, [materialSearch, selectedMaterialPackage, selectedMaterialStatus, materialPageSize])
+
+  useEffect(() => {
     storeAdminSidebarState(isSidebarCollapsed)
   }, [isSidebarCollapsed])
 
+  useEffect(() => {
+    let cancelled = false
+
+    const loadMaxUploadSize = async () => {
+      try {
+        const payload = await fetchParameters({ search: 'system.max_upload_size' })
+        const match = (payload?.data ?? []).find((item) => item.kode === 'system.max_upload_size')
+        const value = Number(match?.nilai)
+
+        if (!cancelled && Number.isFinite(value) && value > 0) {
+          setMaxUploadSizeMb(value)
+        }
+      } catch {
+        // Keep the default fallback if the parameter can't be loaded.
+      }
+    }
+
+    void loadMaxUploadSize()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => () => {
     if (materialSuccessTimerRef.current) window.clearTimeout(materialSuccessTimerRef.current)
+  }, [])
+
+  useEffect(() => {
+    const handleSearchShortcut = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        materialSearchInputRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleSearchShortcut)
+    return () => document.removeEventListener('keydown', handleSearchShortcut)
   }, [])
 
   const openAddMaterialModal = () => {
@@ -168,13 +219,22 @@ export default function AdminMaterialManagementPage() {
     setMaterialForm((current) => ({ ...current, [field]: value }))
   }
 
-  const handleMaterialFileChange = (event) => {
-    const file = event.target.files?.[0] ?? null
-    setMaterialForm((current) => ({
-      ...current,
-      file,
-      file_label: file?.name || current.file_label || '',
-    }))
+  const handleMaterialFileChange = (file) => {
+    if (file) {
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+      if (!isPdf) {
+        setMaterialSubmitError('File harus berformat PDF.')
+        return
+      }
+
+      if (file.size > maxUploadSizeMb * 1024 * 1024) {
+        setMaterialSubmitError(`Ukuran file melebihi batas maksimal ${maxUploadSizeMb}MB.`)
+        return
+      }
+    }
+
+    setMaterialSubmitError(null)
+    setMaterialForm((current) => ({ ...current, file }))
   }
 
   const handleMaterialSubmit = async (event) => {
@@ -246,6 +306,54 @@ export default function AdminMaterialManagementPage() {
   const confirmLogout = () => { clearAuthUser(); navigate('/login', { replace: true }) }
 
   const filteredRows = materialRows
+  const totalMaterialPages = Math.max(1, Math.ceil(filteredRows.length / materialPageSize))
+  const safeMaterialCurrentPage = Math.min(materialCurrentPage, totalMaterialPages)
+  const materialStartIndex = (safeMaterialCurrentPage - 1) * materialPageSize
+  const materialPaginatedRows = filteredRows.slice(materialStartIndex, materialStartIndex + materialPageSize)
+
+  const renderMaterialPaginationPages = () => {
+    if (totalMaterialPages <= 1) return [1]
+
+    const pages = new Set([1, totalMaterialPages, safeMaterialCurrentPage])
+    if (safeMaterialCurrentPage > 1) pages.add(safeMaterialCurrentPage - 1)
+    if (safeMaterialCurrentPage < totalMaterialPages) pages.add(safeMaterialCurrentPage + 1)
+
+    return Array.from(pages).sort((a, b) => a - b)
+  }
+
+  useEffect(() => {
+    if (materialCurrentPage > totalMaterialPages) {
+      setMaterialCurrentPage(totalMaterialPages)
+    }
+  }, [materialCurrentPage, totalMaterialPages])
+
+  const handleExportMaterials = () => {
+    if (!filteredRows.length) return
+
+    const headers = ['Materi', 'Paket', 'File', 'Ukuran', 'Tanggal Upload', 'Status']
+    const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csvRows = filteredRows.map((row) => [
+      row.judul,
+      row.package_name,
+      row.original_name,
+      row.file_size_label,
+      formatAdminDate(row.created_at),
+      row.status,
+    ]
+      .map(escapeCsvValue)
+      .join(','))
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...csvRows].join('\r\n')
+
+    const blob = new Blob([String.fromCharCode(0xfeff), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `data-materi-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="admin-dashboard-page admin-material-page">
@@ -295,7 +403,7 @@ export default function AdminMaterialManagementPage() {
             </div>
 
             <div className="admin-package-actions">
-              <button type="button" className="admin-outline-action">⬇ Ekspor Data</button>
+              <button type="button" className="admin-outline-action" onClick={handleExportMaterials} disabled={!filteredRows.length}>⬇ Ekspor Data</button>
               <button type="button" className="admin-primary-action" onClick={openAddMaterialModal}>＋ Upload Materi</button>
             </div>
           </section>
@@ -320,7 +428,14 @@ export default function AdminMaterialManagementPage() {
             <div className="admin-package-filters">
               <label className="admin-package-search">
                 <span aria-hidden="true">⌕</span>
-                <input type="search" placeholder="Cari materi..." value={materialSearch} onChange={(event) => setMaterialSearch(event.target.value)} />
+                <input
+                  ref={materialSearchInputRef}
+                  type="search"
+                  placeholder="Cari berdasarkan judul, paket, atau file..."
+                  value={materialSearch}
+                  onChange={(event) => setMaterialSearch(event.target.value)}
+                />
+                <kbd>⌘K</kbd>
               </label>
 
               <div className="admin-package-filter-group">
@@ -337,7 +452,18 @@ export default function AdminMaterialManagementPage() {
                   <option value="DRAFT">Draft</option>
                 </select>
 
-                <button type="button" className="admin-user-filter-button admin-package-filter-button">Filter</button>
+                <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
+                  <select
+                    className="admin-page-size-select"
+                    value={materialPageSize}
+                    onChange={(event) => setMaterialPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option} / halaman</option>
+                    ))}
+                  </select>
+                </label>
+
                 <button type="button" className="admin-package-reset" onClick={() => { setMaterialSearch(''); setSelectedMaterialPackage('ALL'); setSelectedMaterialStatus('ALL') }}>Reset</button>
               </div>
             </div>
@@ -353,13 +479,13 @@ export default function AdminMaterialManagementPage() {
                       <th>Materi</th>
                       <th>Paket</th>
                       <th>File</th>
-                      <th>Ukuran</th>
+                      <th>Tanggal</th>
                       <th>Status</th>
                       <th>Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((row) => (
+                    {materialPaginatedRows.map((row) => (
                       <tr key={row.pid}>
                         <td>
                           <div className="admin-package-cell">
@@ -371,19 +497,73 @@ export default function AdminMaterialManagementPage() {
                           </div>
                         </td>
                         <td>{row.package_name}</td>
-                        <td>{row.original_name}</td>
-                        <td>{row.file_size_label}</td>
-                        <td><span className={`admin-package-type-badge ${row.status_key === 'published' ? 'online' : 'tryout'}`}>{row.status}</span></td>
                         <td>
-                          <div className="admin-table-actions">
-                            <button type="button" className="admin-table-action" onClick={() => openEditMaterialModal(row)}>Edit</button>
-                            <button type="button" className="admin-table-action danger" onClick={() => handleDeleteMaterial(row)}>Hapus</button>
+                          <div className="admin-material-file-cell">
+                            <strong>{row.original_name}</strong>
+                            <span>{row.file_size_label} • PDF</span>
+                          </div>
+                        </td>
+                        <td>{formatAdminDate(row.created_at)}</td>
+                        <td>
+                          <span className={`admin-package-type-badge ${row.status_key === 'published' ? 'online' : 'tryout'}`}>
+                            {row.status_key === 'published' ? '✓ ' : ''}{row.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="admin-row-actions">
+                            <a
+                              className="admin-row-action"
+                              title="Lihat file"
+                              aria-label={`Lihat file ${row.judul}`}
+                              href={`${BACKEND_URL}/api/admin/materials/${row.pid}/download`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              👁
+                            </a>
+                            <button
+                              type="button"
+                              className="admin-row-action admin-row-action-edit"
+                              title="Edit materi"
+                              aria-label={`Edit materi ${row.judul}`}
+                              onClick={() => openEditMaterialModal(row)}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-row-action danger"
+                              title="Hapus materi"
+                              aria-label={`Hapus materi ${row.judul}`}
+                              onClick={() => handleDeleteMaterial(row)}
+                            >
+                              🗑
+                            </button>
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="admin-package-footer admin-user-footer">
+                <p>Menampilkan {materialPaginatedRows.length} data dari {filteredRows.length} materi</p>
+                <div className="admin-pagination">
+                  <button type="button" className="admin-pagination-arrow" disabled={safeMaterialCurrentPage === 1} onClick={() => setMaterialCurrentPage((current) => Math.max(1, current - 1))}>‹</button>
+                  {renderMaterialPaginationPages().map((page, index, array) => {
+                    const previousPage = array[index - 1]
+                    const shouldShowDots = previousPage && page - previousPage > 1
+
+                    return (
+                      <span key={page}>
+                        {shouldShowDots ? <span className="admin-pagination-dots">…</span> : null}
+                        <button type="button" className={`admin-pagination-page${page === safeMaterialCurrentPage ? ' active' : ''}`} onClick={() => setMaterialCurrentPage(page)}>{page}</button>
+                      </span>
+                    )
+                  })}
+                  <button type="button" className="admin-pagination-arrow" disabled={safeMaterialCurrentPage === totalMaterialPages} onClick={() => setMaterialCurrentPage((current) => Math.min(totalMaterialPages, current + 1))}>›</button>
+                </div>
               </div>
             </section>
           ) : (
@@ -398,17 +578,36 @@ export default function AdminMaterialManagementPage() {
               />
             </section>
           )}
+
+          <section className="admin-material-info-strip">
+            {[
+              { icon: '👁', title: 'Preview file', desc: 'Lihat isi materi sebelum didownload.' },
+              { icon: '🛡️', title: 'Upload aman', desc: `Hanya file PDF dengan ukuran maks. ${maxUploadSizeMb}MB.` },
+              { icon: '✎', title: 'Kelola mudah', desc: 'Edit, hapus, atau ubah status materi dengan cepat.' },
+              { icon: '🔒', title: 'Akses terkontrol', desc: 'Materi terbit akan langsung dapat diakses user.' },
+            ].map((item) => (
+              <div className="admin-material-info-item" key={item.title}>
+                <span className="admin-material-info-icon" aria-hidden="true">{item.icon}</span>
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </section>
         </main>
       </div>
 
       <AdminMaterialFormModal
         open={showMaterialModal}
+        mode={materialModalMode}
         onCancel={closeMaterialModal}
         onSubmit={handleMaterialSubmit}
         form={materialForm}
         packages={materialPackages}
         onFieldChange={handleMaterialFieldChange}
         onFileChange={handleMaterialFileChange}
+        maxUploadSizeMb={maxUploadSizeMb}
         loading={isSavingMaterial}
         error={materialSubmitError}
         title={materialModalMode === 'edit' ? 'Edit Materi' : 'Upload Materi'}

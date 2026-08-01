@@ -3873,6 +3873,7 @@ Route::get('/admin/materials', function (Request $request) {
             $innerQuery
                 ->where('m.judul', 'like', "%{$search}%")
                 ->orWhere('m.deskripsi', 'like', "%{$search}%")
+                ->orWhere('m.original_name', 'like', "%{$search}%")
                 ->orWhere('p.nama_paket', 'like', "%{$search}%")
                 ->orWhere('p.kategori', 'like', "%{$search}%");
         });
@@ -3965,7 +3966,7 @@ Route::post('/admin/materials', function (Request $request) {
     $storedPath = null;
 
     try {
-        $storedPath = Storage::disk('private')->putFileAs('materials', $uploadedFile, $safeFileName);
+        $storedPath = Storage::disk('local')->putFileAs('materials', $uploadedFile, $safeFileName);
 
         $pid = DB::table('tbl_materi')->insertGetId([
             'package_id' => (int) $validated['package_id'],
@@ -3984,8 +3985,8 @@ Route::post('/admin/materials', function (Request $request) {
             'deleted_at' => null,
         ]);
     } catch (Throwable $error) {
-        if ($storedPath && Storage::disk('private')->exists($storedPath)) {
-            Storage::disk('private')->delete($storedPath);
+        if ($storedPath && Storage::disk('local')->exists($storedPath)) {
+            Storage::disk('local')->delete($storedPath);
         }
 
         throw $error;
@@ -4104,7 +4105,7 @@ Route::put('/admin/materials/{pid}', function (Request $request, $pid) {
         if ($uploadedFile) {
             $safeFileName = Str::slug($validated['judul']) ?: 'materi';
             $safeFileName .= '-' . $now->format('YmdHis') . '.pdf';
-            $nextFilePath = Storage::disk('private')->putFileAs('materials', $uploadedFile, $safeFileName);
+            $nextFilePath = Storage::disk('local')->putFileAs('materials', $uploadedFile, $safeFileName);
             $replaceFile = true;
         }
 
@@ -4124,15 +4125,15 @@ Route::put('/admin/materials/{pid}', function (Request $request, $pid) {
                 'updated_by' => $request->user()->pid ?? null,
             ]);
     } catch (Throwable $error) {
-        if ($replaceFile && $nextFilePath && Storage::disk('private')->exists($nextFilePath)) {
-            Storage::disk('private')->delete($nextFilePath);
+        if ($replaceFile && $nextFilePath && Storage::disk('local')->exists($nextFilePath)) {
+            Storage::disk('local')->delete($nextFilePath);
         }
 
         throw $error;
     }
 
-    if ($replaceFile && $oldFilePath && $oldFilePath !== $nextFilePath && Storage::disk('private')->exists($oldFilePath)) {
-        Storage::disk('private')->delete($oldFilePath);
+    if ($replaceFile && $oldFilePath && $oldFilePath !== $nextFilePath && Storage::disk('local')->exists($oldFilePath)) {
+        Storage::disk('local')->delete($oldFilePath);
     }
 
     $material = DB::table('tbl_materi as m')
@@ -4187,12 +4188,57 @@ Route::delete('/admin/materials/{pid}', function (Request $request, $pid) {
             'updated_by' => $request->user()->pid ?? null,
         ]);
 
-    if (!empty($material->file_path) && Storage::disk('private')->exists($material->file_path)) {
-        Storage::disk('private')->delete($material->file_path);
+    if (!empty($material->file_path) && Storage::disk('local')->exists($material->file_path)) {
+        Storage::disk('local')->delete($material->file_path);
     }
 
     return response()->json([
         'message' => 'Materi berhasil dihapus.',
+    ]);
+});
+
+Route::get('/admin/materials/{pid}/download', function ($pid) {
+    if (!Schema::hasTable('tbl_materi')) {
+        return materialTableMissingResponse();
+    }
+
+    $material = DB::table('tbl_materi')
+        ->where('pid', $pid)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$material) {
+        return response()->json([
+            'message' => 'Materi tidak ditemukan.',
+        ], 404);
+    }
+
+    if (!Storage::disk('local')->exists($material->file_path)) {
+        return response()->json([
+            'message' => 'File materi tidak ditemukan.',
+        ], 404);
+    }
+
+    $stream = Storage::disk('local')->readStream($material->file_path);
+    if ($stream === false) {
+        return response()->json([
+            'message' => 'File materi tidak dapat dibuka.',
+        ], 500);
+    }
+
+    $filename = str_replace('"', '', $material->original_name ?: ($material->judul . '.pdf'));
+
+    return response()->stream(function () use ($stream) {
+        fpassthru($stream);
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+    }, 200, [
+        'Content-Type' => $material->mime_type ?: 'application/pdf',
+        'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        'Content-Length' => (string) Storage::disk('local')->size($material->file_path),
+        'X-Content-Type-Options' => 'nosniff',
+        'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
     ]);
 });
 
@@ -4320,13 +4366,13 @@ Route::get('/materials/{pid}/view', function (Request $request, $pid) {
         ], 403);
     }
 
-    if (!Storage::disk('private')->exists($material->file_path)) {
+    if (!Storage::disk('local')->exists($material->file_path)) {
         return response()->json([
             'message' => 'File materi tidak ditemukan.',
         ], 404);
     }
 
-    $stream = Storage::disk('private')->readStream($material->file_path);
+    $stream = Storage::disk('local')->readStream($material->file_path);
     if ($stream === false) {
         return response()->json([
             'message' => 'File materi tidak dapat dibuka.',
@@ -4337,7 +4383,7 @@ Route::get('/materials/{pid}/view', function (Request $request, $pid) {
     $headers = [
         'Content-Type' => $material->mime_type ?: 'application/pdf',
         'Content-Disposition' => 'inline; filename="' . $filename . '"',
-        'Content-Length' => (string) Storage::disk('private')->size($material->file_path),
+        'Content-Length' => (string) Storage::disk('local')->size($material->file_path),
         'X-Content-Type-Options' => 'nosniff',
         'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
     ];
