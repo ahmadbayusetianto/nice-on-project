@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
 import ComingSoonModal from './ComingSoonModal'
 
-export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapsed, navigate, user, displayName, isProfileComplete, onLogout }) {
+export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapsed, navigate, user, displayName, onLogout }) {
   const [comingSoonLabel, setComingSoonLabel] = useState(null)
 
   const profileInitials = (displayName || 'US')
@@ -70,7 +70,7 @@ export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapse
 
         <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/dashboard-user/progress', { state: { user } })}>
           <strong>Tetap tingkatkan kemampuanmu!</strong>
-          <p>{isProfileComplete ? 'Belajar rutin dan jaga ritme progresmu.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
+          <p>Pantau tren skor, streak belajar, dan riwayat tryoutmu di halaman Progress.</p>
           <span className="dashboard-upgrade-cta">Lihat Progress</span>
         </button>
 
