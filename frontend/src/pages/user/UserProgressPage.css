@@ -1,0 +1,337 @@
+.user-progress-main {
+  gap: 18px;
+}
+
+.user-progress-panel {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgba(22, 47, 91, 0.06);
+  box-shadow: 0 18px 36px rgba(18, 34, 65, 0.06);
+}
+
+.user-progress-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.user-progress-panel-head h3 {
+  margin: 0;
+  color: #17315f;
+  font-size: 18px;
+}
+
+.user-progress-panel-head-sub {
+  margin-top: 8px;
+}
+
+.user-progress-combo-select {
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(22, 47, 91, 0.14);
+  background: #f7f9ff;
+  color: #17315f;
+  font-weight: 700;
+  font-size: 13px;
+  max-width: 100%;
+}
+
+.user-progress-note {
+  margin: 0;
+  color: #667489;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Score trend chart */
+
+.score-trend-chart {
+  position: relative;
+}
+
+.score-trend-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.score-trend-gridline {
+  stroke: #eef1fa;
+  stroke-width: 1;
+}
+
+.score-trend-axis-label {
+  fill: #8b96b3;
+  font-size: 11px;
+}
+
+.score-trend-line {
+  fill: none;
+  stroke: #2a78d6;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.score-trend-dot {
+  fill: #2a78d6;
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.score-trend-dot.active {
+  r: 6;
+}
+
+.score-trend-endpoint-label {
+  fill: #17315f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.score-trend-crosshair {
+  stroke: rgba(22, 47, 91, 0.22);
+  stroke-width: 1;
+}
+
+.score-trend-tooltip {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #17315f;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.score-trend-tooltip strong {
+  font-size: 14px;
+}
+
+/* Score breakdown chart */
+
+.score-breakdown-chart {
+  position: relative;
+}
+
+.score-breakdown-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.score-breakdown-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4a5a7d;
+}
+
+.score-breakdown-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.score-breakdown-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.score-breakdown-gridline {
+  stroke: #eef1fa;
+  stroke-width: 1;
+}
+
+.score-breakdown-axis-label {
+  fill: #8b96b3;
+  font-size: 11px;
+}
+
+.score-breakdown-value-label {
+  fill: #17315f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.score-breakdown-tooltip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #17315f;
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.score-breakdown-tooltip-key {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+/* Activity calendar */
+
+.activity-calendar {
+  display: grid;
+  gap: 10px;
+}
+
+.activity-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.activity-calendar-head strong {
+  color: #17315f;
+  min-width: 160px;
+  text-align: center;
+}
+
+.activity-calendar-nav {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  background: #f7f9ff;
+  color: #17315f;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.activity-calendar-nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.activity-calendar-weekdays,
+.activity-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.activity-calendar-weekdays span {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8b96b3;
+}
+
+.activity-calendar-cell {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: none;
+  background: #f3f5fb;
+  color: #4a5a7d;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activity-calendar-cell.blank {
+  background: transparent;
+  cursor: default;
+}
+
+.activity-calendar-cell.level-0 { background: #f3f5fb; color: #8b96b3; }
+.activity-calendar-cell.level-1 { background: #b7d3f6; color: #17315f; }
+.activity-calendar-cell.level-2 { background: #6da7ec; color: #fff; }
+.activity-calendar-cell.level-3 { background: #256abf; color: #fff; }
+
+.activity-calendar-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8b96b3;
+}
+
+.activity-calendar-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.activity-calendar-legend-swatch.level-0 { background: #f3f5fb; }
+.activity-calendar-legend-swatch.level-1 { background: #b7d3f6; }
+.activity-calendar-legend-swatch.level-2 { background: #6da7ec; }
+.activity-calendar-legend-swatch.level-3 { background: #256abf; }
+
+.activity-calendar-tooltip {
+  text-align: center;
+  font-size: 13px;
+  color: #17315f;
+}
+
+/* Session history table */
+
+.user-progress-table-wrap {
+  overflow-x: auto;
+}
+
+.user-progress-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.user-progress-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: #8b96b3;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(22, 47, 91, 0.08);
+}
+
+.user-progress-table td {
+  padding: 12px;
+  color: #33415f;
+  border-bottom: 1px solid rgba(22, 47, 91, 0.06);
+  font-variant-numeric: tabular-nums;
+}
+
+.user-progress-status-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff1e6;
+  color: #a15c1f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.user-progress-status-badge.finished {
+  background: #e8f8ee;
+  color: #1a8a4c;
+}
+
+@media (max-width: 768px) {
+  .activity-calendar-head strong {
+    min-width: 0;
+  }
+}

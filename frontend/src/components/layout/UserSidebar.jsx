@@ -68,7 +68,7 @@ export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapse
           </div>
         </div>
 
-        <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/complete-profile', { state: { registeredUser: user } })}>
+        <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/dashboard-user/progress', { state: { user } })}>
           <strong>Tetap tingkatkan kemampuanmu!</strong>
           <p>{isProfileComplete ? 'Belajar rutin dan jaga ritme progresmu.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
           <span className="dashboard-upgrade-cta">Lihat Progress</span>

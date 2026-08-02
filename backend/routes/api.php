@@ -4945,6 +4945,100 @@ Route::get('/users/{pid}/learning-streak', function ($pid) {
     ]);
 });
 
+Route::get('/users/{pid}/tryout-history', function ($pid) {
+    $hasDraftColumn = Schema::hasColumn('tbl_tryout_session', 'is_draft');
+
+    $sessions = DB::table('tbl_tryout_session as l')
+        ->leftJoin('tbl_paket as p', 'l.package_id', '=', 'p.pid')
+        ->where('l.user_id', $pid)
+        ->when($hasDraftColumn, function ($query) {
+            $query->where(function ($draftQuery) {
+                $draftQuery->whereNull('l.is_draft')->orWhere('l.is_draft', 0);
+            });
+        })
+        ->orderByDesc('l.created_at')
+        ->select([
+            'l.id',
+            'l.package_id',
+            'p.nama_paket',
+            'l.keterangan',
+            'l.jenis_tryout',
+            'l.skor_total',
+            'l.skor_twk',
+            'l.skor_tiu',
+            'l.skor_tkp',
+            'l.status',
+            'l.finish_at',
+            'l.created_at',
+        ])
+        ->get()
+        ->map(function ($row) {
+            return [
+                'id' => (int) $row->id,
+                'package_id' => $row->package_id !== null ? (int) $row->package_id : null,
+                'nama_paket' => $row->nama_paket ?: ($row->keterangan ?: 'Paket tidak diketahui'),
+                'jenis_tryout' => $row->jenis_tryout,
+                'skor_total' => (int) $row->skor_total,
+                'skor_twk' => (int) $row->skor_twk,
+                'skor_tiu' => (int) $row->skor_tiu,
+                'skor_tkp' => (int) $row->skor_tkp,
+                'is_finished' => (int) $row->status === 1,
+                'finish_at' => $row->finish_at,
+                'created_at' => $row->created_at,
+            ];
+        });
+
+    return response()->json([
+        'message' => 'Riwayat tryout berhasil dimuat.',
+        'data' => $sessions,
+    ]);
+});
+
+Route::get('/users/{pid}/activity-calendar', function (Request $request, $pid) {
+    $month = (string) $request->query('month', now()->format('Y-m'));
+
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+        return response()->json([
+            'message' => 'Format bulan tidak valid, gunakan YYYY-MM.',
+        ], 422);
+    }
+
+    try {
+        $startDate = Carbon::createFromFormat('Y-m-d', $month . '-01')->startOfDay();
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Format bulan tidak valid, gunakan YYYY-MM.',
+        ], 422);
+    }
+
+    $endDate = $startDate->copy()->endOfMonth();
+
+    $counts = DB::table('tbl_activity_log')
+        ->where('pid_user', $pid)
+        ->whereIn('type', ['tryout.started', 'tryout.finished', 'material.viewed'])
+        ->whereBetween('created_at', [$startDate, $endDate])
+        ->selectRaw('DATE(created_at) as activity_date, COUNT(*) as cnt')
+        ->groupBy('activity_date')
+        ->pluck('cnt', 'activity_date');
+
+    $days = [];
+    for ($cursor = $startDate->copy(); $cursor->lte($endDate); $cursor->addDay()) {
+        $dateKey = $cursor->toDateString();
+        $days[] = [
+            'date' => $dateKey,
+            'count' => (int) ($counts[$dateKey] ?? 0),
+        ];
+    }
+
+    return response()->json([
+        'message' => 'Kalender aktivitas berhasil dimuat.',
+        'data' => [
+            'month' => $startDate->format('Y-m'),
+            'days' => $days,
+        ],
+    ]);
+});
+
 Route::get('/captcha', function () {
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     $code = '';

@@ -14,6 +14,7 @@ import DashboardUserPageV2 from './pages/user/DashboardUserPageV2'
 import UserTryoutPage from './pages/user/UserTryoutPage'
 import UserMaterialsPage from './pages/user/UserMaterialsPage'
 import UserBantuanPage from './pages/user/UserBantuanPage'
+import UserProgressPage from './pages/user/UserProgressPage'
 import AdminDashboardPage from './pages/admin/dashboard/AdminDashboardPage'
 import AdminUserManagementPage from './pages/admin/users/AdminUserManagementPage'
 import AdminPackageManagementPage from './pages/admin/packages/AdminPackageManagementPage'
@@ -106,6 +107,10 @@ function App() {
       <Route
         path="/dashboard-user/bantuan"
         element={<RequireRole role="user"><UserBantuanPage /></RequireRole>}
+      />
+      <Route
+        path="/dashboard-user/progress"
+        element={<RequireRole role="user"><UserProgressPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin"

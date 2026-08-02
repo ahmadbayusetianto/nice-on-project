@@ -19,6 +19,14 @@ export function fetchLearningStreak(pid) {
   return apiRequest(`/api/users/${pid}/learning-streak`)
 }
 
+export function fetchTryoutHistory(pid) {
+  return apiRequest(`/api/users/${pid}/tryout-history`)
+}
+
+export function fetchActivityCalendar(pid, month) {
+  return apiRequest(`/api/users/${pid}/activity-calendar${month ? `?month=${month}` : ''}`)
+}
+
 export function changeAccountPassword(pid, payload) {
   return apiRequest(`/api/account-profile/${pid}/password`, {
     method: 'PUT',
