@@ -1,7 +1,11 @@
+import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
+import ComingSoonModal from './ComingSoonModal'
 
 export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapsed, navigate, user, displayName, isProfileComplete, onLogout }) {
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
+
   const profileInitials = (displayName || 'US')
     .split(/\s+/)
     .filter(Boolean)
@@ -19,60 +23,64 @@ export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapse
   ]
 
   return (
-    <aside className={`dashboard-sidebar dashboard-sidebar-v2${isCollapsed ? ' sidebar-collapsed' : ''}`}>
-      <div className="dashboard-sidebar-brand-row">
-        <div className="dashboard-brand-lockup">
-          <Link to="/" className="dashboard-brand-link" aria-label="Beranda Nice On">
-            <div className="dashboard-brand-logo-shell">
-              <img src={niceonImage} alt="Nice On" className="dashboard-brand-logo" />
-            </div>
-          </Link>
-        </div>
+    <Fragment>
+      <aside className={`dashboard-sidebar dashboard-sidebar-v2${isCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <div className="dashboard-sidebar-brand-row">
+          <div className="dashboard-brand-lockup">
+            <Link to="/" className="dashboard-brand-link" aria-label="Beranda Nice On">
+              <div className="dashboard-brand-logo-shell">
+                <img src={niceonImage} alt="Nice On" className="dashboard-brand-logo" />
+              </div>
+            </Link>
+          </div>
 
-        <button
-          type="button"
-          className="dashboard-sidebar-collapse"
-          aria-label={isCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
-          onClick={onToggleCollapsed}
-        >
-          {isCollapsed ? '»' : '«'}
-        </button>
-      </div>
-
-      <nav className="dashboard-nav" aria-label="Navigasi user">
-        {sidebarItems.map((item) => (
           <button
-            key={item.label}
             type="button"
-            className={`dashboard-nav-item${currentPath === item.href || (item.label === 'Tryout' && currentPath.startsWith('/dashboard-user/tryout')) ? ' active' : ''}`}
-            onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}
+            className="dashboard-sidebar-collapse"
+            aria-label={isCollapsed ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
+            onClick={onToggleCollapsed}
           >
-            <span className="dashboard-nav-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
-            <span>{item.label}</span>
+            {isCollapsed ? '»' : '«'}
           </button>
-        ))}
-      </nav>
-
-      <div className="dashboard-sidebar-section-label">Akun</div>
-
-      <div className="dashboard-account-card">
-        <div className="dashboard-account-avatar">{profileInitials}</div>
-        <div>
-          <div className="dashboard-account-name">{displayName}</div>
-          <div className="dashboard-account-meta">{user?.email ?? 'Belum tersedia'}</div>
         </div>
-      </div>
 
-      <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/complete-profile', { state: { registeredUser: user } })}>
-        <strong>Tetap tingkatkan kemampuanmu!</strong>
-        <p>{isProfileComplete ? 'Belajar rutin dan jaga ritme progresmu.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
-        <span className="dashboard-upgrade-cta">Lihat Progress</span>
-      </button>
+        <nav className="dashboard-nav" aria-label="Navigasi user">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={`dashboard-nav-item${currentPath === item.href || (item.label === 'Tryout' && currentPath.startsWith('/dashboard-user/tryout')) ? ' active' : ''}`}
+              onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href, { state: { user } }))}
+            >
+              <span className="dashboard-nav-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
 
-      <button type="button" className="dashboard-logout-button" onClick={onLogout} aria-label="Keluar Akun">
-        <span aria-hidden="true">⎋</span>
-        <span className="dashboard-button-label">Keluar Akun</span>
-      </button>
-    </aside>
+        <div className="dashboard-sidebar-section-label">Akun</div>
+
+        <div className="dashboard-account-card">
+          <div className="dashboard-account-avatar">{profileInitials}</div>
+          <div>
+            <div className="dashboard-account-name">{displayName}</div>
+            <div className="dashboard-account-meta">{user?.email ?? 'Belum tersedia'}</div>
+          </div>
+        </div>
+
+        <button type="button" className="dashboard-upgrade-card" onClick={() => navigate('/complete-profile', { state: { registeredUser: user } })}>
+          <strong>Tetap tingkatkan kemampuanmu!</strong>
+          <p>{isProfileComplete ? 'Belajar rutin dan jaga ritme progresmu.' : 'Lengkapi profil untuk pengalaman belajar yang lebih personal.'}</p>
+          <span className="dashboard-upgrade-cta">Lihat Progress</span>
+        </button>
+
+        <button type="button" className="dashboard-logout-button" onClick={onLogout} aria-label="Keluar Akun">
+          <span aria-hidden="true">⎋</span>
+          <span className="dashboard-button-label">Keluar Akun</span>
+        </button>
+      </aside>
+
+      <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
+    </Fragment>
   )
 }

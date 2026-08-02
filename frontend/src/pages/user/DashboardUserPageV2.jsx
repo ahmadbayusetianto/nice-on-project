@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { fetchLearningStreak } from '../../api/accountProfileApi'
 import AdminBrandBlock from '../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../components/layout/AdminQuestionMenu'
 import AdminSystemMenu from '../../components/layout/AdminSystemMenu'
 import AdminUserMenu from '../../components/layout/AdminUserMenu'
 import DashboardNotificationMenu from '../../components/layout/DashboardNotificationMenu'
+import ComingSoonModal from '../../components/layout/ComingSoonModal'
 import UserSidebar from '../../components/layout/UserSidebar'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
 
@@ -18,6 +20,26 @@ export default function DashboardUserPageV2() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef(null)
+  const [streakDays, setStreakDays] = useState(null)
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
+
+  useEffect(() => {
+    if (!user?.pid) return
+
+    let isMounted = true
+
+    fetchLearningStreak(user.pid)
+      .then((payload) => {
+        if (isMounted) setStreakDays(payload?.data?.streak_days ?? 0)
+      })
+      .catch(() => {
+        if (isMounted) setStreakDays(0)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?.pid])
 
   useEffect(() => {
     const handleDocumentPointerDown = (event) => {
@@ -51,19 +73,11 @@ export default function DashboardUserPageV2() {
   const isProfileComplete = user?.profile_completed !== false
   const initials = displayName.slice(0, 2).toUpperCase()
 
-  const sidebarItems = [
-    { label: 'Dashboard', href: '/dashboard-user' },
-    { label: 'Materi', href: '/dashboard-user/materials' },
-    { label: 'Tryout', href: '/dashboard-user/tryout' },
-    { label: 'Jadwal', href: '#' },
-    { label: 'Bantuan', href: '#' },
-  ]
-
   const stats = [
     ['Progress', isProfileComplete ? '100%' : '0%', isProfileComplete ? 'Profil siap dipakai' : 'Profil belum lengkap'],
     ['Tryout Hari Ini', '0', 'Belum ada aktivitas'],
     ['Target Mingguan', '7 sesi', 'Siap ditetapkan'],
-    ['Streak Belajar', '3 hari', 'Pertahankan konsistensi!'],
+    ['Streak Belajar', streakDays === null ? '...' : `${streakDays} hari`, streakDays ? 'Pertahankan konsistensi!' : 'Belum ada aktivitas'],
   ]
 
   const quickActions = [
@@ -243,11 +257,11 @@ export default function DashboardUserPageV2() {
                 Dari sini kamu bisa melanjutkan profil, mengecek progres, atau langsung masuk ke sesi belajar berikutnya.
               </p>
               <div className="dashboard-hero-actions">
-                <button type="button" className="dashboard-primary-action" onClick={() => navigate('/')}>
-                  Mulai Belajar <span aria-hidden="true">→</span>
+                <button type="button" className="dashboard-primary-action" onClick={() => navigate('/dashboard-user/materials', { state: { user } })}>
+                  Materi <span aria-hidden="true">→</span>
                 </button>
-                <button type="button" className="dashboard-secondary-action" onClick={() => navigate('/login')}>
-                  Ganti Akun <span aria-hidden="true">↻</span>
+                <button type="button" className="dashboard-secondary-action" onClick={() => navigate('/dashboard-user/tryout', { state: { user } })}>
+                  Tryout <span aria-hidden="true">→</span>
                 </button>
               </div>
             </div>
@@ -293,7 +307,12 @@ export default function DashboardUserPageV2() {
               </div>
               <div className="dashboard-quick-grid">
                 {quickActions.map((item) => (
-                  <button key={item.label} type="button" className="dashboard-quick-tile" onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}>
+                  <button
+                    key={item.label}
+                    type="button"
+                    className="dashboard-quick-tile"
+                    onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href, { state: { user } }))}
+                  >
                     <div className="dashboard-quick-tile-icon">{item.label.slice(0, 1)}</div>
                     <div className="dashboard-quick-tile-copy">
                       <strong>{item.label}</strong>
@@ -315,6 +334,8 @@ export default function DashboardUserPageV2() {
         message="Pastikan progres atau aktivitas yang sedang berjalan sudah disimpan sebelum Anda logout."
         confirmLabel="Ya, keluar"
       />
+
+      <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
     </div>
   )
 }

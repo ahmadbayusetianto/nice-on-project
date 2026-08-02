@@ -4708,6 +4708,58 @@ Route::get('/account-profile/{pid}', function ($pid) {
     ]);
 });
 
+Route::put('/account-profile/{pid}/password', function (Request $request, $pid) {
+    $user = DB::table('tbl_user')->where('pid', $pid)->first();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'Data profil tidak ditemukan.',
+        ], 404);
+    }
+
+    $input = [
+        'current_password' => $request->input('current_password'),
+        'password' => $request->input('password'),
+        'password_confirmation' => $request->input('password_confirmation'),
+    ];
+
+    $validator = Validator::make($input, [
+        'current_password' => ['required', 'string'],
+        'password' => ['required', 'string', 'min:8', 'confirmed'],
+    ], [
+        'password.confirmed' => 'Konfirmasi password tidak cocok.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validasi gagal.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    if (!Hash::check($input['current_password'], $user->password)) {
+        return response()->json([
+            'message' => 'Password saat ini tidak sesuai.',
+            'errors' => [
+                'current_password' => ['Password saat ini tidak sesuai.'],
+            ],
+        ], 422);
+    }
+
+    DB::table('tbl_user')
+        ->where('pid', $pid)
+        ->update([
+            'password' => Hash::make($input['password']),
+            'updated_at' => now(),
+        ]);
+
+    logUserActivity((int) $pid, 'password.updated', 'Password diperbarui', 'Anda mengganti password akun.', '🔒');
+
+    return response()->json([
+        'message' => 'Password berhasil diperbarui.',
+    ]);
+})->middleware('throttle:5,1');
+
 Route::put('/account-profile/{pid}', function (Request $request, $pid) {
     $user = DB::table('tbl_user')->where('pid', $pid)->first();
 
@@ -4859,6 +4911,37 @@ Route::get('/users/{pid}/activity-log', function (Request $request, $pid) {
     return response()->json([
         'message' => 'Riwayat aktivitas berhasil dimuat.',
         'data' => $activities,
+    ]);
+});
+
+Route::get('/users/{pid}/learning-streak', function ($pid) {
+    $activityDates = DB::table('tbl_activity_log')
+        ->where('pid_user', $pid)
+        ->whereIn('type', ['tryout.started', 'tryout.finished', 'material.viewed'])
+        ->selectRaw('DISTINCT DATE(created_at) as activity_date')
+        ->orderByDesc('activity_date')
+        ->pluck('activity_date')
+        ->flip();
+
+    // "Hari ini" belum tentu sudah ada aktivitas saat dicek (jam berapa pun user buka
+    // dashboard) — mulai hitung dari kemarin kalau hari ini masih kosong, supaya streak
+    // tidak nge-reset ke 0 hanya karena user belum sempat beraktivitas hari ini.
+    $cursor = Carbon::today();
+    if (!$activityDates->has($cursor->toDateString())) {
+        $cursor = $cursor->subDay();
+    }
+
+    $streakDays = 0;
+    while ($activityDates->has($cursor->toDateString())) {
+        $streakDays++;
+        $cursor = $cursor->subDay();
+    }
+
+    return response()->json([
+        'message' => 'Streak belajar berhasil dihitung.',
+        'data' => [
+            'streak_days' => $streakDays,
+        ],
     ]);
 });
 

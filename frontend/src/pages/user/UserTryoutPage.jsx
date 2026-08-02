@@ -255,14 +255,6 @@ export default function UserTryoutPage() {
     { label: 'Laporan', href: '#' },
   ]
 
-  const sidebarItems = [
-    { label: 'Dashboard', href: '/dashboard-user' },
-    { label: 'Materi', href: '#' },
-    { label: 'Tryout', href: '/dashboard-user/tryout' },
-    { label: 'Jadwal', href: '#' },
-    { label: 'Bantuan', href: '#' },
-  ]
-
   const quickStats = [
     ['Paket Aktif', String(packageRows.length)],
     ['Sesi Berjalan', tryoutData ? '1' : '0'],

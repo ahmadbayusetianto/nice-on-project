@@ -12,6 +12,7 @@ import UserSidebar from '../../components/layout/UserSidebar'
 import { formatAdminDate, formatProfileJoinDate, formatReferenceDisplay } from '../../utils/format'
 import { clearAuthUser, readStoredUser } from '../../utils/storage'
 import AccountProfileEditModal from './AccountProfileEditModal'
+import ChangePasswordModal from './ChangePasswordModal'
 
 export default function AccountProfilePage() {
   const location = useLocation()
@@ -26,6 +27,8 @@ export default function AccountProfilePage() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(Boolean(user))
   const [profileError, setProfileError] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordChangedNotice, setPasswordChangedNotice] = useState(false)
   const [activityLog, setActivityLog] = useState([])
   const [isLoadingActivity, setIsLoadingActivity] = useState(Boolean(user))
 
@@ -313,6 +316,7 @@ export default function AccountProfilePage() {
             </header>
 
             {profileError ? <div className="account-profile-alert error">{profileError}</div> : null}
+            {passwordChangedNotice ? <div className="account-profile-alert">Password berhasil diperbarui.</div> : null}
             {isLoadingProfile ? <div className="account-profile-alert">Memuat data profil...</div> : null}
 
             <section className="account-profile-hero-card">
@@ -388,6 +392,22 @@ export default function AccountProfilePage() {
                       </button>
                     </div>
                   )}
+                </div>
+              </article>
+
+              <article className="account-profile-card">
+                <div className="account-profile-card-head">
+                  <div className="account-profile-card-title">
+                    <span className="account-profile-card-icon" aria-hidden="true">🔒</span>
+                    <h2>Keamanan Akun</h2>
+                  </div>
+                  <button type="button" className="account-profile-edit-button" onClick={() => setShowPasswordModal(true)}>Ubah Password</button>
+                </div>
+                <div className="account-profile-card-body">
+                  <div className="account-profile-row">
+                    <span className="account-profile-row-label">Password</span>
+                    <strong className="account-profile-row-value">••••••••</strong>
+                  </div>
                 </div>
               </article>
 
@@ -473,6 +493,16 @@ export default function AccountProfilePage() {
           if (nextData) {
             setProfile((current) => ({ ...current, ...nextData, detail: nextData.detail ?? null }))
           }
+        }}
+      />
+
+      <ChangePasswordModal
+        open={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        pid={activeProfile?.pid}
+        onSaved={() => {
+          setPasswordChangedNotice(true)
+          setTimeout(() => setPasswordChangedNotice(false), 4000)
         }}
       />
 
