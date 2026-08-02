@@ -5039,6 +5039,46 @@ Route::get('/users/{pid}/activity-calendar', function (Request $request, $pid) {
     ]);
 });
 
+Route::get('/users/{pid}/transactions', function ($pid) {
+    $transactions = DB::table('tbl_transaksi')
+        ->leftJoin('tbl_paket', 'tbl_transaksi.pid_paket', '=', 'tbl_paket.pid')
+        ->where('tbl_transaksi.pid_user', $pid)
+        ->orderByDesc('tbl_transaksi.created_at')
+        ->orderByDesc('tbl_transaksi.pid')
+        ->select([
+            'tbl_transaksi.pid as pid',
+            'tbl_transaksi.status_transaksi as status_transaksi',
+            'tbl_transaksi.paid_date as paid_date',
+            'tbl_transaksi.payment_type as payment_type',
+            'tbl_transaksi.created_at as created_at',
+            'tbl_paket.nama_paket as nama_paket',
+            'tbl_paket.kategori as kategori',
+            'tbl_paket.harga as harga',
+        ])
+        ->get()
+        ->map(function ($item) {
+            $statusKey = (string) $item->status_transaksi;
+
+            return [
+                'pid' => (int) $item->pid,
+                'invoice' => 'INV-'.date('Ymd', strtotime((string) $item->created_at)).'-'.str_pad((string) $item->pid, 3, '0', STR_PAD_LEFT),
+                'nama_paket' => $item->nama_paket ?: 'Paket Belajar',
+                'kategori' => $item->kategori ?: '-',
+                'total' => (float) $item->harga,
+                'payment_type' => $item->payment_type,
+                'created_at' => $item->created_at,
+                'paid_date' => $item->paid_date,
+                'status' => $statusKey === 'paid' ? 'Berhasil' : ($statusKey === 'pending' ? 'Menunggu' : 'Dibatalkan'),
+                'status_class' => $statusKey === 'paid' ? 'success' : ($statusKey === 'pending' ? 'pending' : 'cancelled'),
+            ];
+        });
+
+    return response()->json([
+        'message' => 'Riwayat transaksi berhasil dimuat.',
+        'data' => $transactions,
+    ]);
+});
+
 Route::get('/captcha', function () {
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     $code = '';

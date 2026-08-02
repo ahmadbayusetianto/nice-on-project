@@ -15,6 +15,7 @@ import UserTryoutPage from './pages/user/UserTryoutPage'
 import UserMaterialsPage from './pages/user/UserMaterialsPage'
 import UserBantuanPage from './pages/user/UserBantuanPage'
 import UserProgressPage from './pages/user/UserProgressPage'
+import UserTransactionsPage from './pages/user/UserTransactionsPage'
 import AdminDashboardPage from './pages/admin/dashboard/AdminDashboardPage'
 import AdminUserManagementPage from './pages/admin/users/AdminUserManagementPage'
 import AdminPackageManagementPage from './pages/admin/packages/AdminPackageManagementPage'
@@ -111,6 +112,10 @@ function App() {
       <Route
         path="/dashboard-user/progress"
         element={<RequireRole role="user"><UserProgressPage /></RequireRole>}
+      />
+      <Route
+        path="/dashboard-user/transactions"
+        element={<RequireRole role="user"><UserTransactionsPage /></RequireRole>}
       />
       <Route
         path="/dashboard-admin"

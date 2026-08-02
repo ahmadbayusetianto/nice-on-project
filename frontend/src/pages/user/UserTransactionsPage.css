@@ -1,0 +1,93 @@
+.user-transactions-main {
+  gap: 18px;
+}
+
+.user-transactions-panel {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgba(22, 47, 91, 0.06);
+  box-shadow: 0 18px 36px rgba(18, 34, 65, 0.06);
+}
+
+.user-transactions-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-transactions-filter {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 47, 91, 0.12);
+  background: #f7f9ff;
+  color: #4a5a7d;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.user-transactions-filter.active {
+  background: #2f62ff;
+  border-color: transparent;
+  color: #fff;
+}
+
+.user-transactions-note {
+  margin: 0;
+  color: #667489;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.user-transactions-table-wrap {
+  overflow-x: auto;
+}
+
+.user-transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.user-transactions-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: #8b96b3;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(22, 47, 91, 0.08);
+}
+
+.user-transactions-table td {
+  padding: 12px;
+  color: #33415f;
+  border-bottom: 1px solid rgba(22, 47, 91, 0.06);
+  font-variant-numeric: tabular-nums;
+}
+
+.user-transactions-status-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.user-transactions-status-badge.success {
+  background: rgba(25, 190, 102, 0.12);
+  color: #19be66;
+}
+
+.user-transactions-status-badge.pending {
+  background: rgba(255, 152, 39, 0.14);
+  color: #ff9827;
+}
+
+.user-transactions-status-badge.cancelled {
+  background: rgba(240, 86, 86, 0.12);
+  color: #f05656;
+}

@@ -27,6 +27,10 @@ export function fetchActivityCalendar(pid, month) {
   return apiRequest(`/api/users/${pid}/activity-calendar${month ? `?month=${month}` : ''}`)
 }
 
+export function fetchUserTransactions(pid) {
+  return apiRequest(`/api/users/${pid}/transactions`)
+}
+
 export function changeAccountPassword(pid, payload) {
   return apiRequest(`/api/account-profile/${pid}/password`, {
     method: 'PUT',

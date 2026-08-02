@@ -85,6 +85,7 @@ export default function DashboardUserPageV2() {
     { label: 'Tryout', desc: 'Kerjakan tryout', href: '/dashboard-user/tryout' },
     { label: 'Jadwal', desc: 'Lihat jadwal kelas', href: '#' },
     { label: 'Bantuan', desc: 'Butuh bantuan?', href: '/dashboard-user/bantuan' },
+    { label: 'Riwayat Transaksi', desc: 'Cek status pembayaran', href: '/dashboard-user/transactions' },
   ]
 
   const nextSteps = [
