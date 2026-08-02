@@ -84,7 +84,7 @@ export default function DashboardUserPageV2() {
     { label: 'Materi', desc: 'Buka materi belajar', href: '/dashboard-user/materials' },
     { label: 'Tryout', desc: 'Kerjakan tryout', href: '/dashboard-user/tryout' },
     { label: 'Jadwal', desc: 'Lihat jadwal kelas', href: '#' },
-    { label: 'Bantuan', desc: 'Butuh bantuan?', href: '#' },
+    { label: 'Bantuan', desc: 'Butuh bantuan?', href: '/dashboard-user/bantuan' },
   ]
 
   const nextSteps = [

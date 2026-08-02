@@ -19,7 +19,7 @@ export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapse
     { label: 'Materi', href: '/dashboard-user/materials' },
     { label: 'Tryout', href: '/dashboard-user/tryout' },
     { label: 'Jadwal', href: '#' },
-    { label: 'Bantuan', href: '#' },
+    { label: 'Bantuan', href: '/dashboard-user/bantuan' },
   ]
 
   return (
