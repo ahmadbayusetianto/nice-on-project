@@ -110,6 +110,8 @@ export default function AdminQuestionManagementPage() {
   const [selectedQuestionGroup, setSelectedQuestionGroup] = useState('Semua Grup')
   const [selectedQuestionType, setSelectedQuestionType] = useState('Semua Tipe')
   const [selectedQuestionStatus, setSelectedQuestionStatus] = useState('Aktif')
+  const [selectedQuestionBundling, setSelectedQuestionBundling] = useState('Semua Bundling')
+  const [selectedQuestionPaket, setSelectedQuestionPaket] = useState('Semua Paket')
   const [questionCurrentPage, setQuestionCurrentPage] = useState(1)
   const [questionPageSize, setQuestionPageSize] = useState(10)
   const [showQuestionModal, setShowQuestionModal] = useState(false)
@@ -686,6 +688,14 @@ export default function AdminQuestionManagementPage() {
     }
   }, [])
 
+  const paketRowsByPid = new Map(sandboxPaketRows.map((row) => [String(row.pid), row]))
+
+  const questionBundlingOptions = ['Semua Bundling', ...new Set(sandboxPaketRows.map((row) => row.type).filter(Boolean))]
+
+  const questionPaketOptionRows = selectedQuestionBundling === 'Semua Bundling'
+    ? sandboxPaketRows
+    : sandboxPaketRows.filter((row) => row.type === selectedQuestionBundling)
+
   const visibleQuestionRows = questionRows.filter((row) => {
     const search = questionSearch.trim().toLowerCase()
     const status = row.deleted_at ? 'terhapus' : 'aktif'
@@ -698,6 +708,15 @@ export default function AdminQuestionManagementPage() {
     }
 
     if (selectedQuestionType !== 'Semua Tipe' && String(row.question_type || '').toLowerCase() !== selectedQuestionType.toLowerCase()) {
+      return false
+    }
+
+    if (selectedQuestionBundling !== 'Semua Bundling') {
+      const matchedPaket = paketRowsByPid.get(String(row.package_id))
+      if (!matchedPaket || matchedPaket.type !== selectedQuestionBundling) return false
+    }
+
+    if (selectedQuestionPaket !== 'Semua Paket' && String(row.package_id) !== String(selectedQuestionPaket)) {
       return false
     }
 
@@ -715,7 +734,7 @@ export default function AdminQuestionManagementPage() {
 
   useEffect(() => {
     setQuestionCurrentPage(1)
-  }, [questionSearch, selectedQuestionGroup, selectedQuestionType, selectedQuestionStatus, questionPageSize])
+  }, [questionSearch, selectedQuestionGroup, selectedQuestionType, selectedQuestionStatus, selectedQuestionBundling, selectedQuestionPaket, questionPageSize])
 
   useEffect(() => {
     if (questionCurrentPage > totalQuestionPages) {
@@ -945,6 +964,26 @@ export default function AdminQuestionManagementPage() {
                       ))}
                     </select>
 
+                    <select
+                      className="admin-package-select"
+                      value={selectedQuestionBundling}
+                      onChange={(event) => {
+                        setSelectedQuestionBundling(event.target.value)
+                        setSelectedQuestionPaket('Semua Paket')
+                      }}
+                    >
+                      {questionBundlingOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+
+                    <select className="admin-package-select" value={selectedQuestionPaket} onChange={(event) => setSelectedQuestionPaket(event.target.value)}>
+                      <option value="Semua Paket">Semua Paket</option>
+                      {questionPaketOptionRows.map((row) => (
+                        <option key={row.pid} value={row.pid}>{row.name}</option>
+                      ))}
+                    </select>
+
                     <label className="admin-page-size-control" aria-label="Jumlah data per halaman">
                       <select
                         className="admin-page-size-select"
@@ -964,6 +1003,8 @@ export default function AdminQuestionManagementPage() {
                         setSelectedQuestionGroup('Semua Grup')
                         setSelectedQuestionType('Semua Tipe')
                         setSelectedQuestionStatus('Aktif')
+                        setSelectedQuestionBundling('Semua Bundling')
+                        setSelectedQuestionPaket('Semua Paket')
                       }}
                     >
                       Reset
