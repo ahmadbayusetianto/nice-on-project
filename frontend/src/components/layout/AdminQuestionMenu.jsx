@@ -1,3 +1,5 @@
+import './AdminQuestionMenu.css'
+
 export default function AdminQuestionMenu({ currentPath, navigate }) {
   const isQuestionPage = currentPath.startsWith('/dashboard-admin/questions')
 

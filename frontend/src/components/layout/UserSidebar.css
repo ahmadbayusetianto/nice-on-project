@@ -1,0 +1,185 @@
+.dashboard-sidebar-v2 {
+  min-height: 100vh;
+  padding: 24px 18px 20px;
+  border-radius: 0 28px 28px 0;
+  background: linear-gradient(180deg, #0b2a68 0%, #0b3d8b 52%, #10245a 100%);
+  color: #fff;
+  box-shadow: 16px 0 40px rgba(11, 42, 104, 0.16);
+  gap: 18px;
+  overflow: hidden;
+  transition: padding 240ms ease, border-radius 240ms ease, box-shadow 240ms ease;
+}
+
+.dashboard-sidebar-v2.sidebar-collapsed {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.dashboard-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-brand-logo-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 24px rgba(7, 21, 53, 0.18);
+  transition: min-width 240ms ease, padding 240ms ease, opacity 240ms ease, transform 240ms ease;
+}
+
+.dashboard-brand-logo {
+  display: block;
+  width: 126px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.04));
+  transition: width 240ms ease, transform 240ms ease;
+}
+
+.dashboard-shell-v2.sidebar-collapsed .dashboard-brand-logo-shell {
+  min-width: 56px;
+  padding: 6px 8px;
+}
+
+.dashboard-shell-v2.sidebar-collapsed .dashboard-brand-logo {
+  width: 44px;
+}
+
+.dashboard-brand-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.dashboard-nav {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+  transition: gap 240ms ease, opacity 200ms ease, transform 240ms ease;
+}
+
+.dashboard-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 15px 14px;
+  border-radius: 14px;
+  background: transparent;
+  color: rgba(242, 248, 255, 0.92);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.dashboard-nav-item:hover {
+  transform: translateX(2px);
+}
+
+.dashboard-shell-v2.sidebar-collapsed .dashboard-nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.dashboard-shell-v2.sidebar-collapsed .dashboard-nav-item span:last-child,
+.dashboard-shell-v2.sidebar-collapsed .dashboard-sidebar-section-label,
+.dashboard-shell-v2.sidebar-collapsed .dashboard-account-card,
+.dashboard-shell-v2.sidebar-collapsed .dashboard-upgrade-card,
+.dashboard-shell-v2.sidebar-collapsed .dashboard-button-label {
+  display: none;
+}
+
+.dashboard-shell-v2.sidebar-collapsed .dashboard-nav {
+  gap: 8px;
+}
+
+.dashboard-nav-item.active {
+  background: linear-gradient(135deg, #4b5cff, #4569ff);
+  box-shadow: 0 16px 28px rgba(64, 92, 255, 0.28);
+}
+
+.dashboard-nav-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.dashboard-sidebar-section-label {
+  margin-top: 10px;
+  color: rgba(215, 228, 255, 0.7);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dashboard-account-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  transition: opacity 200ms ease, transform 240ms ease, max-height 240ms ease, margin 240ms ease, padding 240ms ease;
+}
+
+.dashboard-account-name {
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.dashboard-account-meta {
+  color: rgba(231, 240, 255, 0.76);
+  font-size: 13px;
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+.dashboard-upgrade-card {
+  width: 100%;
+  padding: 18px;
+  border-radius: 20px;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(180deg, #6d4cff, #4964ff);
+  box-shadow: 0 20px 38px rgba(77, 75, 255, 0.30);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  transition: opacity 200ms ease, transform 240ms ease, max-height 240ms ease, margin 240ms ease, padding 240ms ease;
+}
+
+.dashboard-upgrade-card strong {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.dashboard-upgrade-card p {
+  margin: 0;
+  color: rgba(248, 250, 255, 0.92);
+  line-height: 1.55;
+}
+
+.dashboard-upgrade-cta {
+  display: inline-flex;
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-weight: 800;
+}

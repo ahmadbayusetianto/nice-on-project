@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 import niceonImage from '../../../../niceon.png'
 import ComingSoonModal from './ComingSoonModal'
+import './UserSidebar.css'
 
 export default function UserSidebar({ currentPath, isCollapsed, onToggleCollapsed, navigate, user, displayName, onLogout }) {
   const [comingSoonLabel, setComingSoonLabel] = useState(null)

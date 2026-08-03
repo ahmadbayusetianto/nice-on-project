@@ -1,0 +1,49 @@
+.admin-question-menu-wrap {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(130, 171, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-question-parent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  width: 100%;
+  border: 1px solid rgba(130, 171, 255, 0.16);
+  border-radius: 14px;
+  padding: 16px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 248, 255, 0.96);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.admin-question-parent:hover,
+.admin-question-parent:focus-visible {
+  transform: translateX(2px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(154, 188, 255, 0.28);
+}
+
+.admin-question-parent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(126, 164, 255, 0.22);
+}
+
+.admin-question-parent.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(154, 188, 255, 0.28);
+}
+
+.admin-question-parent-label {
+  white-space: nowrap;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchAdminNotifications, markAllNotificationsRead, markNotificationRead } from '../../api/notificationsApi'
 import DashboardNotificationMenu from './DashboardNotificationMenu'
+import './AdminTopbar.css'
 
 export default function AdminTopbar({
   title,

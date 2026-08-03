@@ -1,3 +1,5 @@
+import './AdminUserMenu.css'
+
 export default function AdminUserMenu({ profileUser, displayName, onResumeProfile, onLogout }) {
   const profileInitials = (displayName || 'AD')
     .split(/\s+/)

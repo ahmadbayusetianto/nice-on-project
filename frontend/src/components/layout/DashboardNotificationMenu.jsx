@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import './DashboardNotificationMenu.css'
 
 export default function DashboardNotificationMenu({
   items,

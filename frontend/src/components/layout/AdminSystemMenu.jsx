@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './AdminSystemMenu.css'
 
 export default function AdminSystemMenu({ currentPath, navigate }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(() => currentPath.startsWith('/dashboard-admin/settings'))
