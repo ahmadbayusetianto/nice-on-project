@@ -3,7 +3,6 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
@@ -16,15 +15,18 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\FaqController;
+use App\Http\Controllers\Admin\MaterialController;
+use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\ParameterController;
+use App\Http\Controllers\Admin\QuestionGroupController;
 use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\UserStatsController;
-use App\Models\User;
-use App\Notifications\AdminActivityNotification;
+use App\Services\AdminNotificationService;
 use App\Services\MidtransService;
+use App\Services\SystemParameterService;
 
 function questionGroupLabel(mixed $group, string $questionType = 'SKD', array $groupsById = []): string
 {
@@ -199,78 +201,6 @@ function mapQuestionRow(object $item, ?array $options = null, ?Request $request 
     ];
 }
 
-function parameterValueByCode(string $code, mixed $default = null): mixed
-{
-    if (!Schema::hasTable('tbl_parameter')) {
-        return $default;
-    }
-
-    $item = DB::table('tbl_parameter')
-        ->where('kode', $code)
-        ->where('is_active', 1)
-        ->first();
-
-    return $item ? $item->nilai : $default;
-}
-
-function parameterIntValue(string $code, int $default): int
-{
-    return (int) parameterValueByCode($code, $default);
-}
-
-function resolveAdminUsers(): \Illuminate\Support\Collection
-{
-    if (!Schema::hasTable('tbl_user')) {
-        return collect();
-    }
-
-    return User::query()
-        ->where('is_admin', 1)
-        ->where('status', 'active')
-        ->get();
-}
-
-function notifyAdminUsers(string $type, string $title, string $message, ?string $url = null, array $meta = [], ?array $actor = null): void
-{
-    $adminUsers = resolveAdminUsers();
-
-    if ($adminUsers->isEmpty()) {
-        return;
-    }
-
-    $payload = [
-        'type' => $type,
-        'title' => $title,
-        'message' => $message,
-        'url' => $url,
-        'icon' => $meta['icon'] ?? '🔔',
-        'meta' => $meta,
-        'actor' => $actor,
-    ];
-
-    Notification::send($adminUsers, new AdminActivityNotification($payload));
-}
-
-function logUserActivity(int $pidUser, string $type, string $title, ?string $description = null, ?string $icon = null, array $meta = []): void
-{
-    DB::table('tbl_activity_log')->insert([
-        'pid_user' => $pidUser,
-        'type' => $type,
-        'title' => $title,
-        'description' => $description,
-        'icon' => $icon,
-        'meta' => json_encode($meta),
-        'created_at' => now(),
-    ]);
-}
-
-function parameterBoolValue(string $code, bool $default): bool
-{
-    $value = parameterValueByCode($code, $default ? '1' : '0');
-
-    return filter_var($value, FILTER_VALIDATE_BOOL);
-}
-
 function mapTryoutOptionRow(object $item, ?Request $request = null): array
 {
     return [
@@ -363,7 +293,7 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false, ?Req
 
     $tryoutType = normalizeTryoutType((string) ($session->jenis_tryout ?? 'SKD'));
 
-    $durationMinutes = parameterIntValue('exam.default_duration', 100);
+    $durationMinutes = (new SystemParameterService())->intValue('exam.default_duration', 100);
     $expiresAt = null;
     $startedAtTimestamp = null;
     $expiresAtTimestamp = null;
@@ -460,9 +390,9 @@ function buildTryoutSessionPayload(int $ljkId, bool $includeResult = false, ?Req
         'settings' => [
             'duration_minutes' => $durationMinutes,
             'expires_at' => $expiresAt,
-            'auto_submit' => parameterBoolValue('exam.auto_submit', true),
-            'shuffle_question' => parameterBoolValue('exam.shuffle_question', true),
-            'shuffle_option' => parameterBoolValue('exam.shuffle_option', true),
+            'auto_submit' => (new SystemParameterService())->boolValue('exam.auto_submit', true),
+            'shuffle_question' => (new SystemParameterService())->boolValue('exam.shuffle_question', true),
+            'shuffle_option' => (new SystemParameterService())->boolValue('exam.shuffle_option', true),
         ],
     ];
 }
@@ -521,102 +451,15 @@ function calculateTryoutSheetValue(?int $selectedOptionId, ?int $answerOptionId,
         return (int) ($selectedOption->nilai_tkp ?? 0);
     }
 
-    $scoreCorrect = parameterIntValue('exam.score_correct', 5);
-    $scoreWrong = parameterIntValue('exam.score_wrong', 0);
-    $scoreBlank = parameterIntValue('exam.score_blank', 0);
+    $scoreCorrect = (new SystemParameterService())->intValue('exam.score_correct', 5);
+    $scoreWrong = (new SystemParameterService())->intValue('exam.score_wrong', 0);
+    $scoreBlank = (new SystemParameterService())->intValue('exam.score_blank', 0);
 
     if (!$selectedOptionId) {
         return $scoreBlank;
     }
 
     return (int) $selectedOptionId === (int) $answerOptionId ? $scoreCorrect : $scoreWrong;
-}
-
-function formatMaterialFileSize(int $bytes): string
-{
-    if ($bytes <= 0) {
-        return '0 B';
-    }
-
-    $units = ['B', 'KB', 'MB', 'GB'];
-    $size = (float) $bytes;
-    $unitIndex = 0;
-
-    while ($size >= 1024 && $unitIndex < count($units) - 1) {
-        $size /= 1024;
-        $unitIndex++;
-    }
-
-    return number_format($size, $unitIndex === 0 ? 0 : 1, ',', '.') . ' ' . $units[$unitIndex];
-}
-
-function mapMaterialRow(object $item): array
-{
-    $isPublished = (int) ($item->is_published ?? 1) === 1;
-
-    return [
-        'pid' => (int) $item->pid,
-        'package_id' => (int) $item->package_id,
-        'package_name' => (string) ($item->nama_paket ?? '-'),
-        'judul' => (string) $item->judul,
-        'deskripsi' => (string) ($item->deskripsi ?? ''),
-        'original_name' => (string) $item->original_name,
-        'mime_type' => (string) ($item->mime_type ?? 'application/pdf'),
-        'file_size' => (int) ($item->file_size ?? 0),
-        'file_size_label' => formatMaterialFileSize((int) ($item->file_size ?? 0)),
-        'sort_order' => (int) ($item->sort_order ?? 0),
-        'is_published' => $isPublished,
-        'status' => $isPublished ? 'Terbit' : 'Draft',
-        'status_key' => $isPublished ? 'published' : 'draft',
-        'created_at' => $item->created_at ?? null,
-        'updated_at' => $item->updated_at ?? null,
-        'deleted_at' => $item->deleted_at ?? null,
-    ];
-}
-
-function materialTableMissingResponse()
-{
-    return response()->json([
-        'message' => 'Tabel materi belum tersedia. Jalankan migrasi database terlebih dahulu.',
-        'summary' => [
-            'total_materi' => 0,
-            'materi_terbit' => 0,
-            'materi_draft' => 0,
-        ],
-        'packages' => [],
-        'data' => [],
-    ], 503);
-}
-
-function materialMaxUploadKb(): int
-{
-    return max(1, parameterIntValue('system.max_upload_size', 5)) * 1024;
-}
-
-function userPurchasedPackageIds(?int $userId): array
-{
-    if (!$userId || !Schema::hasTable('tbl_transaksi')) {
-        return [];
-    }
-
-    return DB::table('tbl_transaksi')
-        ->where('pid_user', $userId)
-        ->where('status_transaksi', 'paid')
-        ->pluck('pid_paket')
-        ->filter()
-        ->map(fn ($packageId) => (int) $packageId)
-        ->unique()
-        ->values()
-        ->all();
-}
-
-function userHasMaterialAccess(?int $userId, int $packageId): bool
-{
-    if (!$userId) {
-        return false;
-    }
-
-    return in_array($packageId, userPurchasedPackageIds($userId), true);
 }
 
 Route::get('/health', function () {
@@ -720,51 +563,7 @@ Route::patch('/admin/users/{pid}/toggle-role', [UserController::class, 'toggleRo
 Route::get('/admin/users/{pid}', [UserController::class, 'show']);
 Route::put('/admin/users/{pid}', [UserController::class, 'update']);
 
-Route::get('/packages', function (Request $request) {
-    $kategori = trim((string) $request->query('kategori', ''));
-    $purchasedOnlyUserId = (int) $request->query('user_id', 0);
-
-    $query = DB::table('tbl_paket')
-        ->whereNull('deleted_at')
-        ->select([
-            'pid',
-            'kategori',
-            'formasi',
-            'jadwal',
-            'nama_paket',
-            'harga',
-            'ket',
-            'created_at',
-        ])
-        ->orderByDesc('created_at')
-        ->orderByDesc('pid');
-
-    if ($kategori !== '' && strtoupper($kategori) !== 'ALL') {
-        $query->whereRaw('UPPER(kategori) = ?', [strtoupper($kategori)]);
-    }
-
-    if ($purchasedOnlyUserId > 0) {
-        $query->whereIn('pid', userPurchasedPackageIds($purchasedOnlyUserId));
-    }
-
-    $packages = $query->get()->map(function ($item) {
-        return [
-            'pid' => (int) $item->pid,
-            'kategori' => $item->kategori,
-            'formasi' => $item->formasi,
-            'jadwal' => $item->jadwal,
-            'nama_paket' => $item->nama_paket,
-            'harga' => (float) $item->harga,
-            'ket' => $item->ket,
-            'created_at' => $item->created_at,
-        ];
-    });
-
-    return response()->json([
-        'message' => 'Data paket berhasil dimuat.',
-        'data' => $packages,
-    ]);
-});
+Route::get('/packages', [PackageController::class, 'publicIndex']);
 
 Route::post('/checkout', function (Request $request) {
     $validator = Validator::make($request->all(), [
@@ -847,7 +646,7 @@ Route::post('/checkout', function (Request $request) {
         'updated_at' => now(),
     ]);
 
-    logUserActivity($pidUser, 'checkout', 'Checkout dimulai', "Memulai pembayaran paket {$paket->nama_paket}");
+    (new AdminNotificationService())->logUserActivity($pidUser, 'checkout', 'Checkout dimulai', "Memulai pembayaran paket {$paket->nama_paket}");
 
     return response()->json([
         'message' => 'Transaksi berhasil dibuat.',
@@ -905,8 +704,8 @@ Route::post('/midtrans/notification', function (Request $request) {
     // paid", so a duplicate notification doesn't fire duplicate side effects.
     if ($newStatus === 'paid' && !$wasPaid) {
         $paket = DB::table('tbl_paket')->where('pid', $transaksi->pid_paket)->first();
-        logUserActivity((int) $transaksi->pid_user, 'payment', 'Pembayaran berhasil', $paket->nama_paket ?? null);
-        notifyAdminUsers('payment', 'Pembayaran diterima', "Transaksi #{$transaksi->pid} berhasil dibayar.", '/admin/transactions');
+        (new AdminNotificationService())->logUserActivity((int) $transaksi->pid_user, 'payment', 'Pembayaran berhasil', $paket->nama_paket ?? null);
+        (new AdminNotificationService())->notify('payment', 'Pembayaran diterima', "Transaksi #{$transaksi->pid} berhasil dibayar.", '/admin/transactions');
     }
 
     return response()->json(['message' => 'OK']);
@@ -997,7 +796,7 @@ Route::post('/tryout/start', function (Request $request) {
         return response()->json(['message' => 'Paket tidak ditemukan.'], 404);
     }
 
-    $shuffleQuestion = parameterBoolValue('exam.shuffle_question', true);
+    $shuffleQuestion = (new SystemParameterService())->boolValue('exam.shuffle_question', true);
     $selectedQuestions = collect();
     $questionsQuery = DB::table('tbl_questions')
         ->select(['id', 'question_group'])
@@ -1018,9 +817,9 @@ Route::post('/tryout/start', function (Request $request) {
 
     if ($tryoutType === 'SKD') {
         $groupQuotas = [
-            1 => parameterIntValue('catcpns.twk_default', 30),
-            2 => parameterIntValue('catcpns.tiu_default', 35),
-            3 => parameterIntValue('catcpns.tkp_default', 45),
+            1 => (new SystemParameterService())->intValue('catcpns.twk_default', 30),
+            2 => (new SystemParameterService())->intValue('catcpns.tiu_default', 35),
+            3 => (new SystemParameterService())->intValue('catcpns.tkp_default', 45),
         ];
 
         foreach ($groupQuotas as $group => $quota) {
@@ -1054,7 +853,7 @@ Route::post('/tryout/start', function (Request $request) {
     });
 
     $user = DB::table('tbl_user')->where('pid', $validated['user_id'])->first();
-    notifyAdminUsers(
+    (new AdminNotificationService())->notify(
         'tryout.started',
         'Tryout dimulai',
         'User ' . ($user->email ?? ('#' . $validated['user_id'])) . ' memulai tryout ' . $package->nama_paket . '.',
@@ -1063,7 +862,7 @@ Route::post('/tryout/start', function (Request $request) {
         ['pid' => (int) $validated['user_id'], 'package_id' => (int) $validated['package_id'], 'jenis_tryout' => $tryoutType]
     );
 
-    logUserActivity(
+    (new AdminNotificationService())->logUserActivity(
         (int) $validated['user_id'],
         'tryout.started',
         'Tryout dimulai',
@@ -1112,7 +911,7 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
         return response()->json(['message' => 'Paket tidak ditemukan.'], 404);
     }
 
-    $shuffleQuestion = parameterBoolValue('exam.shuffle_question', true);
+    $shuffleQuestion = (new SystemParameterService())->boolValue('exam.shuffle_question', true);
     $selectedQuestions = collect();
     $questionsQuery = DB::table('tbl_questions')
         ->select(['id', 'question_group'])
@@ -1133,9 +932,9 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
 
     if ($tryoutType === 'SKD') {
         $groupQuotas = [
-            1 => parameterIntValue('catcpns.twk_default', 30),
-            2 => parameterIntValue('catcpns.tiu_default', 35),
-            3 => parameterIntValue('catcpns.tkp_default', 45),
+            1 => (new SystemParameterService())->intValue('catcpns.twk_default', 30),
+            2 => (new SystemParameterService())->intValue('catcpns.tiu_default', 35),
+            3 => (new SystemParameterService())->intValue('catcpns.tkp_default', 45),
         ];
 
         foreach ($groupQuotas as $group => $quota) {
@@ -1353,7 +1152,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
 
     $user = DB::table('tbl_user')->where('pid', $userId)->first();
     if ((int) ($session->is_draft ?? 0) !== 1) {
-        notifyAdminUsers(
+        (new AdminNotificationService())->notify(
             'tryout.finished',
             'Tryout selesai',
             'User ' . ($user->email ?? ('#' . $userId)) . ' menyelesaikan tryout dengan skor ' . ($scoreTwk + $scoreTiu + $scoreTkp + $scoreOther) . '.',
@@ -1362,7 +1161,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
             ['pid' => $userId, 'session_id' => (int) $ljkId, 'score_total' => $scoreTwk + $scoreTiu + $scoreTkp + $scoreOther]
         );
 
-        logUserActivity(
+        (new AdminNotificationService())->logUserActivity(
             (int) $userId,
             'tryout.finished',
             'Tryout selesai',
@@ -1907,1100 +1706,29 @@ Route::patch('/admin/questions/{id}/restore', function ($id) {
     ]);
 });
 
-Route::get('/admin/question-groups', function (Request $request) {
-    $type = normalizeQuestionType((string) $request->query('type', 'SKD'));
-    $packageId = $request->query('package_id');
-
-    $query = DB::table('tbl_question_groups')
-        ->where('question_type', $type)
-        ->whereNull('deleted_at')
-        ->orderBy('sort_order')
-        ->orderBy('id');
-
-    if ($type === 'SKB') {
-        if (!$packageId) {
-            return response()->json([
-                'message' => 'Grup soal berhasil dimuat.',
-                'data' => [],
-            ]);
-        }
-
-        $query->where('package_id', $packageId);
-    } else {
-        $query->whereNull('package_id');
-    }
-
-    $groups = $query->get()->map(fn ($item) => [
-        'id' => (int) $item->id,
-        'package_id' => $item->package_id !== null ? (int) $item->package_id : null,
-        'question_type' => $item->question_type,
-        'name' => $item->name,
-        'sort_order' => (int) $item->sort_order,
-        'is_locked' => (bool) $item->is_locked,
-    ])->values();
-
-    return response()->json([
-        'message' => 'Grup soal berhasil dimuat.',
-        'data' => $groups,
-    ]);
-});
-
-Route::post('/admin/question-groups', function (Request $request) {
-    $questionType = normalizeQuestionType((string) $request->input('question_type', 'SKB'));
-
-    if ($questionType === 'SKD') {
-        return response()->json([
-            'message' => 'Grup SKD tidak dapat ditambahkan karena sudah baku (TWK/TIU/TKP).',
-        ], 422);
-    }
-
-    $validator = Validator::make($request->all(), [
-        'package_id' => ['required', 'integer', Rule::exists('tbl_paket', 'pid')->whereNull('deleted_at')],
-        'name' => ['required', 'string', 'max:100'],
-    ], [
-        'package_id.required' => 'Paket wajib dipilih.',
-        'package_id.exists' => 'Paket tidak ditemukan.',
-        'name.required' => 'Nama grup wajib diisi.',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validasi grup soal gagal.',
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    $validated = $validator->validated();
-    $name = trim($validated['name']);
-
-    $duplicate = DB::table('tbl_question_groups')
-        ->where('package_id', $validated['package_id'])
-        ->where('question_type', 'SKB')
-        ->whereNull('deleted_at')
-        ->whereRaw('LOWER(name) = ?', [strtolower($name)])
-        ->exists();
-
-    if ($duplicate) {
-        return response()->json([
-            'message' => 'Grup dengan nama tersebut sudah ada di paket ini.',
-        ], 422);
-    }
-
-    $now = now();
-    $groupId = DB::table('tbl_question_groups')->insertGetId([
-        'package_id' => $validated['package_id'],
-        'question_type' => 'SKB',
-        'name' => $name,
-        'sort_order' => 0,
-        'is_locked' => false,
-        'created_at' => $now,
-        'updated_at' => null,
-        'deleted_at' => null,
-    ]);
-
-    return response()->json([
-        'message' => 'Grup soal berhasil ditambahkan.',
-        'data' => [
-            'id' => $groupId,
-            'package_id' => (int) $validated['package_id'],
-            'question_type' => 'SKB',
-            'name' => $name,
-            'sort_order' => 0,
-            'is_locked' => false,
-        ],
-    ], 201);
-});
-
-Route::put('/admin/question-groups/{id}', function (Request $request, $id) {
-    $group = DB::table('tbl_question_groups')
-        ->where('id', $id)
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$group) {
-        return response()->json(['message' => 'Grup soal tidak ditemukan.'], 404);
-    }
-
-    if ($group->is_locked) {
-        return response()->json(['message' => 'Grup SKD sudah baku dan tidak dapat diubah.'], 422);
-    }
-
-    $validator = Validator::make($request->all(), [
-        'name' => ['required', 'string', 'max:100'],
-    ], [
-        'name.required' => 'Nama grup wajib diisi.',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validasi grup soal gagal.',
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    $name = trim($validator->validated()['name']);
-
-    $duplicate = DB::table('tbl_question_groups')
-        ->where('package_id', $group->package_id)
-        ->where('question_type', $group->question_type)
-        ->whereNull('deleted_at')
-        ->where('id', '!=', $id)
-        ->whereRaw('LOWER(name) = ?', [strtolower($name)])
-        ->exists();
-
-    if ($duplicate) {
-        return response()->json([
-            'message' => 'Grup dengan nama tersebut sudah ada di paket ini.',
-        ], 422);
-    }
-
-    DB::table('tbl_question_groups')
-        ->where('id', $id)
-        ->update(['name' => $name, 'updated_at' => now()]);
-
-    return response()->json([
-        'message' => 'Grup soal berhasil diperbarui.',
-        'data' => [
-            'id' => (int) $group->id,
-            'package_id' => $group->package_id !== null ? (int) $group->package_id : null,
-            'question_type' => $group->question_type,
-            'name' => $name,
-            'sort_order' => (int) $group->sort_order,
-            'is_locked' => (bool) $group->is_locked,
-        ],
-    ]);
-});
-
-Route::delete('/admin/question-groups/{id}', function ($id) {
-    $group = DB::table('tbl_question_groups')
-        ->where('id', $id)
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$group) {
-        return response()->json(['message' => 'Grup soal tidak ditemukan.'], 404);
-    }
-
-    if ($group->is_locked) {
-        return response()->json(['message' => 'Grup SKD sudah baku dan tidak dapat dihapus.'], 422);
-    }
-
-    $stillUsed = DB::table('tbl_questions')
-        ->where('question_group', $id)
-        ->whereNull('deleted_at')
-        ->exists();
-
-    if ($stillUsed) {
-        return response()->json(['message' => 'Grup masih dipakai oleh soal, tidak bisa dihapus.'], 422);
-    }
-
-    DB::table('tbl_question_groups')
-        ->where('id', $id)
-        ->update(['deleted_at' => now(), 'updated_at' => now()]);
-
-    return response()->json([
-        'message' => 'Grup soal berhasil dihapus.',
-    ]);
-});
-
-Route::get('/admin/packages', function (Request $request) {
-    $kategori = trim((string) $request->query('kategori', ''));
-
-    $query = DB::table('tbl_paket as p')
-        ->leftJoin('tbl_paket as b', 'p.bundling_id', '=', 'b.pid')
-        ->whereNull('p.deleted_at')
-        ->select([
-            'p.pid',
-            'p.kategori',
-            'p.formasi',
-            'p.jadwal',
-            'p.nama_paket',
-            'p.tipe_paket',
-            'p.bundling_id',
-            'b.nama_paket as bundling_nama',
-            'p.harga',
-            'p.ket',
-            'p.created_at',
-        ])
-        ->orderByDesc('p.created_at')
-        ->orderByDesc('p.pid');
-
-    if ($kategori !== '' && strtoupper($kategori) !== 'ALL') {
-        $query->whereRaw('UPPER(p.kategori) = ?', [strtoupper($kategori)]);
-    }
-
-    $packages = $query->get()->map(function ($item) {
-        $title = $item->nama_paket ?: 'Paket Belajar';
-        $program = $item->kategori ?: '-';
-        $type = $item->formasi ?: ($item->jadwal ?: '-');
-        $description = $item->ket ?: '-';
-        $price = (float) $item->harga;
-
-        return [
-            'pid' => (int) $item->pid,
-            'name' => $title,
-            'desc' => $description,
-            'thumb' => strtoupper(substr((string) $program, 0, 10)),
-            'tone' => strtoupper((string) $program) === 'PPPK' ? 'blue' : 'red',
-            'program' => $program,
-            'type' => $type,
-            'formasi' => $item->formasi ?: null,
-            'typeClass' => strtoupper((string) $program) === 'PPPK' ? 'online' : 'tryout',
-            'tipe_paket' => $item->tipe_paket ?: 'tunggal',
-            'bundling_id' => $item->bundling_id !== null ? (int) $item->bundling_id : null,
-            'bundling_nama' => $item->bundling_nama,
-            'price' => 'Rp'.number_format($price, 0, ',', '.'),
-            'discount' => '-',
-            'finalPrice' => 'Rp'.number_format($price, 0, ',', '.'),
-            'status' => 'Aktif',
-            'statusClass' => 'aktif',
-            'sold' => '-',
-        ];
-    });
-
-    $summary = [
-        'total_paket' => (int) DB::table('tbl_paket')->whereNull('deleted_at')->count(),
-        'paket_aktif' => (int) DB::table('tbl_paket')->whereNull('deleted_at')->count(),
-        'paket_nonaktif' => (int) DB::table('tbl_paket')->whereNotNull('deleted_at')->count(),
-        'total_penjualan' => (float) DB::table('tbl_paket')->whereNull('deleted_at')->sum('harga'),
-    ];
-
-    return response()->json([
-        'message' => 'Data paket admin berhasil dimuat.',
-        'summary' => $summary,
-        'data' => $packages,
-    ]);
-});
-
-Route::get('/admin/ref-paket', function (Request $request) {
-    $bundle = trim((string) $request->query('bundle', ''));
-    $search = trim((string) $request->query('search', ''));
-    $tipe = trim((string) $request->query('tipe', ''));
-    $pid = $request->query('pid');
-
-    $query = DB::table('ref_paket')->whereNull('deleted_at');
-
-    // With no pid/bundle given, list everything (optionally narrowed by
-    // search/tipe) — used by pickers that browse the whole table (e.g.
-    // Sandbox Tryout) rather than ones scoped to a single bundle.
-    if ($pid !== null && $pid !== '') {
-        $query->where('pid', $pid);
-    } elseif ($bundle !== '') {
-        $query->where('nama_bundle', $bundle);
-    }
-
-    if ($search !== '') {
-        $query->where('nama_paket', 'like', "%{$search}%");
-    }
-
-    if ($tipe !== '') {
-        $query->where('tipe', $tipe);
-    }
-
-    $rows = $query->orderBy('nama_paket')->get()->map(fn ($row) => [
-        'pid' => (int) $row->pid,
-        'name' => $row->nama_paket,
-        'program' => $row->tipe,
-        'type' => $row->nama_bundle,
-    ])->values();
-
-    return response()->json([
-        'message' => 'Paket referensi berhasil dimuat.',
-        'data' => $rows,
-    ]);
-});
-
-Route::post('/admin/packages', function (Request $request) {
-    $request->merge(['tipe_paket' => $request->input('tipe_paket') ?: 'tunggal']);
-
-    $validator = Validator::make($request->all(), [
-        'kategori' => ['required', 'string', 'max:100'],
-        'formasi' => ['nullable', 'string', 'max:100'],
-        'jadwal' => ['nullable', 'string', 'max:150'],
-        'nama_paket' => ['required', 'string', 'max:150'],
-        'tipe_paket' => ['required', 'in:tunggal,bundling'],
-        'bundling_id' => [
-            'nullable',
-            'integer',
-            Rule::exists('tbl_paket', 'pid')->where('tipe_paket', 'bundling')->whereNull('deleted_at'),
-        ],
-        'harga' => ['required', 'numeric', 'min:0'],
-        'ket' => ['nullable', 'string'],
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validasi paket gagal.',
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    $validated = $validator->validated();
-    $tipePaket = $validated['tipe_paket'] ?? 'tunggal';
-    $now = now();
-
-    $pid = DB::table('tbl_paket')->insertGetId([
-        'kategori' => $validated['kategori'],
-        'formasi' => $validated['formasi'] ?? null,
-        'jadwal' => $validated['jadwal'] ?? null,
-        'nama_paket' => $validated['nama_paket'],
-        'tipe_paket' => $tipePaket,
-        'bundling_id' => $tipePaket === 'tunggal' ? ($validated['bundling_id'] ?? null) : null,
-        'harga' => $validated['harga'],
-        'ket' => $validated['ket'] ?? null,
-        'created_at' => $now,
-        'created_by' => $request->user()->pid ?? null,
-        'updated_at' => null,
-        'updated_by' => null,
-    ]);
-
-    return response()->json([
-        'message' => 'Paket berhasil ditambahkan.',
-        'data' => DB::table('tbl_paket')
-            ->where('pid', $pid)
-            ->first(),
-    ], 201);
-});
-
-Route::get('/admin/packages/{pid}', function ($pid) {
-    $package = DB::table('tbl_paket as p')
-        ->leftJoin('tbl_paket as b', 'p.bundling_id', '=', 'b.pid')
-        ->select([
-            'p.pid',
-            'p.kategori',
-            'p.formasi',
-            'p.jadwal',
-            'p.nama_paket',
-            'p.tipe_paket',
-            'p.bundling_id',
-            'b.nama_paket as bundling_nama',
-            'p.harga',
-            'p.ket',
-            'p.created_at',
-            'p.created_by',
-            'p.updated_at',
-            'p.updated_by',
-        ])
-        ->where('p.pid', $pid)
-        ->first();
-
-    if (!$package) {
-        return response()->json([
-            'message' => 'Paket tidak ditemukan.',
-        ], 404);
-    }
-
-    return response()->json([
-        'message' => 'Detail paket berhasil dimuat.',
-        'data' => [
-            'pid' => (int) $package->pid,
-            'kategori' => $package->kategori,
-            'formasi' => $package->formasi,
-            'jadwal' => $package->jadwal,
-            'nama_paket' => $package->nama_paket,
-            'tipe_paket' => $package->tipe_paket ?: 'tunggal',
-            'bundling_id' => $package->bundling_id !== null ? (int) $package->bundling_id : null,
-            'bundling_nama' => $package->bundling_nama,
-            'harga' => (float) $package->harga,
-            'ket' => $package->ket,
-            'created_at' => $package->created_at,
-            'created_by' => $package->created_by,
-            'updated_at' => $package->updated_at,
-            'updated_by' => $package->updated_by,
-        ],
-    ]);
-});
-
-Route::put('/admin/packages/{pid}', function (Request $request, $pid) {
-    $request->merge(['tipe_paket' => $request->input('tipe_paket') ?: 'tunggal']);
-
-    $validator = Validator::make($request->all(), [
-        'kategori' => ['required', 'string', 'max:100'],
-        'formasi' => ['nullable', 'string', 'max:100'],
-        'jadwal' => ['nullable', 'string', 'max:150'],
-        'nama_paket' => ['required', 'string', 'max:150'],
-        'tipe_paket' => ['required', 'in:tunggal,bundling'],
-        'bundling_id' => [
-            'nullable',
-            'integer',
-            Rule::exists('tbl_paket', 'pid')->where('tipe_paket', 'bundling')->whereNull('deleted_at'),
-        ],
-        'harga' => ['required', 'numeric', 'min:0'],
-        'ket' => ['nullable', 'string'],
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validasi paket gagal.',
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    $existingPackage = DB::table('tbl_paket')->where('pid', $pid)->first();
-
-    if (!$existingPackage) {
-        return response()->json([
-            'message' => 'Paket tidak ditemukan.',
-        ], 404);
-    }
-
-    $validated = $validator->validated();
-    $tipePaket = $validated['tipe_paket'] ?? 'tunggal';
-
-    if ($tipePaket === 'tunggal' && (int) ($validated['bundling_id'] ?? 0) === (int) $pid) {
-        return response()->json([
-            'message' => 'Validasi paket gagal.',
-            'errors' => ['bundling_id' => ['Paket tidak bisa menjadi bundling untuk dirinya sendiri.']],
-        ], 422);
-    }
-
-    if ($existingPackage->tipe_paket === 'bundling' && $tipePaket === 'tunggal') {
-        $hasChildren = DB::table('tbl_paket')->where('bundling_id', $pid)->whereNull('deleted_at')->exists();
-
-        if ($hasChildren) {
-            return response()->json([
-                'message' => 'Validasi paket gagal.',
-                'errors' => ['tipe_paket' => ['Paket ini masih menjadi Bundling Paket untuk paket lain. Pindahkan atau hapus paket-paket tersebut terlebih dahulu.']],
-            ], 422);
-        }
-    }
-
-    DB::table('tbl_paket')
-        ->where('pid', $pid)
-        ->update([
-            'kategori' => $validated['kategori'],
-            'formasi' => $validated['formasi'] ?? null,
-            'jadwal' => $validated['jadwal'] ?? null,
-            'nama_paket' => $validated['nama_paket'],
-            'tipe_paket' => $tipePaket,
-            'bundling_id' => $tipePaket === 'tunggal' ? ($validated['bundling_id'] ?? null) : null,
-            'harga' => $validated['harga'],
-            'ket' => $validated['ket'] ?? null,
-            'updated_at' => now(),
-            'updated_by' => $request->user()->pid ?? null,
-        ]);
-
-    return response()->json([
-        'message' => 'Paket berhasil diperbarui.',
-        'data' => DB::table('tbl_paket')
-            ->where('pid', $pid)
-            ->first(),
-    ]);
-});
-
-Route::delete('/admin/packages/{pid}', function (Request $request, $pid) {
-    $existingPackage = DB::table('tbl_paket')
-        ->where('pid', $pid)
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$existingPackage) {
-        return response()->json([
-            'message' => 'Paket tidak ditemukan.',
-        ], 404);
-    }
-
-    if ($existingPackage->tipe_paket === 'bundling') {
-        $hasChildren = DB::table('tbl_paket')->where('bundling_id', $pid)->whereNull('deleted_at')->exists();
-
-        if ($hasChildren) {
-            return response()->json([
-                'message' => 'Bundling Paket ini masih memiliki paket tunggal di dalamnya. Pindahkan atau hapus paket-paket tersebut terlebih dahulu.',
-            ], 422);
-        }
-    }
-
-    DB::table('tbl_paket')
-        ->where('pid', $pid)
-        ->update([
-            'deleted_at' => now(),
-            'updated_at' => now(),
-            'updated_by' => $request->user()->pid ?? null,
-        ]);
-
-    return response()->json([
-        'message' => 'Paket berhasil dihapus.',
-    ]);
-});
-
-Route::get('/admin/materials', function (Request $request) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $search = trim((string) $request->query('search', ''));
-    $packageId = (int) $request->query('package_id', 0);
-    $status = trim((string) $request->query('status', 'ALL'));
-
-    $query = DB::table('tbl_materi as m')
-        ->leftJoin('tbl_paket as p', 'm.package_id', '=', 'p.pid')
-        ->select([
-            'm.pid',
-            'm.package_id',
-            'm.judul',
-            'm.deskripsi',
-            'm.file_path',
-            'm.original_name',
-            'm.mime_type',
-            'm.file_size',
-            'm.sort_order',
-            'm.is_published',
-            'm.created_at',
-            'm.updated_at',
-            'm.deleted_at',
-            'p.nama_paket',
-            'p.kategori',
-        ])
-        ->orderByDesc('m.sort_order')
-        ->orderByDesc('m.created_at')
-        ->orderByDesc('m.pid');
-
-    if ($search !== '') {
-        $query->where(function ($innerQuery) use ($search) {
-            $innerQuery
-                ->where('m.judul', 'like', "%{$search}%")
-                ->orWhere('m.deskripsi', 'like', "%{$search}%")
-                ->orWhere('m.original_name', 'like', "%{$search}%")
-                ->orWhere('p.nama_paket', 'like', "%{$search}%")
-                ->orWhere('p.kategori', 'like', "%{$search}%");
-        });
-    }
-
-    if ($packageId > 0) {
-        $query->where('m.package_id', $packageId);
-    }
-
-    if ($status !== '' && strtoupper($status) !== 'ALL') {
-        if (strtoupper($status) === 'PUBLISHED') {
-            $query->where('m.is_published', 1);
-        }
-
-        if (strtoupper($status) === 'DRAFT') {
-            $query->where('m.is_published', 0);
-        }
-    }
-
-    $materials = $query->get()->map(fn ($item) => mapMaterialRow($item));
-
-    $summary = [
-        'total_materi' => (int) DB::table('tbl_materi')->count(),
-        'materi_terbit' => (int) DB::table('tbl_materi')->where('is_published', 1)->count(),
-        'materi_draft' => (int) DB::table('tbl_materi')->where('is_published', 0)->count(),
-    ];
-
-    $packages = DB::table('tbl_paket')
-        ->whereNull('deleted_at')
-        ->select(['pid', 'nama_paket', 'kategori'])
-        ->orderBy('nama_paket')
-        ->get()
-        ->map(fn ($item) => [
-            'pid' => (int) $item->pid,
-            'name' => (string) $item->nama_paket,
-            'kategori' => (string) $item->kategori,
-        ]);
-
-    return response()->json([
-        'message' => 'Data materi admin berhasil dimuat.',
-        'summary' => $summary,
-        'packages' => $packages,
-        'data' => $materials,
-    ]);
-});
-
-Route::post('/admin/materials', function (Request $request) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $validator = Validator::make($request->all(), [
-        'package_id' => ['required', 'integer', 'exists:tbl_paket,pid'],
-        'judul' => ['required', 'string', 'max:200'],
-        'deskripsi' => ['nullable', 'string'],
-        'sort_order' => ['nullable', 'integer', 'min:0'],
-        'is_published' => ['nullable', 'boolean'],
-        'file' => ['required', 'file', 'mimes:pdf', 'max:' . materialMaxUploadKb()],
-    ], [
-        'package_id.required' => 'Paket wajib dipilih.',
-        'package_id.exists' => 'Paket tidak ditemukan.',
-        'judul.required' => 'Judul materi wajib diisi.',
-        'file.required' => 'File PDF wajib diunggah.',
-        'file.mimes' => 'File harus berformat PDF.',
-        'file.max' => 'Ukuran file melebihi batas maksimal.',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validasi materi gagal.',
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    $validated = $validator->validated();
-    $package = DB::table('tbl_paket')
-        ->where('pid', $validated['package_id'])
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$package) {
-        return response()->json([
-            'message' => 'Paket tidak ditemukan.',
-        ], 404);
-    }
-
-    $uploadedFile = $request->file('file');
-    $safeFileName = Str::slug($validated['judul']) ?: 'materi';
-    $safeFileName .= '-' . now()->format('YmdHis') . '.pdf';
-    $storedPath = null;
-
-    try {
-        $storedPath = Storage::disk('local')->putFileAs('materials', $uploadedFile, $safeFileName);
-
-        $pid = DB::table('tbl_materi')->insertGetId([
-            'package_id' => (int) $validated['package_id'],
-            'judul' => $validated['judul'],
-            'deskripsi' => $validated['deskripsi'] ?? null,
-            'file_path' => $storedPath,
-            'original_name' => $uploadedFile->getClientOriginalName(),
-            'mime_type' => $uploadedFile->getClientMimeType() ?: 'application/pdf',
-            'file_size' => (int) ($uploadedFile->getSize() ?: 0),
-            'sort_order' => (int) ($validated['sort_order'] ?? 0),
-            'is_published' => (int) ($validated['is_published'] ?? 1) === 1 ? 1 : 0,
-            'created_at' => now(),
-            'created_by' => $request->user()->pid ?? null,
-            'updated_at' => null,
-            'updated_by' => null,
-            'deleted_at' => null,
-        ]);
-    } catch (Throwable $error) {
-        if ($storedPath && Storage::disk('local')->exists($storedPath)) {
-            Storage::disk('local')->delete($storedPath);
-        }
-
-        throw $error;
-    }
-
-    $material = DB::table('tbl_materi as m')
-        ->leftJoin('tbl_paket as p', 'm.package_id', '=', 'p.pid')
-        ->where('m.pid', $pid)
-        ->select([
-            'm.*',
-            'p.nama_paket',
-        ])
-        ->first();
-
-    return response()->json([
-        'message' => 'Materi berhasil diunggah.',
-        'data' => mapMaterialRow($material),
-    ], 201);
-});
-
-Route::get('/admin/materials/{pid}', function ($pid) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $material = DB::table('tbl_materi as m')
-        ->leftJoin('tbl_paket as p', 'm.package_id', '=', 'p.pid')
-        ->where('m.pid', $pid)
-        ->select([
-            'm.pid',
-            'm.package_id',
-            'm.judul',
-            'm.deskripsi',
-            'm.file_path',
-            'm.original_name',
-            'm.mime_type',
-            'm.file_size',
-            'm.sort_order',
-            'm.is_published',
-            'm.created_at',
-            'm.updated_at',
-            'm.deleted_at',
-            'p.nama_paket',
-            'p.kategori',
-        ])
-        ->first();
-
-    if (!$material) {
-        return response()->json([
-            'message' => 'Materi tidak ditemukan.',
-        ], 404);
-    }
-
-    return response()->json([
-        'message' => 'Detail materi berhasil dimuat.',
-        'data' => mapMaterialRow($material),
-    ]);
-});
-
-Route::put('/admin/materials/{pid}', function (Request $request, $pid) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $existingMaterial = DB::table('tbl_materi')
-        ->where('pid', $pid)
-        ->first();
-
-    if (!$existingMaterial) {
-        return response()->json([
-            'message' => 'Materi tidak ditemukan.',
-        ], 404);
-    }
-
-    $validator = Validator::make($request->all(), [
-        'package_id' => ['required', 'integer', 'exists:tbl_paket,pid'],
-        'judul' => ['required', 'string', 'max:200'],
-        'deskripsi' => ['nullable', 'string'],
-        'sort_order' => ['nullable', 'integer', 'min:0'],
-        'is_published' => ['nullable', 'boolean'],
-        'file' => ['nullable', 'file', 'mimes:pdf', 'max:' . materialMaxUploadKb()],
-    ], [
-        'package_id.required' => 'Paket wajib dipilih.',
-        'package_id.exists' => 'Paket tidak ditemukan.',
-        'judul.required' => 'Judul materi wajib diisi.',
-        'file.mimes' => 'File harus berformat PDF.',
-        'file.max' => 'Ukuran file melebihi batas maksimal.',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validasi materi gagal.',
-            'errors' => $validator->errors(),
-        ], 422);
-    }
-
-    $validated = $validator->validated();
-    $package = DB::table('tbl_paket')
-        ->where('pid', $validated['package_id'])
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$package) {
-        return response()->json([
-            'message' => 'Paket tidak ditemukan.',
-        ], 404);
-    }
-
-    $now = now();
-    $nextFilePath = $existingMaterial->file_path;
-    $oldFilePath = $existingMaterial->file_path;
-    $uploadedFile = $request->file('file');
-    $replaceFile = false;
-
-    try {
-        if ($uploadedFile) {
-            $safeFileName = Str::slug($validated['judul']) ?: 'materi';
-            $safeFileName .= '-' . $now->format('YmdHis') . '.pdf';
-            $nextFilePath = Storage::disk('local')->putFileAs('materials', $uploadedFile, $safeFileName);
-            $replaceFile = true;
-        }
-
-        DB::table('tbl_materi')
-            ->where('pid', $pid)
-            ->update([
-                'package_id' => (int) $validated['package_id'],
-                'judul' => $validated['judul'],
-                'deskripsi' => $validated['deskripsi'] ?? null,
-                'file_path' => $nextFilePath,
-                'original_name' => $uploadedFile?->getClientOriginalName() ?? $existingMaterial->original_name,
-                'mime_type' => $uploadedFile?->getClientMimeType() ?: $existingMaterial->mime_type,
-                'file_size' => (int) ($uploadedFile?->getSize() ?: $existingMaterial->file_size),
-                'sort_order' => (int) ($validated['sort_order'] ?? 0),
-                'is_published' => (int) ($validated['is_published'] ?? 1) === 1 ? 1 : 0,
-                'updated_at' => $now,
-                'updated_by' => $request->user()->pid ?? null,
-            ]);
-    } catch (Throwable $error) {
-        if ($replaceFile && $nextFilePath && Storage::disk('local')->exists($nextFilePath)) {
-            Storage::disk('local')->delete($nextFilePath);
-        }
-
-        throw $error;
-    }
-
-    if ($replaceFile && $oldFilePath && $oldFilePath !== $nextFilePath && Storage::disk('local')->exists($oldFilePath)) {
-        Storage::disk('local')->delete($oldFilePath);
-    }
-
-    $material = DB::table('tbl_materi as m')
-        ->leftJoin('tbl_paket as p', 'm.package_id', '=', 'p.pid')
-        ->where('m.pid', $pid)
-        ->select([
-            'm.pid',
-            'm.package_id',
-            'm.judul',
-            'm.deskripsi',
-            'm.file_path',
-            'm.original_name',
-            'm.mime_type',
-            'm.file_size',
-            'm.sort_order',
-            'm.is_published',
-            'm.created_at',
-            'm.updated_at',
-            'm.deleted_at',
-            'p.nama_paket',
-            'p.kategori',
-        ])
-        ->first();
-
-    return response()->json([
-        'message' => 'Materi berhasil diperbarui.',
-        'data' => mapMaterialRow($material),
-    ]);
-});
-
-Route::delete('/admin/materials/{pid}', function (Request $request, $pid) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $material = DB::table('tbl_materi')
-        ->where('pid', $pid)
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$material) {
-        return response()->json([
-            'message' => 'Materi tidak ditemukan.',
-        ], 404);
-    }
-
-    DB::table('tbl_materi')
-        ->where('pid', $pid)
-        ->update([
-            'deleted_at' => now(),
-            'updated_at' => now(),
-            'updated_by' => $request->user()->pid ?? null,
-        ]);
-
-    if (!empty($material->file_path) && Storage::disk('local')->exists($material->file_path)) {
-        Storage::disk('local')->delete($material->file_path);
-    }
-
-    return response()->json([
-        'message' => 'Materi berhasil dihapus.',
-    ]);
-});
-
-Route::get('/admin/materials/{pid}/download', function ($pid) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $material = DB::table('tbl_materi')
-        ->where('pid', $pid)
-        ->whereNull('deleted_at')
-        ->first();
-
-    if (!$material) {
-        return response()->json([
-            'message' => 'Materi tidak ditemukan.',
-        ], 404);
-    }
-
-    if (!Storage::disk('local')->exists($material->file_path)) {
-        return response()->json([
-            'message' => 'File materi tidak ditemukan.',
-        ], 404);
-    }
-
-    $stream = Storage::disk('local')->readStream($material->file_path);
-    if ($stream === false) {
-        return response()->json([
-            'message' => 'File materi tidak dapat dibuka.',
-        ], 500);
-    }
-
-    $filename = str_replace('"', '', $material->original_name ?: ($material->judul . '.pdf'));
-
-    return response()->stream(function () use ($stream) {
-        fpassthru($stream);
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-    }, 200, [
-        'Content-Type' => $material->mime_type ?: 'application/pdf',
-        'Content-Disposition' => 'inline; filename="' . $filename . '"',
-        'Content-Length' => (string) Storage::disk('local')->size($material->file_path),
-        'X-Content-Type-Options' => 'nosniff',
-        'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
-    ]);
-});
-
-Route::get('/materials', function (Request $request) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $userId = (int) $request->query('user_id', 0);
-    $search = trim((string) $request->query('search', ''));
-    $packageId = (int) $request->query('package_id', 0);
-    $accessiblePackageIds = userPurchasedPackageIds($userId);
-
-    if (empty($accessiblePackageIds)) {
-        return response()->json([
-            'message' => 'Data materi berhasil dimuat.',
-            'summary' => [
-                'total_materi' => 0,
-                'total_paket' => 0,
-            ],
-            'packages' => [],
-            'data' => [],
-        ]);
-    }
-
-    $query = DB::table('tbl_materi as m')
-        ->leftJoin('tbl_paket as p', 'm.package_id', '=', 'p.pid')
-        ->whereNull('m.deleted_at')
-        ->where('m.is_published', 1)
-        ->whereIn('m.package_id', $accessiblePackageIds)
-        ->select([
-            'm.pid',
-            'm.package_id',
-            'm.judul',
-            'm.deskripsi',
-            'm.file_path',
-            'm.original_name',
-            'm.mime_type',
-            'm.file_size',
-            'm.sort_order',
-            'm.is_published',
-            'm.created_at',
-            'm.updated_at',
-            'p.nama_paket',
-            'p.kategori',
-        ])
-        ->orderByDesc('m.sort_order')
-        ->orderByDesc('m.created_at')
-        ->orderByDesc('m.pid');
-
-    if ($search !== '') {
-        $query->where(function ($innerQuery) use ($search) {
-            $innerQuery
-                ->where('m.judul', 'like', "%{$search}%")
-                ->orWhere('m.deskripsi', 'like', "%{$search}%")
-                ->orWhere('p.nama_paket', 'like', "%{$search}%")
-                ->orWhere('p.kategori', 'like', "%{$search}%");
-        });
-    }
-
-    if ($packageId > 0 && in_array($packageId, $accessiblePackageIds, true)) {
-        $query->where('m.package_id', $packageId);
-    }
-
-    $materials = $query->get()->map(fn ($item) => mapMaterialRow($item));
-
-    $packages = DB::table('tbl_paket as p')
-        ->whereNull('p.deleted_at')
-        ->whereIn('p.pid', $accessiblePackageIds)
-        ->select(['p.pid', 'p.nama_paket', 'p.kategori'])
-        ->orderBy('p.nama_paket')
-        ->get()
-        ->map(fn ($item) => [
-            'pid' => (int) $item->pid,
-            'name' => (string) $item->nama_paket,
-            'kategori' => (string) $item->kategori,
-        ]);
-
-    return response()->json([
-        'message' => 'Data materi berhasil dimuat.',
-        'summary' => [
-            'total_materi' => count($materials),
-            'total_paket' => count($packages),
-        ],
-        'packages' => $packages,
-        'data' => $materials,
-    ]);
-});
-
-Route::get('/materials/{pid}/view', function (Request $request, $pid) {
-    if (!Schema::hasTable('tbl_materi')) {
-        return materialTableMissingResponse();
-    }
-
-    $material = DB::table('tbl_materi as m')
-        ->leftJoin('tbl_paket as p', 'm.package_id', '=', 'p.pid')
-        ->where('m.pid', $pid)
-        ->whereNull('m.deleted_at')
-        ->select([
-            'm.pid',
-            'm.package_id',
-            'm.judul',
-            'm.file_path',
-            'm.original_name',
-            'm.mime_type',
-            'm.file_size',
-            'm.is_published',
-            'p.nama_paket',
-            'p.kategori',
-        ])
-        ->first();
-
-    if (!$material) {
-        return response()->json([
-            'message' => 'Materi tidak ditemukan.',
-        ], 404);
-    }
-
-    $userId = (int) $request->query('user_id', $request->input('user_id', 0));
-    $isAdmin = (int) ($request->user()->is_admin ?? 0) === 1;
-
-    if (!$isAdmin && !userHasMaterialAccess($userId, (int) $material->package_id)) {
-        return response()->json([
-            'message' => 'Anda belum memiliki akses ke materi ini.',
-        ], 403);
-    }
-
-    if (!Storage::disk('local')->exists($material->file_path)) {
-        return response()->json([
-            'message' => 'File materi tidak ditemukan.',
-        ], 404);
-    }
-
-    $stream = Storage::disk('local')->readStream($material->file_path);
-    if ($stream === false) {
-        return response()->json([
-            'message' => 'File materi tidak dapat dibuka.',
-        ], 500);
-    }
-
-    $filename = str_replace('"', '', $material->original_name ?: ($material->judul . '.pdf'));
-    $headers = [
-        'Content-Type' => $material->mime_type ?: 'application/pdf',
-        'Content-Disposition' => 'inline; filename="' . $filename . '"',
-        'Content-Length' => (string) Storage::disk('local')->size($material->file_path),
-        'X-Content-Type-Options' => 'nosniff',
-        'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
-    ];
-
-    notifyAdminUsers(
-        'material.viewed',
-        'Materi dibuka user',
-        'User #' . $userId . ' membuka materi ' . $material->judul . '.',
-        '/dashboard-admin/materials',
-        ['icon' => '📄'],
-        ['pid' => $userId, 'material_id' => (int) $material->pid, 'package_id' => (int) $material->package_id]
-    );
-
-    logUserActivity(
-        (int) $userId,
-        'material.viewed',
-        'Membuka materi',
-        'Anda membuka materi ' . $material->judul . '.',
-        '📄',
-        ['material_id' => (int) $material->pid, 'package_id' => (int) $material->package_id]
-    );
-
-    return response()->stream(function () use ($stream) {
-        fpassthru($stream);
-
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-    }, 200, $headers);
-});
+Route::get('/admin/question-groups', [QuestionGroupController::class, 'index']);
+Route::post('/admin/question-groups', [QuestionGroupController::class, 'store']);
+Route::put('/admin/question-groups/{id}', [QuestionGroupController::class, 'update']);
+Route::delete('/admin/question-groups/{id}', [QuestionGroupController::class, 'destroy']);
+
+Route::get('/admin/packages', [PackageController::class, 'index']);
+Route::get('/admin/ref-paket', [PackageController::class, 'refPaket']);
+Route::post('/admin/packages', [PackageController::class, 'store']);
+Route::get('/admin/packages/{pid}', [PackageController::class, 'show']);
+Route::put('/admin/packages/{pid}', [PackageController::class, 'update']);
+Route::delete('/admin/packages/{pid}', [PackageController::class, 'destroy']);
+
+Route::get('/admin/materials', [MaterialController::class, 'index']);
+Route::post('/admin/materials', [MaterialController::class, 'store']);
+
+Route::get('/admin/materials/{pid}', [MaterialController::class, 'show']);
+Route::put('/admin/materials/{pid}', [MaterialController::class, 'update']);
+
+Route::delete('/admin/materials/{pid}', [MaterialController::class, 'destroy']);
+Route::get('/admin/materials/{pid}/download', [MaterialController::class, 'download']);
+
+Route::get('/materials', [MaterialController::class, 'publicIndex']);
+Route::get('/materials/{pid}/view', [MaterialController::class, 'view']);
 
 Route::get('/admin/transactions', [TransactionController::class, 'index']);
 
@@ -3106,7 +1834,7 @@ Route::put('/account-profile/{pid}/password', function (Request $request, $pid) 
             'updated_at' => now(),
         ]);
 
-    logUserActivity((int) $pid, 'password.updated', 'Password diperbarui', 'Anda mengganti password akun.', '🔒');
+    (new AdminNotificationService())->logUserActivity((int) $pid, 'password.updated', 'Password diperbarui', 'Anda mengganti password akun.', '🔒');
 
     return response()->json([
         'message' => 'Password berhasil diperbarui.',
@@ -3195,7 +1923,7 @@ Route::put('/account-profile/{pid}', function (Request $request, $pid) {
         }
     });
 
-    logUserActivity((int) $pid, 'profile.updated', 'Profil diperbarui', 'Anda memperbarui data profil.', '✏️');
+    (new AdminNotificationService())->logUserActivity((int) $pid, 'profile.updated', 'Profil diperbarui', 'Anda memperbarui data profil.', '✏️');
 
     $updatedUser = DB::table('tbl_user')
         ->leftJoin('tbl_detail_user', 'tbl_user.pid', '=', 'tbl_detail_user.pid_user')
@@ -3345,7 +2073,7 @@ Route::post('/register', function (Request $request) {
 
     Cache::forget($cacheKey);
 
-    notifyAdminUsers(
+    (new AdminNotificationService())->notify(
         'user.registered',
         'User baru terdaftar',
         'Akun baru dibuat dengan email ' . $input['email'] . '.',
@@ -3354,7 +2082,7 @@ Route::post('/register', function (Request $request) {
         ['pid' => $userId, 'email' => $input['email']]
     );
 
-    logUserActivity(
+    (new AdminNotificationService())->logUserActivity(
         (int) $userId,
         'user.registered',
         'Akun berhasil dibuat',
@@ -3418,7 +2146,7 @@ Route::post('/login', function (Request $request) {
         ->where('pid_user', $user->pid)
         ->first();
 
-    notifyAdminUsers(
+    (new AdminNotificationService())->notify(
         'user.login',
         'User login',
         'User ' . ($user->email ?? 'unknown') . ' berhasil login.',
@@ -3427,7 +2155,7 @@ Route::post('/login', function (Request $request) {
         ['pid' => (int) $user->pid, 'email' => (string) $user->email]
     );
 
-    logUserActivity(
+    (new AdminNotificationService())->logUserActivity(
         (int) $user->pid,
         'user.login',
         'Login berhasil',
@@ -3587,7 +2315,7 @@ Route::post('/complete-profile', function (Request $request) {
         ->where('pid', $input['pid_user'])
         ->first();
 
-    notifyAdminUsers(
+    (new AdminNotificationService())->notify(
         'user.profile_completed',
         'Profil user diperbarui',
         'Profil ' . ($input['nama'] ?: ($profileUser->email ?? 'user')) . ' sudah dilengkapi.',
@@ -3596,7 +2324,7 @@ Route::post('/complete-profile', function (Request $request) {
         ['pid' => (int) $input['pid_user'], 'email' => $profileUser->email ?? null]
     );
 
-    logUserActivity(
+    (new AdminNotificationService())->logUserActivity(
         (int) $input['pid_user'],
         'user.profile_completed',
         'Profil dilengkapi',
