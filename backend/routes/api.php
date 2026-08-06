@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\UserStatsController;
+use App\Models\User;
 use App\Services\AdminNotificationService;
 use App\Services\MidtransService;
 use App\Services\SystemParameterService;
@@ -534,34 +536,34 @@ Route::get('/admin/dashboard-summary', function () {
             'total_paket' => $totalPackage,
         ],
     ]);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/parameters', [ParameterController::class, 'index']);
-Route::get('/admin/parameters/{pid}', [ParameterController::class, 'show']);
-Route::post('/admin/parameters', [ParameterController::class, 'store']);
-Route::put('/admin/parameters/{pid}', [ParameterController::class, 'update']);
+Route::get('/admin/parameters', [ParameterController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/parameters/{pid}', [ParameterController::class, 'show'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/parameters', [ParameterController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/parameters/{pid}', [ParameterController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/faqs', [FaqController::class, 'index']);
-Route::get('/admin/faqs/{pid}', [FaqController::class, 'show']);
-Route::post('/admin/faqs', [FaqController::class, 'store']);
-Route::put('/admin/faqs/{pid}', [FaqController::class, 'update']);
-Route::delete('/admin/faqs/{pid}', [FaqController::class, 'destroy']);
-Route::patch('/admin/faqs/{pid}/restore', [FaqController::class, 'restore']);
-Route::patch('/admin/faqs/{pid}/toggle', [FaqController::class, 'toggle']);
+Route::get('/admin/faqs', [FaqController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/faqs/{pid}', [FaqController::class, 'show'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/faqs', [FaqController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/faqs/{pid}', [FaqController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
+Route::delete('/admin/faqs/{pid}', [FaqController::class, 'destroy'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/faqs/{pid}/restore', [FaqController::class, 'restore'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/faqs/{pid}/toggle', [FaqController::class, 'toggle'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/testimonials', [TestimonialController::class, 'index']);
-Route::get('/admin/testimonials/{pid}', [TestimonialController::class, 'show']);
-Route::post('/admin/testimonials', [TestimonialController::class, 'store']);
-Route::put('/admin/testimonials/{pid}', [TestimonialController::class, 'update']);
-Route::delete('/admin/testimonials/{pid}', [TestimonialController::class, 'destroy']);
-Route::patch('/admin/testimonials/{pid}/restore', [TestimonialController::class, 'restore']);
-Route::patch('/admin/testimonials/{pid}/toggle', [TestimonialController::class, 'toggle']);
+Route::get('/admin/testimonials', [TestimonialController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/testimonials/{pid}', [TestimonialController::class, 'show'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/testimonials', [TestimonialController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/testimonials/{pid}', [TestimonialController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
+Route::delete('/admin/testimonials/{pid}', [TestimonialController::class, 'destroy'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/testimonials/{pid}/restore', [TestimonialController::class, 'restore'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/testimonials/{pid}/toggle', [TestimonialController::class, 'toggle'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/users', [UserController::class, 'index']);
-Route::post('/admin/users', [UserController::class, 'store']);
-Route::patch('/admin/users/{pid}/toggle-role', [UserController::class, 'toggleRole']);
-Route::get('/admin/users/{pid}', [UserController::class, 'show']);
-Route::put('/admin/users/{pid}', [UserController::class, 'update']);
+Route::get('/admin/users', [UserController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/users', [UserController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/users/{pid}/toggle-role', [UserController::class, 'toggleRole'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/users/{pid}', [UserController::class, 'show'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/users/{pid}', [UserController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
 
 Route::get('/packages', [PackageController::class, 'publicIndex']);
 
@@ -657,7 +659,7 @@ Route::post('/checkout', function (Request $request) {
             'gross_amount' => $grossAmount,
         ],
     ], 201);
-});
+})->middleware('auth:sanctum');
 
 Route::post('/midtrans/notification', function (Request $request) {
     $notification = $request->all();
@@ -755,7 +757,7 @@ Route::get('/tryout/current', function (Request $request) {
         'message' => 'Sesi tryout aktif ditemukan.',
         'data' => $payload,
     ]);
-});
+})->middleware('auth:sanctum');
 
 Route::post('/tryout/start', function (Request $request) {
     $input = [
@@ -877,7 +879,7 @@ Route::post('/tryout/start', function (Request $request) {
         'message' => 'Tryout berhasil dimulai.',
         'data' => $payload,
     ], 201);
-});
+})->middleware('auth:sanctum');
 
 Route::post('/admin/tryout-sandbox/start', function (Request $request) {
     $input = [
@@ -973,7 +975,7 @@ Route::post('/admin/tryout-sandbox/start', function (Request $request) {
         'message' => 'Sandbox tryout berhasil dibuat.',
         'data' => $payload,
     ], 201);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
 Route::get('/tryout/{ljkId}', function (Request $request, $ljkId) {
     $userId = (int) $request->query('user_id', 0);
@@ -995,7 +997,7 @@ Route::get('/tryout/{ljkId}', function (Request $request, $ljkId) {
         'message' => 'Sesi tryout berhasil dimuat.',
         'data' => $payload,
     ]);
-});
+})->middleware('auth:sanctum');
 
 Route::put('/tryout/{ljkId}/answer', function (Request $request, $ljkId) {
     $input = [
@@ -1064,7 +1066,7 @@ Route::put('/tryout/{ljkId}/answer', function (Request $request, $ljkId) {
     return response()->json([
         'message' => 'Jawaban berhasil disimpan.',
     ]);
-});
+})->middleware('auth:sanctum');
 
 Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
     $userId = (int) $request->input('user_id', $request->input('pid_user'));
@@ -1175,7 +1177,7 @@ Route::post('/tryout/{ljkId}/finish', function (Request $request, $ljkId) {
         'message' => 'Tryout selesai dan skor berhasil dihitung.',
         'data' => $payload,
     ]);
-});
+})->middleware('auth:sanctum');
 
 Route::get('/admin/questions', function (Request $request) {
     $group = trim((string) $request->query('group', ''));
@@ -1274,7 +1276,7 @@ Route::get('/admin/questions', function (Request $request) {
         ],
         'data' => $data,
     ]);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
 Route::get('/admin/questions/{id}', function (Request $request, $id) {
     $question = DB::table('tbl_questions as q')
@@ -1328,7 +1330,7 @@ Route::get('/admin/questions/{id}', function (Request $request, $id) {
             'correct_options_count' => count(array_filter($options->all(), fn ($option) => (bool) ($option['answer'] ?? false))),
         ]),
     ]);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
 Route::post('/admin/questions', function (Request $request) {
     $isText = $request->boolean('istext');
@@ -1468,7 +1470,7 @@ Route::post('/admin/questions', function (Request $request) {
         'message' => 'Soal berhasil ditambahkan.',
         'data' => DB::table('tbl_questions')->where('id', $questionId)->first(),
     ], 201);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
 Route::put('/admin/questions/{id}', function (Request $request, $id) {
     $isText = $request->boolean('istext');
@@ -1637,7 +1639,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         'message' => 'Soal berhasil diperbarui.',
         'data' => DB::table('tbl_questions')->where('id', $id)->first(),
     ]);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
 Route::delete('/admin/questions/{id}', function ($id) {
     $existingQuestion = DB::table('tbl_questions')
@@ -1671,7 +1673,7 @@ Route::delete('/admin/questions/{id}', function ($id) {
     return response()->json([
         'message' => 'Soal berhasil dihapus.',
     ]);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
 Route::patch('/admin/questions/{id}/restore', function ($id) {
     $existingQuestion = DB::table('tbl_questions')
@@ -1704,40 +1706,40 @@ Route::patch('/admin/questions/{id}/restore', function ($id) {
     return response()->json([
         'message' => 'Soal berhasil dipulihkan.',
     ]);
-});
+})->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/question-groups', [QuestionGroupController::class, 'index']);
-Route::post('/admin/question-groups', [QuestionGroupController::class, 'store']);
-Route::put('/admin/question-groups/{id}', [QuestionGroupController::class, 'update']);
-Route::delete('/admin/question-groups/{id}', [QuestionGroupController::class, 'destroy']);
+Route::get('/admin/question-groups', [QuestionGroupController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/question-groups', [QuestionGroupController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/question-groups/{id}', [QuestionGroupController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
+Route::delete('/admin/question-groups/{id}', [QuestionGroupController::class, 'destroy'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/packages', [PackageController::class, 'index']);
-Route::get('/admin/ref-paket', [PackageController::class, 'refPaket']);
-Route::post('/admin/packages', [PackageController::class, 'store']);
-Route::get('/admin/packages/{pid}', [PackageController::class, 'show']);
-Route::put('/admin/packages/{pid}', [PackageController::class, 'update']);
-Route::delete('/admin/packages/{pid}', [PackageController::class, 'destroy']);
+Route::get('/admin/packages', [PackageController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/ref-paket', [PackageController::class, 'refPaket'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/packages', [PackageController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/packages/{pid}', [PackageController::class, 'show'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/packages/{pid}', [PackageController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
+Route::delete('/admin/packages/{pid}', [PackageController::class, 'destroy'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/materials', [MaterialController::class, 'index']);
-Route::post('/admin/materials', [MaterialController::class, 'store']);
+Route::get('/admin/materials', [MaterialController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::post('/admin/materials', [MaterialController::class, 'store'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/admin/materials/{pid}', [MaterialController::class, 'show']);
-Route::put('/admin/materials/{pid}', [MaterialController::class, 'update']);
+Route::get('/admin/materials/{pid}', [MaterialController::class, 'show'])->middleware(['auth:sanctum', 'admin']);
+Route::put('/admin/materials/{pid}', [MaterialController::class, 'update'])->middleware(['auth:sanctum', 'admin']);
 
-Route::delete('/admin/materials/{pid}', [MaterialController::class, 'destroy']);
-Route::get('/admin/materials/{pid}/download', [MaterialController::class, 'download']);
+Route::delete('/admin/materials/{pid}', [MaterialController::class, 'destroy'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/materials/{pid}/download', [MaterialController::class, 'download'])->middleware(['auth:sanctum', 'admin']);
 
-Route::get('/materials', [MaterialController::class, 'publicIndex']);
-Route::get('/materials/{pid}/view', [MaterialController::class, 'view']);
+Route::get('/materials', [MaterialController::class, 'publicIndex'])->middleware('auth:sanctum');
+Route::get('/materials/{pid}/view', [MaterialController::class, 'view'])->middleware('auth:sanctum');
 
-Route::get('/admin/transactions', [TransactionController::class, 'index']);
+Route::get('/admin/transactions', [TransactionController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
 
 Route::get('/me', [MeController::class, 'show']);
 
-Route::get('/admin/notifications', [AdminNotificationController::class, 'index']);
-Route::get('/admin/notifications/unread-count', [AdminNotificationController::class, 'unreadCount']);
-Route::patch('/admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markRead']);
-Route::patch('/admin/notifications/read-all', [AdminNotificationController::class, 'markAllRead']);
+Route::get('/admin/notifications', [AdminNotificationController::class, 'index'])->middleware(['auth:sanctum', 'admin']);
+Route::get('/admin/notifications/unread-count', [AdminNotificationController::class, 'unreadCount'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markRead'])->middleware(['auth:sanctum', 'admin']);
+Route::patch('/admin/notifications/read-all', [AdminNotificationController::class, 'markAllRead'])->middleware(['auth:sanctum', 'admin']);
 
 Route::get('/account-profile/{pid}', function ($pid) {
     $user = DB::table('tbl_user')
@@ -1787,7 +1789,7 @@ Route::get('/account-profile/{pid}', function ($pid) {
             ],
         ],
     ]);
-});
+})->middleware('auth:sanctum');
 
 Route::put('/account-profile/{pid}/password', function (Request $request, $pid) {
     $user = DB::table('tbl_user')->where('pid', $pid)->first();
@@ -1839,7 +1841,7 @@ Route::put('/account-profile/{pid}/password', function (Request $request, $pid) 
     return response()->json([
         'message' => 'Password berhasil diperbarui.',
     ]);
-})->middleware('throttle:5,1');
+})->middleware(['auth:sanctum', 'throttle:5,1']);
 
 Route::put('/account-profile/{pid}', function (Request $request, $pid) {
     $user = DB::table('tbl_user')->where('pid', $pid)->first();
@@ -1966,13 +1968,13 @@ Route::put('/account-profile/{pid}', function (Request $request, $pid) {
             ],
         ],
     ]);
-});
+})->middleware('auth:sanctum');
 
-Route::get('/users/{pid}/activity-log', [UserStatsController::class, 'activityLog']);
-Route::get('/users/{pid}/learning-streak', [UserStatsController::class, 'learningStreak']);
-Route::get('/users/{pid}/tryout-history', [UserStatsController::class, 'tryoutHistory']);
-Route::get('/users/{pid}/activity-calendar', [UserStatsController::class, 'activityCalendar']);
-Route::get('/users/{pid}/transactions', [UserStatsController::class, 'transactions']);
+Route::get('/users/{pid}/activity-log', [UserStatsController::class, 'activityLog'])->middleware('auth:sanctum');
+Route::get('/users/{pid}/learning-streak', [UserStatsController::class, 'learningStreak'])->middleware('auth:sanctum');
+Route::get('/users/{pid}/tryout-history', [UserStatsController::class, 'tryoutHistory'])->middleware('auth:sanctum');
+Route::get('/users/{pid}/activity-calendar', [UserStatsController::class, 'activityCalendar'])->middleware('auth:sanctum');
+Route::get('/users/{pid}/transactions', [UserStatsController::class, 'transactions'])->middleware('auth:sanctum');
 
 Route::get('/captcha', function () {
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2120,9 +2122,7 @@ Route::post('/login', function (Request $request) {
         ], 422);
     }
 
-    $user = DB::table('tbl_user')
-        ->where('email', $input['email'])
-        ->first();
+    $user = User::where('email', $input['email'])->first();
 
     if (!$user || !Hash::check($input['password'], $user->password)) {
         return response()->json([
@@ -2141,6 +2141,9 @@ Route::post('/login', function (Request $request) {
             ],
         ], 403);
     }
+
+    Auth::login($user);
+    $request->session()->regenerate();
 
     $detailUser = DB::table('tbl_detail_user')
         ->where('pid_user', $user->pid)
@@ -2174,6 +2177,14 @@ Route::post('/login', function (Request $request) {
             'next_step' => $detailUser ? 'Masuk ke beranda.' : 'Lengkapi profil terlebih dahulu.',
         ],
     ]);
+});
+
+Route::post('/logout', function (Request $request) {
+    Auth::guard('web')->logout();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+
+    return response()->json(['message' => 'Logout berhasil.']);
 });
 
 Route::post('/forgot-password', function (Request $request) {

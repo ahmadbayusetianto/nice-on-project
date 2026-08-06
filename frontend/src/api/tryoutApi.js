@@ -1,7 +1,9 @@
 import { BACKEND_URL, buildHttpErrorMessage, parseSafeJson } from './client'
 
 export async function fetchCurrentTryout({ userId, includeDraft } = {}) {
-  const response = await fetch(`${BACKEND_URL}/api/tryout/current?user_id=${userId}${includeDraft ? '&include_draft=1' : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/tryout/current?user_id=${userId}${includeDraft ? '&include_draft=1' : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -18,6 +20,7 @@ export async function startTryout({ userId, packageId, jenisTryout }) {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({
       user_id: userId,
       package_id: packageId,
@@ -40,6 +43,7 @@ export async function saveTryoutAnswer({ sessionId, userId, questionId, optionId
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({
       user_id: userId,
       question_id: questionId,
@@ -62,6 +66,7 @@ export async function finishTryout({ sessionId, userId }) {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({ user_id: userId }),
   })
   const { payload, rawBody } = await parseSafeJson(response)

@@ -5,7 +5,9 @@ export async function fetchAdminTestimonials({ search, status } = {}) {
   if (search) query.set('search', search)
   if (status && status !== 'Semua Status') query.set('status', status)
 
-  const response = await fetch(`${BACKEND_URL}/api/admin/testimonials${query.toString() ? `?${query.toString()}` : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/testimonials${query.toString() ? `?${query.toString()}` : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -16,7 +18,9 @@ export async function fetchAdminTestimonials({ search, status } = {}) {
 }
 
 export async function fetchAdminTestimoniDetail(pid) {
-  const response = await fetch(`${BACKEND_URL}/api/admin/testimonials/${pid}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/testimonials/${pid}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -30,6 +34,7 @@ export async function saveTestimoni(formData, { isEditMode, pid } = {}) {
   const response = await fetch(`${BACKEND_URL}/api/admin/testimonials${isEditMode ? `/${pid}` : ''}`, {
     method: 'POST',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
     body: formData,
   })
   const { payload, rawBody } = await parseSafeJson(response)
@@ -45,6 +50,7 @@ export async function deleteTestimoni(pid) {
   const response = await fetch(`${BACKEND_URL}/api/admin/testimonials/${pid}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const { payload, rawBody } = await parseSafeJson(response)
 
@@ -59,6 +65,7 @@ export async function toggleTestimoniStatus(pid) {
   const response = await fetch(`${BACKEND_URL}/api/admin/testimonials/${pid}/toggle`, {
     method: 'PATCH',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const { payload, rawBody } = await parseSafeJson(response)
 

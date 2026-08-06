@@ -6,7 +6,9 @@ export async function fetchAdminMaterials({ search, packageId, status } = {}) {
   if (packageId && packageId !== 'ALL') params.set('package_id', packageId)
   if (status && status !== 'ALL') params.set('status', status)
 
-  const response = await fetch(`${BACKEND_URL}/api/admin/materials${params.toString() ? `?${params.toString()}` : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/materials${params.toString() ? `?${params.toString()}` : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -17,7 +19,9 @@ export async function fetchAdminMaterials({ search, packageId, status } = {}) {
 }
 
 export async function fetchAdminMaterialDetail(pid) {
-  const response = await fetch(`${BACKEND_URL}/api/admin/materials/${pid}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/materials/${pid}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -31,6 +35,7 @@ export async function saveMaterial(formData, { isEditMode, pid } = {}) {
   const response = await fetch(`${BACKEND_URL}/api/admin/materials${isEditMode ? `/${pid}` : ''}`, {
     method: 'POST',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
     body: formData,
   })
   const { payload, rawBody } = await parseSafeJson(response)
@@ -46,6 +51,7 @@ export async function deleteMaterial(pid) {
   const response = await fetch(`${BACKEND_URL}/api/admin/materials/${pid}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const { payload, rawBody } = await parseSafeJson(response)
 
@@ -61,7 +67,9 @@ export async function fetchUserMaterials({ userId, search, packageId } = {}) {
   if (search) params.set('search', search)
   if (packageId && packageId !== 'ALL') params.set('package_id', packageId)
 
-  const response = await fetch(`${BACKEND_URL}/api/materials?${params.toString()}`)
+  const response = await fetch(`${BACKEND_URL}/api/materials?${params.toString()}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {

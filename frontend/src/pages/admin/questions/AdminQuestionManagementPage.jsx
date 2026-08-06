@@ -12,6 +12,7 @@ import {
   startSandboxTryout,
 } from '../../../api/adminQuestionsApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
+import ComingSoonModal from '../../../components/layout/ComingSoonModal'
 import AdminLogoutModal from '../../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../../components/layout/AdminQuestionMenu'
 import AdminSystemMenu from '../../../components/layout/AdminSystemMenu'
@@ -103,6 +104,7 @@ export default function AdminQuestionManagementPage() {
   const navigate = useNavigate()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
   const [questionRows, setQuestionRows] = useState([])
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true)
   const [questionError, setQuestionError] = useState(null)
@@ -833,7 +835,7 @@ export default function AdminQuestionManagementPage() {
                 key={item.label}
                 type="button"
                 className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
-                onClick={() => item.href !== '#' && navigate(item.href)}
+                onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href))}
               >
                 <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
                 <span>{item.label}</span>
@@ -1220,6 +1222,8 @@ export default function AdminQuestionManagementPage() {
             onCancel={() => setShowLogoutConfirm(false)}
             onConfirm={confirmLogout}
           />
+
+          <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
         </main>
       </div>
     </div>

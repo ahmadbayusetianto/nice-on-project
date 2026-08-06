@@ -1,3 +1,5 @@
+import { logout as logoutRequest } from '../api/authApi'
+
 const AUTH_STORAGE_KEY = 'niceon.auth.user'
 const ADMIN_SIDEBAR_COLLAPSED_KEY = 'niceon.admin.sidebarCollapsed'
 const SANDBOX_ADMIN_STORAGE_KEY = 'niceon.sandbox.admin'
@@ -36,6 +38,10 @@ export function storeAuthUser(user) {
 
 export function clearAuthUser() {
   if (typeof window === 'undefined') return
+
+  logoutRequest().catch(() => {
+    // Best-effort: proceed with clearing local state even if the server call fails.
+  })
 
   try {
     window.sessionStorage.removeItem(AUTH_STORAGE_KEY)

@@ -12,7 +12,9 @@ export async function fetchAdminTransactions({ search, status, program } = {}) {
   if (status && status !== 'Semua Status') params.set('status', STATUS_QUERY_MAP[status])
   if (program && program !== 'Semua Program') params.set('program', program)
 
-  const response = await fetch(`${BACKEND_URL}/api/admin/transactions${params.toString() ? `?${params.toString()}` : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/transactions${params.toString() ? `?${params.toString()}` : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {

@@ -7,7 +7,9 @@ export async function fetchQuestions({ search, group, type, includeTrashed } = {
   if (type && type !== 'Semua Tipe') params.set('type', type)
   if (includeTrashed) params.set('include_trashed', 'true')
 
-  const response = await fetch(`${BACKEND_URL}/api/admin/questions${params.toString() ? `?${params.toString()}` : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/questions${params.toString() ? `?${params.toString()}` : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -18,7 +20,9 @@ export async function fetchQuestions({ search, group, type, includeTrashed } = {
 }
 
 export async function fetchQuestionDetail(id) {
-  const response = await fetch(`${BACKEND_URL}/api/admin/questions/${id}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/questions/${id}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -32,6 +36,7 @@ export async function saveQuestion(formData, { isEditMode, id } = {}) {
   const response = await fetch(`${BACKEND_URL}/api/admin/questions${isEditMode ? `/${id}` : ''}`, {
     method: 'POST',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
     body: formData,
   })
   const { payload, rawBody } = await parseSafeJson(response)
@@ -47,6 +52,7 @@ export async function deleteQuestion(id) {
   const response = await fetch(`${BACKEND_URL}/api/admin/questions/${id}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const { payload, rawBody } = await parseSafeJson(response)
 
@@ -61,6 +67,7 @@ export async function restoreQuestion(id) {
   const response = await fetch(`${BACKEND_URL}/api/admin/questions/${id}/restore`, {
     method: 'PATCH',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const { payload, rawBody } = await parseSafeJson(response)
 
@@ -72,7 +79,9 @@ export async function restoreQuestion(id) {
 }
 
 export async function fetchSandboxPaket() {
-  const response = await fetch(`${BACKEND_URL}/api/admin/ref-paket`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/ref-paket`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -83,12 +92,16 @@ export async function fetchSandboxPaket() {
 }
 
 export function fetchRefPaketByPid(pid) {
-  return fetch(`${BACKEND_URL}/api/admin/ref-paket?pid=${encodeURIComponent(pid)}`)
+  return fetch(`${BACKEND_URL}/api/admin/ref-paket?pid=${encodeURIComponent(pid)}`, {
+    credentials: 'include',
+  })
     .then((response) => response.json().catch(() => null))
 }
 
 export function fetchRefPaketByBundle(bundleName) {
-  return fetch(`${BACKEND_URL}/api/admin/ref-paket?bundle=${encodeURIComponent(bundleName)}`)
+  return fetch(`${BACKEND_URL}/api/admin/ref-paket?bundle=${encodeURIComponent(bundleName)}`, {
+    credentials: 'include',
+  })
     .then((response) => response.json().catch(() => null))
 }
 
@@ -96,7 +109,9 @@ export function fetchQuestionGroups({ type, packageId } = {}) {
   const params = new URLSearchParams({ type })
   if (packageId) params.set('package_id', String(packageId))
 
-  return fetch(`${BACKEND_URL}/api/admin/question-groups?${params.toString()}`)
+  return fetch(`${BACKEND_URL}/api/admin/question-groups?${params.toString()}`, {
+    credentials: 'include',
+  })
     .then((response) => response.json().catch(() => null).then((payload) => ({ ok: response.ok, payload })))
 }
 
@@ -104,6 +119,7 @@ export async function createQuestionGroup(payload) {
   const response = await fetch(`${BACKEND_URL}/api/admin/question-groups`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
   const responsePayload = await response.json().catch(() => null)
@@ -115,6 +131,7 @@ export async function updateQuestionGroup(id, payload) {
   const response = await fetch(`${BACKEND_URL}/api/admin/question-groups/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
   const responsePayload = await response.json().catch(() => null)
@@ -126,6 +143,7 @@ export async function deleteQuestionGroup(id) {
   const response = await fetch(`${BACKEND_URL}/api/admin/question-groups/${id}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const responsePayload = await response.json().catch(() => null)
   if (!response.ok) throw new Error(responsePayload?.message || 'Gagal menghapus grup.')
@@ -136,6 +154,7 @@ export async function startSandboxTryout(payload) {
   const response = await fetch(`${BACKEND_URL}/api/admin/tryout-sandbox/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
   const { payload: responsePayload, rawBody } = await parseSafeJson(response)

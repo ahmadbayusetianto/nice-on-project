@@ -220,11 +220,16 @@ class UserController extends Controller
         }
 
         $currentIsAdmin = (int) ($user->is_admin ?? 0) === 1;
+        $wasActiveAdmin = $currentIsAdmin && (string) ($user->status ?? '') === 'active';
 
-        if ($currentIsAdmin) {
-            $adminCount = (int) DB::table('tbl_user')->where('is_admin', 1)->count();
+        if ($wasActiveAdmin) {
+            $otherActiveAdminCount = (int) DB::table('tbl_user')
+                ->where('is_admin', 1)
+                ->where('status', 'active')
+                ->where('pid', '!=', $pid)
+                ->count();
 
-            if ($adminCount <= 1) {
+            if ($otherActiveAdminCount < 1) {
                 return response()->json([
                     'message' => 'Minimal harus ada satu admin aktif.',
                 ], 409);
@@ -384,9 +389,17 @@ class UserController extends Controller
             : 'active';
         $nextIsAdmin = (int) filter_var($validated['is_admin'], FILTER_VALIDATE_BOOL) === 1 ? 1 : 0;
 
-        if ((int) ($user->is_admin ?? 0) === 1 && $nextIsAdmin === 0) {
-            $adminCount = (int) DB::table('tbl_user')->where('is_admin', 1)->count();
-            if ($adminCount <= 1) {
+        $wasActiveAdmin = (int) ($user->is_admin ?? 0) === 1 && (string) ($user->status ?? '') === 'active';
+        $willBeActiveAdmin = $nextIsAdmin === 1 && $normalizedStatus === 'active';
+
+        if ($wasActiveAdmin && !$willBeActiveAdmin) {
+            $otherActiveAdminCount = (int) DB::table('tbl_user')
+                ->where('is_admin', 1)
+                ->where('status', 'active')
+                ->where('pid', '!=', $pid)
+                ->count();
+
+            if ($otherActiveAdminCount < 1) {
                 return response()->json([
                     'message' => 'Minimal harus ada satu admin aktif.',
                 ], 409);

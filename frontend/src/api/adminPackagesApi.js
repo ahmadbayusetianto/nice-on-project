@@ -4,7 +4,9 @@ export async function fetchAdminPackages({ kategori } = {}) {
   const query = new URLSearchParams()
   if (kategori && kategori !== 'Semua Program') query.set('kategori', kategori)
 
-  const response = await fetch(`${BACKEND_URL}/api/admin/packages${query.toString() ? `?${query.toString()}` : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/packages${query.toString() ? `?${query.toString()}` : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -15,7 +17,9 @@ export async function fetchAdminPackages({ kategori } = {}) {
 }
 
 export async function fetchAdminPackageDetail(pid) {
-  const response = await fetch(`${BACKEND_URL}/api/admin/packages/${pid}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/packages/${pid}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -32,6 +36,7 @@ export async function saveAdminPackage(form, { isEditMode, pid } = {}) {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify(form),
   })
   const { payload, rawBody } = await parseSafeJson(response)
@@ -47,6 +52,7 @@ export async function deleteAdminPackage(pid) {
   const response = await fetch(`${BACKEND_URL}/api/admin/packages/${pid}`, {
     method: 'DELETE',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   const { payload, rawBody } = await parseSafeJson(response)
 

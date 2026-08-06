@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import './AdminUserManagementPage.css'
 import { fetchUserDetail, fetchUsers, saveUser, toggleUserRole } from '../../../api/adminUsersApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
+import ComingSoonModal from '../../../components/layout/ComingSoonModal'
 import AdminLogoutModal from '../../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../../components/layout/AdminQuestionMenu'
 import AdminSystemMenu from '../../../components/layout/AdminSystemMenu'
@@ -37,6 +38,7 @@ export default function AdminUserManagementPage() {
   const navigate = useNavigate()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => readStoredAdminSidebarState())
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
   const [userRows, setUserRows] = useState([])
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
   const [userError, setUserError] = useState(null)
@@ -359,7 +361,7 @@ export default function AdminUserManagementPage() {
                 key={item.label}
                 type="button"
                 className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
-                onClick={() => item.href !== '#' && navigate(item.href)}
+                onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href))}
               >
                 <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
                 <span>{item.label}</span>
@@ -554,6 +556,8 @@ export default function AdminUserManagementPage() {
             onCancel={() => setShowLogoutConfirm(false)}
             onConfirm={confirmLogout}
           />
+
+          <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
 
           <AdminLogoutModal
             open={showRoleToggleConfirm}

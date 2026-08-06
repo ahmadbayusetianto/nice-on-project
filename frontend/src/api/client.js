@@ -5,6 +5,7 @@ export const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BACKEND_
 export async function apiRequest(path, options = {}) {
   const response = await fetch(`${BACKEND_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),

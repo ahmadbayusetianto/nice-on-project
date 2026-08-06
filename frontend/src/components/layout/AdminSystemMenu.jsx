@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import ComingSoonModal from './ComingSoonModal'
 import './AdminSystemMenu.css'
 
 export default function AdminSystemMenu({ currentPath, navigate }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(() => currentPath.startsWith('/dashboard-admin/settings'))
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
 
   const settingsItems = [
     { label: 'Parameter', href: '/dashboard-admin/settings/parameters' },
@@ -41,7 +43,7 @@ export default function AdminSystemMenu({ currentPath, navigate }) {
                 key={item.label}
                 type="button"
                 className={`admin-system-subitem${currentPath === item.href ? ' active' : ''}`}
-                onClick={() => item.href !== '#' && navigate(item.href)}
+                onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href))}
               >
                 <span className="admin-system-subitem-icon" aria-hidden="true">•</span>
                 <span>{item.label}</span>
@@ -56,7 +58,7 @@ export default function AdminSystemMenu({ currentPath, navigate }) {
               key={item.label}
               type="button"
               className={`admin-sidebar-item${currentPath === item.href ? ' active' : ''}`}
-              onClick={() => item.href !== '#' && navigate(item.href)}
+              onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href))}
             >
               <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
               <span>{item.label}</span>
@@ -64,6 +66,8 @@ export default function AdminSystemMenu({ currentPath, navigate }) {
           ))}
         </nav>
       </div>
+
+      <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
     </>
   )
 }

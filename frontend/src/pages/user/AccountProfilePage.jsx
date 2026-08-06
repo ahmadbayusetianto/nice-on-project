@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import './AccountProfilePage.css'
 import { fetchAccountProfile, fetchUserActivityLog } from '../../api/accountProfileApi'
 import AdminBrandBlock from '../../components/layout/AdminBrandBlock'
+import ComingSoonModal from '../../components/layout/ComingSoonModal'
 import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../components/layout/AdminQuestionMenu'
 import AdminSystemMenu from '../../components/layout/AdminSystemMenu'
@@ -21,6 +22,7 @@ export default function AccountProfilePage() {
   const user = location.state?.user ?? storedUser
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef(null)
   const [profile, setProfile] = useState(user ? { ...user, detail: null } : null)
@@ -212,7 +214,7 @@ export default function AccountProfilePage() {
                   key={item.label}
                   type="button"
                   className={`admin-sidebar-item${currentPath === item.href || (item.label === 'Dashboard' && currentPath === '/account-profile') ? ' active' : ''}`}
-                  onClick={() => item.href !== '#' && navigate(item.href)}
+                  onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href))}
                 >
                   <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
                   <span>{item.label}</span>
@@ -514,6 +516,8 @@ export default function AccountProfilePage() {
         message="Pastikan progres atau aktivitas yang sedang berjalan sudah disimpan sebelum Anda logout."
         confirmLabel="Ya, keluar"
       />
+
+      <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import './UserTryoutPage.css'
 import { fetchPackages } from '../../api/homeApi'
 import { fetchCurrentTryout, finishTryout as finishTryoutRequest, saveTryoutAnswer, startTryout as startTryoutRequest } from '../../api/tryoutApi'
 import AdminBrandBlock from '../../components/layout/AdminBrandBlock'
+import ComingSoonModal from '../../components/layout/ComingSoonModal'
 import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../components/layout/AdminQuestionMenu'
 import AdminSystemMenu from '../../components/layout/AdminSystemMenu'
@@ -30,6 +31,7 @@ export default function UserTryoutPage() {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [comingSoonLabel, setComingSoonLabel] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [packageRows, setPackageRows] = useState([])
   const [packageLoading, setPackageLoading] = useState(true)
@@ -410,7 +412,7 @@ export default function UserTryoutPage() {
                   key={item.label}
                   type="button"
                   className={`admin-sidebar-item${adminSidebarPath === item.href ? ' active' : ''}`}
-                  onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}
+                  onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href, { state: { user } }))}
                 >
                   <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
                   <span>{item.label}</span>
@@ -924,6 +926,8 @@ export default function UserTryoutPage() {
             message="Pastikan progres atau jawaban yang sedang dikerjakan sudah tersimpan sebelum Anda logout."
             confirmLabel="Ya, keluar"
           />
+
+          <ComingSoonModal open={Boolean(comingSoonLabel)} label={comingSoonLabel} onClose={() => setComingSoonLabel(null)} />
         </main>
       </div>
     </div>

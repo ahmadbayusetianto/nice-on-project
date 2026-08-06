@@ -6,7 +6,9 @@ export async function fetchParameters({ search, category, status } = {}) {
   if (category && category !== 'Semua Kategori') query.set('category', category)
   if (status && status !== 'Semua Status') query.set('status', status)
 
-  const response = await fetch(`${BACKEND_URL}/api/admin/parameters${query.toString() ? `?${query.toString()}` : ''}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/parameters${query.toString() ? `?${query.toString()}` : ''}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -17,7 +19,9 @@ export async function fetchParameters({ search, category, status } = {}) {
 }
 
 export async function fetchParameterDetail(pid) {
-  const response = await fetch(`${BACKEND_URL}/api/admin/parameters/${pid}`)
+  const response = await fetch(`${BACKEND_URL}/api/admin/parameters/${pid}`, {
+    credentials: 'include',
+  })
   const { payload, rawBody } = await parseSafeJson(response)
 
   if (!response.ok) {
@@ -34,6 +38,7 @@ export async function saveParameter(form, { isEditMode, pid } = {}) {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify(form),
   })
   const { payload, rawBody } = await parseSafeJson(response)

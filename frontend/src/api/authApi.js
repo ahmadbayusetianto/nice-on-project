@@ -20,6 +20,12 @@ export function register({ email, password, confirmPassword, captchaToken, captc
   })
 }
 
+export function logout() {
+  return apiRequest('/api/logout', {
+    method: 'POST',
+  })
+}
+
 export function forgotPassword({ email }) {
   return apiRequest('/api/forgot-password', {
     method: 'POST',

@@ -158,7 +158,7 @@ export default function DashboardUserPageV2() {
                   key={item.label}
                   type="button"
                   className={`admin-sidebar-item${adminSidebarPath === item.href ? ' active' : ''}`}
-                  onClick={() => item.href !== '#' && navigate(item.href, { state: { user } })}
+                  onClick={() => (item.href === '#' ? setComingSoonLabel(item.label) : navigate(item.href, { state: { user } }))}
                 >
                   <span className="admin-sidebar-icon" aria-hidden="true">{item.label.slice(0, 1)}</span>
                   <span>{item.label}</span>
