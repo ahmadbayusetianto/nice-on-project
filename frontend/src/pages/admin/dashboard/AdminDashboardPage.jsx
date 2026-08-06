@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { fetchAccountProfile } from '../../../api/accountProfileApi'
 import { fetchDashboardSummary } from '../../../api/notificationsApi'
 import { fetchSystemHealth } from '../../../api/systemApi'
 import AdminBrandBlock from '../../../components/layout/AdminBrandBlock'
@@ -28,6 +29,7 @@ export default function AdminDashboardPage() {
   const [systemStatus, setSystemStatus] = useState({ backend: 'checking', database: 'checking', mail: 'checking', storage: 'checking' })
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [comingSoonLabel, setComingSoonLabel] = useState(null)
+  const [profileName, setProfileName] = useState(null)
   const storedUser = readStoredUser()
   const user = location.state?.user ?? storedUser
   const currentPath = location.pathname
@@ -36,7 +38,7 @@ export default function AdminDashboardPage() {
     return <Navigate to="/login" replace state={{ from: '/dashboard-admin' }} />
   }
 
-  const displayName = user?.email?.split('@')?.[0] || 'Admin'
+  const displayName = profileName || user?.nama || user?.email?.split('@')?.[0] || 'Admin'
   const summaryCards = [
     { label: 'Total User', value: String(dashboardSummary.total_user ?? 0), delta: 'Data dari tbl_user', accent: 'blue', icon: '👥' },
     { label: 'Total Transaksi', value: String(dashboardSummary.total_transaksi ?? 0), delta: 'Data dari tbl_transaksi', accent: 'green', icon: '🛒' },
@@ -101,6 +103,24 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     storeAdminSidebarState(isSidebarCollapsed)
   }, [isSidebarCollapsed])
+
+  useEffect(() => {
+    if (!user?.pid) return
+
+    let isMounted = true
+
+    fetchAccountProfile(user.pid)
+      .then((payload) => {
+        if (isMounted) setProfileName(payload?.data?.detail?.nama ?? null)
+      })
+      .catch(() => {
+        if (isMounted) setProfileName(null)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?.pid])
 
   useEffect(() => {
     let cancelled = false
@@ -207,7 +227,7 @@ export default function AdminDashboardPage() {
 
           <section className="admin-hero-row">
             <div>
-              <h2>Selamat datang kembali, Ahmad Bayu! 👋</h2>
+              <h2>Selamat datang kembali, {displayName}! 👋</h2>
               <p>Berikut ringkasan performa platform hari ini.</p>
             </div>
 

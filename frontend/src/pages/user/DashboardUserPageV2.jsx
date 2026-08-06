@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { fetchLearningStreak } from '../../api/accountProfileApi'
+import { fetchAccountProfile, fetchLearningStreak } from '../../api/accountProfileApi'
 import AdminBrandBlock from '../../components/layout/AdminBrandBlock'
 import AdminLogoutModal from '../../components/layout/AdminLogoutModal'
 import AdminQuestionMenu from '../../components/layout/AdminQuestionMenu'
@@ -22,6 +22,7 @@ export default function DashboardUserPageV2() {
   const profileMenuRef = useRef(null)
   const [streakDays, setStreakDays] = useState(null)
   const [comingSoonLabel, setComingSoonLabel] = useState(null)
+  const [profileName, setProfileName] = useState(null)
 
   useEffect(() => {
     if (!user?.pid) return
@@ -34,6 +35,24 @@ export default function DashboardUserPageV2() {
       })
       .catch(() => {
         if (isMounted) setStreakDays(0)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?.pid])
+
+  useEffect(() => {
+    if (!user?.pid) return
+
+    let isMounted = true
+
+    fetchAccountProfile(user.pid)
+      .then((payload) => {
+        if (isMounted) setProfileName(payload?.data?.detail?.nama ?? null)
+      })
+      .catch(() => {
+        if (isMounted) setProfileName(null)
       })
 
     return () => {
@@ -69,7 +88,7 @@ export default function DashboardUserPageV2() {
 
   const currentPath = location.pathname
   const isAdminSandbox = false
-  const displayName = user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
+  const displayName = profileName || user?.nama || user?.name || user?.email?.split('@')?.[0] || 'User'
   const isProfileComplete = user?.profile_completed !== false
   const initials = displayName.slice(0, 2).toUpperCase()
 
