@@ -18,6 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureUserIsAdmin::class,
         ]);
 
+        // This backend is API-only (see routes/web.php) and defines no
+        // named 'login' route. Laravel's default guest redirect calls
+        // route('login'), which throws RouteNotFoundException and turns
+        // every unauthenticated request into a 500 instead of a 401.
+        $middleware->redirectGuestsTo(fn () => null);
+
         $middleware->prependToGroup('api', [
             EnsureFrontendRequestsAreStateful::class,
         ]);
@@ -35,5 +41,5 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->shouldRenderJsonWhen(fn () => true);
     })->create();
