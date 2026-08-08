@@ -130,7 +130,7 @@ export default function LoginPage() {
             <Link to="/register" className="alt-auth-btn">Belum Punya Akun? Daftar Sekarang!</Link>
 
             <div className="auth-bottom-links">
-              <a href="#">Tentang Kami</a>
+              <Link to="/tentang-kami">Tentang Kami</Link>
               <a href="#">Syarat dan Ketentuan</a>
               <a href="#">Kebijakan Privasi</a>
             </div>

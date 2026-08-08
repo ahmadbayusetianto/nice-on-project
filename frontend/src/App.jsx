@@ -4,6 +4,7 @@ import faviconImage from '../../favicon.png'
 import './AppStyles.css'
 import { readStoredSandboxAdminMode, readStoredUser } from './utils/storage'
 import HomePage from './pages/home/HomePage'
+import AboutPage from './pages/about/AboutPage'
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
@@ -69,6 +70,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/tentang-kami" element={<AboutPage />} />
       <Route
         path="/login"
         element={<LoginPage />}

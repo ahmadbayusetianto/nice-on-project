@@ -103,6 +103,16 @@ export default function AdminQuestionDetailModal({ open, question, onCancel, onE
                 <span className="admin-question-detail-section-icon explanation" aria-hidden="true">📖</span>
                 <h4>Pembahasan</h4>
               </div>
+              {question.pembahasan_image_url ? (
+                <button
+                  type="button"
+                  className="admin-question-detail-image-trigger"
+                  onClick={openImageLightbox(question.pembahasan_image_url, 'Gambar pembahasan')}
+                  title="Klik untuk memperbesar"
+                >
+                  <img className="admin-question-detail-image" src={question.pembahasan_image_url} alt="Gambar pembahasan" />
+                </button>
+              ) : null}
               <p><RichText text={question.pembahasan || 'Tidak ada pembahasan.'} /></p>
             </section>
           </div>

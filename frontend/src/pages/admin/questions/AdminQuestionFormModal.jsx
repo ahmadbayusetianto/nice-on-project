@@ -17,6 +17,8 @@ export default function AdminQuestionFormModal({
   onResetForm,
   onQuestionImageChange,
   onQuestionImageClear,
+  onPembahasanImageChange,
+  onPembahasanImageClear,
   onOptionImageChange,
   onOptionImageClear,
   loading,
@@ -30,6 +32,7 @@ export default function AdminQuestionFormModal({
   const [groups, setGroups] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(false)
   const questionImageFieldRef = useRef(null)
+  const pembahasanImageFieldRef = useRef(null)
   const questionTextareaRef = useRef(null)
   const pembahasanTextareaRef = useRef(null)
   const optionTextareaRefs = useRef({})
@@ -148,6 +151,7 @@ export default function AdminQuestionFormModal({
   const informationCount = String(form.information || '').length
   const pembahasanCount = String(form.pembahasan || '').length
   const hasQuestionImage = Boolean(form.question_image_preview || form.existing_question_image_url)
+  const hasPembahasanImage = Boolean(form.pembahasan_image_preview || form.existing_pembahasan_image_url)
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={onCancel}>
@@ -498,7 +502,16 @@ export default function AdminQuestionFormModal({
                     <button type="button" className="admin-question-editor-toolbar-action" onClick={() => applyFormat(pembahasanTextareaRef.current, form.pembahasan, (value) => onFieldChange('pembahasan', value), 'strikethrough')} disabled={loading} title="Coret" aria-label="Coret">≡</button>
                     <span aria-hidden="true">≣</span>
                     <span aria-hidden="true">↗</span>
-                    <span aria-hidden="true">▢</span>
+                    <button
+                      type="button"
+                      className="admin-question-editor-toolbar-action"
+                      onClick={() => pembahasanImageFieldRef.current?.openPicker()}
+                      disabled={loading}
+                      title="Tambah gambar (opsional)"
+                      aria-label="Tambah gambar (opsional)"
+                    >
+                      ▢
+                    </button>
                     <span aria-hidden="true">&lt;/&gt;</span>
                   </div>
                   <textarea
@@ -510,6 +523,31 @@ export default function AdminQuestionFormModal({
                     rows={4}
                   />
                   <div className="admin-question-counter">{pembahasanCount}/2000</div>
+                  {hasPembahasanImage ? (
+                    <div className="admin-question-editor-image-slot">
+                      <QuestionImageUploadField
+                        ref={pembahasanImageFieldRef}
+                        label="Tambah gambar pembahasan (opsional)"
+                        preview={form.pembahasan_image_preview}
+                        existingImageUrl={form.existing_pembahasan_image_url}
+                        onSelectFile={onPembahasanImageChange}
+                        onClear={onPembahasanImageClear}
+                        disabled={loading}
+                        hideTrigger
+                      />
+                    </div>
+                  ) : (
+                    <QuestionImageUploadField
+                      ref={pembahasanImageFieldRef}
+                      label="Tambah gambar pembahasan (opsional)"
+                      preview={form.pembahasan_image_preview}
+                      existingImageUrl={form.existing_pembahasan_image_url}
+                      onSelectFile={onPembahasanImageChange}
+                      onClear={onPembahasanImageClear}
+                      disabled={loading}
+                      hideTrigger
+                    />
+                  )}
                 </div>
               </label>
             </section>

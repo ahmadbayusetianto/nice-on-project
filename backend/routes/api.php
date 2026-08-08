@@ -196,6 +196,8 @@ function mapQuestionRow(object $item, ?array $options = null, ?Request $request 
         'pembahasan' => $item->pembahasan,
         'image_path' => $item->image_path ?? null,
         'image_url' => buildQuestionImageUrl($request, $item->image_path ?? null),
+        'pembahasan_image_path' => $item->pembahasan_image_path ?? null,
+        'pembahasan_image_url' => buildQuestionImageUrl($request, $item->pembahasan_image_path ?? null),
         'created_at' => $item->created_at ?? null,
         'updated_at' => $item->updated_at ?? null,
         'deleted_at' => $item->deleted_at ?? null,
@@ -1198,6 +1200,7 @@ Route::get('/admin/questions', function (Request $request) {
             'q.information',
             'q.pembahasan',
             'q.image_path',
+            'q.pembahasan_image_path',
             'q.created_at',
             'q.updated_at',
             'q.deleted_at',
@@ -1292,6 +1295,7 @@ Route::get('/admin/questions/{id}', function (Request $request, $id) {
             'q.information',
             'q.pembahasan',
             'q.image_path',
+            'q.pembahasan_image_path',
             'q.created_at',
             'q.updated_at',
             'q.deleted_at',
@@ -1357,6 +1361,7 @@ Route::post('/admin/questions', function (Request $request) {
         $isText ? 'nullable' : 'required',
         'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb(),
     ];
+    $rules['pembahasan_image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
 
     if ($optionsIsText) {
         $rules['options.*.choise'] = ['required', 'string'];
@@ -1403,6 +1408,10 @@ Route::post('/admin/questions', function (Request $request) {
         ? storeUploadedQuestionImage($request->file('question_image'), 'questions')
         : null;
 
+    $pembahasanImagePath = $request->hasFile('pembahasan_image')
+        ? storeUploadedQuestionImage($request->file('pembahasan_image'), 'question-pembahasan')
+        : null;
+
     $normalizedOptions = collect($validated['options'])
         ->values()
         ->map(function ($option, $index) use ($isTkpGroup, $optionsIsText, $request) {
@@ -1434,7 +1443,7 @@ Route::post('/admin/questions', function (Request $request) {
     }
 
     $now = now();
-    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $now, $questionType, $isText, $questionImagePath) {
+    $questionId = DB::transaction(function () use ($validated, $normalizedOptions, $now, $questionType, $isText, $questionImagePath, $pembahasanImagePath) {
         $questionId = DB::table('tbl_questions')->insertGetId([
             'question' => $isText ? $validated['question'] : '',
             'question_type' => $questionType,
@@ -1444,6 +1453,7 @@ Route::post('/admin/questions', function (Request $request) {
             'image_path' => $questionImagePath,
             'information' => $validated['information'] ?? null,
             'pembahasan' => $validated['pembahasan'] ?? null,
+            'pembahasan_image_path' => $pembahasanImagePath,
             'created_at' => $now,
             'updated_at' => null,
             'deleted_at' => null,
@@ -1496,6 +1506,8 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
 
     $rules['question_image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
     $rules['existing_question_image_path'] = ['nullable', 'string'];
+    $rules['pembahasan_image'] = ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:' . questionImageMaxUploadKb()];
+    $rules['existing_pembahasan_image_path'] = ['nullable', 'string'];
 
     if ($isText) {
         $rules['question'] = ['required', 'string'];
@@ -1552,6 +1564,11 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         ], 422);
     }
 
+    $uploadedPembahasanImage = $request->file('pembahasan_image');
+    $pembahasanImagePath = $uploadedPembahasanImage
+        ? storeUploadedQuestionImage($uploadedPembahasanImage, 'question-pembahasan')
+        : ($validated['existing_pembahasan_image_path'] ?? null);
+
     $normalizedOptions = collect($validated['options'])
         ->values()
         ->map(function ($option, $index) use ($isTkpGroup, $optionsIsText, $request) {
@@ -1594,7 +1611,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
         ], 422);
     }
 
-    DB::transaction(function () use ($id, $validated, $normalizedOptions, $questionType, $isText, $questionImagePath) {
+    DB::transaction(function () use ($id, $validated, $normalizedOptions, $questionType, $isText, $questionImagePath, $pembahasanImagePath) {
         $now = now();
 
         DB::table('tbl_questions')
@@ -1608,6 +1625,7 @@ Route::put('/admin/questions/{id}', function (Request $request, $id) {
                 'image_path' => $questionImagePath,
                 'information' => $validated['information'] ?? null,
                 'pembahasan' => $validated['pembahasan'] ?? null,
+                'pembahasan_image_path' => $pembahasanImagePath,
                 'updated_at' => $now,
                 'deleted_at' => null,
             ]);

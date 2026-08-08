@@ -81,6 +81,10 @@ function createQuestionFormFromDetail(detail = {}) {
     question_image_preview: null,
     existing_question_image_path: detail.image_path ?? null,
     existing_question_image_url: detail.image_url ?? null,
+    pembahasan_image: null,
+    pembahasan_image_preview: null,
+    existing_pembahasan_image_path: detail.pembahasan_image_path ?? null,
+    existing_pembahasan_image_url: detail.pembahasan_image_url ?? null,
     options,
   }
 }
@@ -94,6 +98,7 @@ function validateQuestionImageFile(file) {
 
 function revokeQuestionFormPreviews(form) {
   if (form?.question_image_preview) URL.revokeObjectURL(form.question_image_preview)
+  if (form?.pembahasan_image_preview) URL.revokeObjectURL(form.pembahasan_image_preview)
   form?.options?.forEach((option) => {
     if (option.image_preview) URL.revokeObjectURL(option.image_preview)
   })
@@ -438,6 +443,40 @@ export default function AdminQuestionManagementPage() {
     })
   }
 
+  const handleQuestionPembahasanImageChange = (file) => {
+    const validationError = validateQuestionImageFile(file)
+    if (validationError) {
+      setQuestionSubmitError(validationError)
+      return
+    }
+
+    setQuestionForm((current) => {
+      if (current.pembahasan_image_preview) {
+        URL.revokeObjectURL(current.pembahasan_image_preview)
+      }
+      return {
+        ...current,
+        pembahasan_image: file,
+        pembahasan_image_preview: URL.createObjectURL(file),
+      }
+    })
+  }
+
+  const handleQuestionPembahasanImageClear = () => {
+    setQuestionForm((current) => {
+      if (current.pembahasan_image_preview) {
+        URL.revokeObjectURL(current.pembahasan_image_preview)
+      }
+      return {
+        ...current,
+        pembahasan_image: null,
+        pembahasan_image_preview: null,
+        existing_pembahasan_image_path: null,
+        existing_pembahasan_image_url: null,
+      }
+    })
+  }
+
   const handleQuestionOptionImageChange = (index, file) => {
     const validationError = validateQuestionImageFile(file)
     if (validationError) {
@@ -557,6 +596,12 @@ export default function AdminQuestionManagementPage() {
         formData.append('question_image', questionForm.question_image)
       } else if (questionForm.existing_question_image_path) {
         formData.append('existing_question_image_path', questionForm.existing_question_image_path)
+      }
+
+      if (questionForm.pembahasan_image) {
+        formData.append('pembahasan_image', questionForm.pembahasan_image)
+      } else if (questionForm.existing_pembahasan_image_path) {
+        formData.append('existing_pembahasan_image_path', questionForm.existing_pembahasan_image_path)
       }
 
       activeOptions.forEach((option, index) => {
@@ -1106,6 +1151,8 @@ export default function AdminQuestionManagementPage() {
                 onResetForm={resetQuestionForm}
                 onQuestionImageChange={handleQuestionImageChange}
                 onQuestionImageClear={handleQuestionImageClear}
+                onPembahasanImageChange={handleQuestionPembahasanImageChange}
+                onPembahasanImageClear={handleQuestionPembahasanImageClear}
                 onOptionImageChange={handleQuestionOptionImageChange}
                 onOptionImageClear={handleQuestionOptionImageClear}
                 packages={packageRows}
